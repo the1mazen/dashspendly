@@ -427,6 +427,32 @@ const accountSummaries = [
   { name: "Card", type: "Credit card", balance: "21,725.00", icon: CreditCard, tone: "red" as const },
 ]
 
+function NetWorthCard() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: EASE_OUT }}
+      className="relative overflow-hidden rounded-2xl surface-card p-5 lg:p-6 glow-blue-sm"
+      style={{ boxShadow: CARD_SHADOW }}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[11px] font-semibold tracking-[0.08em] uppercase text-muted-foreground font-sans">Net worth</p>
+          <p className="text-3xl font-bold text-foreground font-mono tracking-tighter mt-2">$62,450.00</p>
+          <div className="flex items-center gap-2 mt-2">
+            <span className="text-[10px] font-semibold text-fin-gain bg-fin-gain/10 rounded-md px-2 py-1 font-mono">↗ +6.03%</span>
+            <span className="text-[10px] text-muted-foreground font-sans">vs last month</span>
+          </div>
+        </div>
+        <div className="size-10 rounded-xl bg-accent/60 flex items-center justify-center">
+          <Landmark className="size-5 text-primary" />
+        </div>
+      </div>
+    </motion.div>
+  )
+}
+
 function AccountsSection() {
   return (
     <div className={`flex flex-col gap-5 ${SECTION_MIN_H}`}>
@@ -1151,8 +1177,17 @@ function SettingsSection() {
 
 // ─── Main Dashboard ─────────────────────────────────────────────
 
+function DashboardSection() {
+  return (
+    <div className={`flex flex-col gap-5 ${SECTION_MIN_H}`}>
+      <NetWorthCard />
+      <AccountsSection />
+    </div>
+  )
+}
+
 const sectionComponents: Record<SectionId, React.FC> = {
-  dashboard: AccountsSection,
+  dashboard: DashboardSection,
   transactions: TransactionsSection,
   accounts: AccountsSection,
   categories: TransactionsSection,
