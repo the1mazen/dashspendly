@@ -183,17 +183,23 @@ function GlowOrb({ className }: { className?: string }) {
 }
 
 function KpiCard({
-  label, value, change, prefix = "", suffix = "", delay = 0, icon: Icon,
+  label, value, change, prefix = "", suffix = "", delay = 0, icon: Icon, glowColor = "teal",
 }: {
-  label: string; value: string; change?: number; prefix?: string; suffix?: string; delay?: number; icon?: React.ElementType
+  label: string; value: string; change?: number; prefix?: string; suffix?: string; delay?: number; icon?: React.ElementType; glowColor?: "teal" | "blue" | "green" | "red"
 }) {
   const isPositive = (change ?? 0) >= 0
+  const glowMap = {
+    teal: "glow-teal-sm",
+    blue: "glow-blue-sm",
+    green: "glow-green-sm",
+    red: "glow-red-sm",
+  }
   return (
     <motion.div
       initial={{ opacity: 0, y: 16, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.5, delay, ease: EASE_OUT }}
-      className="relative overflow-hidden rounded-2xl surface-card p-4 lg:p-5 group hover:scale-[1.01] transition-transform duration-300"
+      className={`relative overflow-hidden rounded-2xl surface-card p-4 lg:p-5 group hover:scale-[1.01] transition-transform duration-300 ${glowMap[glowColor]}`}
       style={{ boxShadow: CARD_SHADOW }}
     >
       <div className="absolute top-0 right-0 w-24 h-24 opacity-[0.03] pointer-events-none">
@@ -367,9 +373,9 @@ function DashboardSection() {
   return (
     <div className={`flex flex-col gap-5 ${SECTION_MIN_H}`}>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 lg:gap-4">
-        <KpiCard label="Total Balance" value="62,450" prefix="$" change={6.03} delay={0} icon={DollarSign} />
-        <KpiCard label="Total Income" value="6,450" prefix="+$" change={8.2} delay={0.06} icon={TrendingUp} />
-        <KpiCard label="Total Expenses" value="2,155" prefix="-$" change={3.4} delay={0.12} icon={ArrowDownRight} />
+        <KpiCard label="Current Balance" value="62,450" prefix="$" change={6.03} delay={0} icon={DollarSign} glowColor="blue" />
+        <KpiCard label="Current Income" value="6,450" prefix="+$" change={8.2} delay={0.06} icon={TrendingUp} glowColor="green" />
+        <KpiCard label="Current Expenses" value="2,155" prefix="-$" change={3.4} delay={0.12} icon={ArrowDownRight} glowColor="red" />
       </div>
 
       <SectionPanel className="relative overflow-hidden">
