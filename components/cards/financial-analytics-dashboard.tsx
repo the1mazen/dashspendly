@@ -489,24 +489,50 @@ function AccountsSection() {
         })}
       </div>
 
-      <SectionPanel className="relative overflow-hidden">
-        <GlowOrb className="w-64 h-64 -top-32 -right-32 bg-primary/10" />
-        <SectionHeader title="Accounts overview" subtitle="Your connected accounts and balances">
-          <button className="text-xs font-semibold text-primary hover:underline font-sans">Add account</button>
-        </SectionHeader>
-        <div className="flex flex-col">
-          {accountSummaries.map((account, i) => {
-            const Icon = account.icon
-            return (
-              <motion.div key={account.name} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }} className="flex items-center justify-between gap-4 px-3 py-3.5 border-t border-border/30 hover:bg-accent/20 transition-colors">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="size-8 rounded-lg bg-accent/60 flex items-center justify-center shrink-0"><Icon className="size-4 text-primary" /></div>
-                  <div><p className="text-sm font-semibold text-foreground font-sans">{account.name}</p><p className="text-xs text-muted-foreground font-sans">{account.type}</p></div>
-                </div>
-                <span className="text-sm font-bold font-mono text-foreground">${account.balance}</span>
-              </motion.div>
-            )
-          })}
+      <SectionPanel className="!p-0 overflow-hidden">
+        <div className="p-5 lg:p-6 border-b border-border/50 flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-bold text-foreground tracking-tight font-display">All recent transactions</h3>
+            <p className="text-[11px] text-muted-foreground mt-0.5 font-sans">Your latest income and expenses</p>
+          </div>
+          <button className="text-xs font-semibold text-primary hover:underline font-sans">View all</button>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border/50">
+                <th className="text-left p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans">Description</th>
+                <th className="text-left p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans">Category</th>
+                <th className="text-left p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans">Date</th>
+                <th className="text-right p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recentTransactions.map((transaction, i) => (
+                <motion.tr
+                  key={i}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.35, delay: 0.15 + i * 0.04 }}
+                  className="border-b border-border/30 hover:bg-accent/20 transition-all duration-200"
+                >
+                  <td className="p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="size-8 rounded-lg bg-accent/40 flex items-center justify-center shrink-0">
+                        <div className={`size-2 rounded-full ${transaction.type === 'income' ? 'bg-fin-gain' : 'bg-fin-loss'}`} />
+                      </div>
+                      <span className="text-[13px] font-semibold text-foreground font-sans">{transaction.description}</span>
+                    </div>
+                  </td>
+                  <td className="p-4 text-xs text-muted-foreground font-sans">{transaction.category}</td>
+                  <td className="p-4 text-xs font-mono text-muted-foreground">{transaction.date}</td>
+                  <td className={`p-4 text-right font-mono font-bold ${transaction.type === 'income' ? 'text-fin-gain' : 'text-fin-loss'}`}>
+                    {transaction.type === 'income' ? '+' : '-'}${Math.abs(transaction.amount).toFixed(2)}
+                  </td>
+                </motion.tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </SectionPanel>
     </div>
