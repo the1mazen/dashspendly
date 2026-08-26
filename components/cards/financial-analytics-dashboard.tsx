@@ -232,46 +232,48 @@ function KpiCard({
 function AccountSelector({ accounts }: { accounts: string[] }) {
   const [isOpen, setIsOpen] = useState(false)
   const [selectedAccount, setSelectedAccount] = useState(accounts[0] || "")
-
+  
   return (
-    <div className="relative self-start">
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        aria-expanded={isOpen}
-        className="text-xs font-semibold text-primary hover:text-primary/80 transition-colors flex items-center gap-1.5 px-3 py-2 rounded-lg border border-primary/20 bg-primary/5 hover:bg-primary/10 font-sans"
-      >
-        Select account
-        <ChevronDown className={`size-3.5 transition-transform duration-300 ${isOpen ? "rotate-180" : ""}`} />
-      </button>
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -8, height: 0 }}
-            animate={{ opacity: 1, y: 0, height: "auto" }}
-            exit={{ opacity: 0, y: -8, height: 0 }}
-            transition={{ duration: 0.2 }}
-            className="absolute top-full left-0 mt-1 bg-surface-darker rounded-lg border border-border/30 overflow-hidden z-50 min-w-32"
-          >
-            {accounts.map((account, i) => (
-              <motion.button
-                key={account}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.05 }}
-                onClick={() => {
-                  setSelectedAccount(account)
-                  setIsOpen(false)
-                }}
-                className={`w-full text-left px-4 py-2.5 text-xs font-medium transition-colors hover:bg-primary/10 ${
-                  selectedAccount === account ? "text-primary bg-primary/5" : "text-foreground hover:text-primary"
-                } font-sans`}
-              >
-                {account}
-              </motion.button>
-            ))}
-          </motion.div>
+  <div className="flex justify-center">
+  <div className="relative">
+  <button
+  onClick={() => setIsOpen(!isOpen)}
+  aria-expanded={isOpen}
+  className="text-xs font-semibold text-primary hover:text-primary/80 transition-colors flex items-center gap-1.5 px-3 py-2 rounded-lg border border-primary/20 bg-primary/5 hover:bg-primary/10 font-sans"
+  >
+  {selectedAccount}
+  <ChevronDown className={`size-3.5 transition-transform duration-300 ${isOpen ? "rotate-180" : ""}`} />
+  </button>
+  <AnimatePresence>
+  {isOpen && (
+  <motion.div
+  initial={{ opacity: 0, y: -8, height: 0 }}
+  animate={{ opacity: 1, y: 0, height: "auto" }}
+  exit={{ opacity: 0, y: -8, height: 0 }}
+  transition={{ duration: 0.2 }}
+  className="absolute top-full left-1/2 -translate-x-1/2 mt-1 bg-accent rounded-lg border border-border/30 overflow-hidden z-50 min-w-32"
+  >
+  {accounts.map((account, i) => (
+  <motion.button
+  key={account}
+  initial={{ opacity: 0, x: -10 }}
+  animate={{ opacity: 1, x: 0 }}
+  transition={{ delay: i * 0.05 }}
+  onClick={() => {
+  setSelectedAccount(account)
+  setIsOpen(false)
+  }}
+  className={`w-full text-left px-4 py-2.5 text-xs font-medium transition-colors ${
+  selectedAccount === account ? "text-primary bg-primary/10" : "text-foreground hover:text-primary hover:bg-accent/50"
+  } font-sans`}
+  >
+  {account}
+  </motion.button>
+  ))}
+  </motion.div>
         )}
       </AnimatePresence>
+    </div>
     </div>
   )
 }
