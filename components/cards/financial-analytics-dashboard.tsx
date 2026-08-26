@@ -1104,12 +1104,7 @@ export default function FinancialAnalyticsDashboard() {
         <div className="w-full px-5 lg:px-10 xl:px-14">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2.5">
-                <div className="size-8 rounded-xl bg-primary/12 flex items-center justify-center glow-teal-sm">
-                  <BarChart3 className="size-4 text-primary" />
-                </div>
-                <span className="text-base font-extrabold tracking-tight text-foreground font-display">Spendly</span>
-              </div>
+              <span className="text-base font-extrabold tracking-tight text-foreground font-display">Spendly</span>
             </div>
             <div className="flex items-center gap-1.5">
               <button className="p-2.5 rounded-xl hover:bg-accent/50 transition-all duration-200" aria-label="Search">
