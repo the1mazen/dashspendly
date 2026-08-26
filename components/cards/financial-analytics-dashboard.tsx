@@ -430,8 +430,8 @@ const accountSummaries = [
 function NetWorthCard() {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0, y: 16, scale: 0.97 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.5, ease: EASE_OUT }}
       className="relative overflow-hidden rounded-2xl surface-card p-5 lg:p-6 glow-blue-sm"
       style={{ boxShadow: CARD_SHADOW }}
