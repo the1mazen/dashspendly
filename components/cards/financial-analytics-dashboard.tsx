@@ -183,11 +183,13 @@ function GlowOrb({ className }: { className?: string }) {
 }
 
 function KpiCard({
-  label, value, change, prefix = "", suffix = "", delay = 0, icon: Icon, glowColor = "teal",
+  label, value, change, prefix = "", suffix = "", delay = 0, icon: Icon, glowColor = "teal", accounts,
 }: {
-  label: string; value: string; change?: number; prefix?: string; suffix?: string; delay?: number; icon?: React.ElementType; glowColor?: "teal" | "blue" | "green" | "red"
+  label: string; value: string; change?: number; prefix?: string; suffix?: string; delay?: number; icon?: React.ElementType; glowColor?: "teal" | "blue" | "green" | "red"; accounts?: string[]
 }) {
   const isPositive = (change ?? 0) >= 0
+  const [isOpen, setIsOpen] = useState(false)
+  const [selectedAccount, setSelectedAccount] = useState(accounts?.[0] || "")
   const glowMap = {
     teal: "glow-teal-sm",
     blue: "glow-blue-sm",
@@ -205,9 +207,51 @@ function KpiCard({
       <div className="absolute top-0 right-0 w-24 h-24 opacity-[0.03] pointer-events-none">
         {Icon && <Icon className="size-24 -translate-y-4 translate-x-4" />}
       </div>
-      <p className="text-[11px] font-semibold tracking-[0.08em] uppercase text-muted-foreground mb-2.5 font-sans">
-        {label}
-      </p>
+      <div className="flex items-center justify-between mb-2.5">
+        <p className="text-[11px] font-semibold tracking-[0.08em] uppercase text-muted-foreground font-sans">
+          {label}
+        </p>
+        {accounts && accounts.length > 0 && (
+          <div className="relative">
+            <button
+              onClick={() => setIsOpen(!isOpen)}
+              className="text-[11px] font-semibold text-primary hover:text-primary/80 transition-colors flex items-center gap-1 px-2 py-1 rounded-md hover:bg-primary/5 font-sans"
+            >
+              Select account
+              <ChevronDown className={`size-3 transition-transform duration-300 ${isOpen ? "rotate-180" : ""}`} />
+            </button>
+            <AnimatePresence>
+              {isOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -8, height: 0 }}
+                  animate={{ opacity: 1, y: 0, height: "auto" }}
+                  exit={{ opacity: 0, y: -8, height: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="absolute top-full right-0 mt-1 bg-surface-darker rounded-lg border border-border/30 overflow-hidden z-50 min-w-max"
+                >
+                  {accounts.map((account, i) => (
+                    <motion.button
+                      key={account}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.05 }}
+                      onClick={() => {
+                        setSelectedAccount(account)
+                        setIsOpen(false)
+                      }}
+                      className={`w-full text-left px-4 py-2.5 text-xs font-medium transition-colors hover:bg-primary/10 ${
+                        selectedAccount === account ? "text-primary bg-primary/5" : "text-foreground hover:text-primary"
+                      } font-sans`}
+                    >
+                      {account}
+                    </motion.button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        )}
+      </div>
       <p className="text-2xl lg:text-3xl font-bold text-foreground font-mono tracking-tighter leading-none">
         {prefix}{value}{suffix}
       </p>
@@ -373,7 +417,7 @@ function DashboardSection() {
   return (
     <div className={`flex flex-col gap-5 ${SECTION_MIN_H}`}>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 lg:gap-4">
-        <KpiCard label="Current Balance" value="62,450" prefix="$" change={6.03} delay={0} icon={DollarSign} glowColor="blue" />
+        <KpiCard label="Current Balance" value="62,450" prefix="$" change={6.03} delay={0} icon={DollarSign} glowColor="blue" accounts={["QNB", "Cash", "Card"]} />
         <KpiCard label="Current Income" value="6,450" prefix="+$" change={8.2} delay={0.06} icon={TrendingUp} glowColor="green" />
         <KpiCard label="Current Expenses" value="2,155" prefix="-$" change={3.4} delay={0.12} icon={ArrowDownRight} glowColor="red" />
       </div>
