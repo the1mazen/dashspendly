@@ -7,7 +7,7 @@ import {
   ChevronRight, Bell, Search, Settings, Wallet, CircleDot, Eye, FileText, UserCog,
   X, Check, AlertTriangle, Info, DollarSign, Clock, Star, Plus, Download, Filter,
   Calendar, Mail, Lock, Palette, Monitor, BellRing, CreditCard, Languages, HelpCircle,
-  LogOut, ChevronDown, Activity, Zap,
+  LogOut, ChevronDown, Activity, Zap, Landmark,
 } from "lucide-react"
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, LineChart, Line,
@@ -419,40 +419,68 @@ function NotificationPanel({ isOpen, onClose, items, onMarkRead, onMarkAllRead }
   )
 }
 
-// ─── Section: Personal finance dashboard ────────────────────────
+// ─── Section: Accounts ──────────────────────────────────────────
 
-function DashboardSection() {
+const accountSummaries = [
+  { name: "QNB", type: "Checking account", balance: "32,450.00", icon: Landmark, tone: "blue" as const },
+  { name: "Cash", type: "Cash wallet", balance: "8,275.00", icon: Wallet, tone: "green" as const },
+  { name: "Card", type: "Credit card", balance: "21,725.00", icon: CreditCard, tone: "red" as const },
+]
+
+function AccountsSection() {
   return (
     <div className={`flex flex-col gap-5 ${SECTION_MIN_H}`}>
-      <AccountSelector accounts={["QNB", "Cash", "Card"]} />
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 lg:gap-4">
-        <KpiCard label="Current Balance" value="62,450" prefix="$" change={6.03} delay={0} icon={DollarSign} glowColor="blue" />
-        <KpiCard label="Current Income" value="6,450" prefix="+$" change={8.2} delay={0.06} icon={TrendingUp} glowColor="green" />
-        <KpiCard label="Current Expenses" value="2,155" prefix="-$" change={3.4} delay={0.12} icon={ArrowDownRight} glowColor="red" />
+        {accountSummaries.map((account, i) => {
+          const Icon = account.icon
+          return (
+            <motion.div
+              key={account.name}
+              initial={{ opacity: 0, y: 16, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0.5, delay: i * 0.06, ease: EASE_OUT }}
+              className={`relative overflow-hidden rounded-2xl surface-card p-4 lg:p-5 glow-${account.tone}-sm`}
+              style={{ boxShadow: CARD_SHADOW }}
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="size-10 rounded-xl bg-accent/60 flex items-center justify-center">
+                    <Icon className="size-4 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-foreground font-display">{account.name}</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5 font-sans">{account.type}</p>
+                  </div>
+                </div>
+                <button className="text-xs font-semibold text-primary hover:underline font-sans">Manage</button>
+              </div>
+              <div className="mt-6">
+                <p className="text-[11px] font-semibold tracking-[0.08em] uppercase text-muted-foreground font-sans">Available balance</p>
+                <p className="text-2xl font-bold text-foreground font-mono tracking-tighter mt-1">${account.balance}</p>
+              </div>
+            </motion.div>
+          )
+        })}
       </div>
 
       <SectionPanel className="relative overflow-hidden">
         <GlowOrb className="w-64 h-64 -top-32 -right-32 bg-primary/10" />
-        <SectionHeader title="Recent Transactions" subtitle="Your latest income and expenses">
-          <button className="text-xs font-semibold text-primary hover:underline font-sans">View all</button>
+        <SectionHeader title="Accounts overview" subtitle="Your connected accounts and balances">
+          <button className="text-xs font-semibold text-primary hover:underline font-sans">Add account</button>
         </SectionHeader>
         <div className="flex flex-col">
-          <div className="hidden sm:grid grid-cols-[1.5fr_1fr_1fr_auto] gap-4 px-3 pb-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">
-            <span>Description</span><span>Category</span><span>Date</span><span className="text-right">Amount</span>
-          </div>
-          {recentTransactions.map((item, i) => (
-            <motion.div key={item.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }} className="grid grid-cols-[1fr_auto] sm:grid-cols-[1.5fr_1fr_1fr_auto] gap-x-4 gap-y-1 items-center px-3 py-3.5 border-t border-border/30 hover:bg-accent/20 transition-colors">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className={`size-8 rounded-lg flex items-center justify-center shrink-0 ${item.type === "income" ? "bg-fin-gain/12 text-fin-gain" : "bg-fin-loss/12 text-fin-loss"}`}>
-                  {item.type === "income" ? <ArrowDownRight className="size-4 rotate-180" /> : <ArrowUpRight className="size-4 rotate-90" />}
+          {accountSummaries.map((account, i) => {
+            const Icon = account.icon
+            return (
+              <motion.div key={account.name} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }} className="flex items-center justify-between gap-4 px-3 py-3.5 border-t border-border/30 hover:bg-accent/20 transition-colors">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="size-8 rounded-lg bg-accent/60 flex items-center justify-center shrink-0"><Icon className="size-4 text-primary" /></div>
+                  <div><p className="text-sm font-semibold text-foreground font-sans">{account.name}</p><p className="text-xs text-muted-foreground font-sans">{account.type}</p></div>
                 </div>
-                <span className="text-sm font-semibold text-foreground truncate font-sans">{item.description}</span>
-              </div>
-              <span className="text-xs text-muted-foreground font-sans">{item.category}</span>
-              <span className="text-xs text-muted-foreground font-mono">{item.date}</span>
-              <span className={`text-sm font-bold font-mono text-right ${item.type === "income" ? "text-fin-gain" : "text-fin-loss"}`}>{item.amount >= 0 ? "+" : "−"}${Math.abs(item.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
-            </motion.div>
-          ))}
+                <span className="text-sm font-bold font-mono text-foreground">${account.balance}</span>
+              </motion.div>
+            )
+          })}
         </div>
       </SectionPanel>
     </div>
@@ -1124,9 +1152,9 @@ function SettingsSection() {
 // ─── Main Dashboard ─────────────────────────────────────────────
 
 const sectionComponents: Record<SectionId, React.FC> = {
-  dashboard: DashboardSection,
+  dashboard: AccountsSection,
   transactions: TransactionsSection,
-  accounts: TransactionsSection,
+  accounts: AccountsSection,
   categories: TransactionsSection,
   settings: SettingsSection,
 }
