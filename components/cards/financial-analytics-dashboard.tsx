@@ -407,15 +407,300 @@ function NetWorthCard() {
   )
 }
 
+function AddTransactionModal({
+  isOpen,
+  onClose,
+}: {
+  isOpen: boolean
+  onClose: () => void
+}) {
+  const { accounts, categories, createTransaction } = useFinanceData()
+  const { profile } = useUserProfile()
+
+  const [newAmount, setNewAmount] = useState("")
+  const [newType, setNewType] = useState<"expense" | "income" | "transfer">("expense")
+  const [newAccountId, setNewAccountId] = useState(accounts[0]?.id || "")
+  const [newDestAccountId, setNewDestAccountId] = useState("")
+  const [newCategoryId, setNewCategoryId] = useState("")
+  const [newCustomCategory, setNewCustomCategory] = useState("")
+  const [newDate, setNewDate] = useState(new Date().toISOString().split("T")[0])
+  const [newNote, setNewNote] = useState("")
+  const [txError, setTxError] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const currencySymbol = profile.currency === "EUR" ? "€" : profile.currency === "GBP" ? "£" : profile.currency === "EGP" ? "EGP " : profile.currency === "AED" ? "AED " : "$"
+
+  const handleAddTransaction = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setTxError("")
+
+    const amountNum = parseFloat(newAmount)
+    if (isNaN(amountNum) || amountNum <= 0) {
+      setTxError("Please enter a valid amount greater than 0.")
+      return
+    }
+
+    const accId = newAccountId || accounts[0]?.id
+    if (!accId) {
+      setTxError("Please create an account first before adding transactions.")
+      return
+    }
+
+    if (newType === "transfer") {
+      const destId = newDestAccountId || accounts.find((a) => a.id !== accId)?.id
+      if (!destId || destId === accId) {
+        setTxError("Please select two different accounts for the transfer.")
+        return
+      }
+    }
+
+    setIsSubmitting(true)
+    try {
+      const isCustomCat = newCategoryId === "custom" || (!newCategoryId && newCustomCategory.trim() !== "")
+      const catId = !isCustomCat && newCategoryId ? newCategoryId : undefined
+      const catName = isCustomCat && newCustomCategory.trim() ? newCustomCategory.trim() : undefined
+
+      await createTransaction({
+        account_id: accId,
+        destination_account_id: newType === "transfer" ? (newDestAccountId || accounts.find((a) => a.id !== accId)?.id) : undefined,
+        category_id: catId,
+        category_name: catName,
+        amount: amountNum,
+        type: newType,
+        note: newNote.trim(),
+        description: newNote.trim() || (newType === "transfer" ? "Transfer" : newType === "income" ? "Income" : "Expense"),
+        date: newDate || new Date().toISOString().split("T")[0],
+      })
+
+      // Reset and close on success
+      setNewAmount("")
+      setNewNote("")
+      setNewCustomCategory("")
+      setTxError("")
+      onClose()
+    } catch (err: any) {
+      setTxError(err?.message || "Failed to create transaction. Please try again.")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            transition={{ duration: 0.2 }}
+            className="w-full max-w-lg bg-[#12121a] border border-white/10 rounded-3xl p-6 shadow-2xl shadow-black/80 overflow-hidden"
+          >
+            <form onSubmit={handleAddTransaction} className="flex flex-col gap-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-base font-bold text-white font-display">Add New Transaction</h4>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="text-white/40 hover:text-white transition-colors p-1 cursor-pointer"
+                >
+                  <X className="size-5" />
+                </button>
+              </div>
+
+              {txError && (
+                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-sans flex items-center gap-2">
+                  <AlertTriangle className="size-4 shrink-0" />
+                  <span>{txError}</span>
+                </div>
+              )}
+
+              {/* Type Switcher */}
+              <div>
+                <label className="text-[11px] font-semibold text-white/50 uppercase tracking-wide block mb-1.5 font-sans">
+                  Transaction Type
+                </label>
+                <div className="grid grid-cols-3 gap-1.5 p-1 bg-[#1a1a26] border border-white/5 rounded-xl">
+                  {(["expense", "income", "transfer"] as const).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setNewType(t)}
+                      className={`py-2 rounded-lg text-xs font-semibold capitalize transition-all font-sans cursor-pointer ${
+                        newType === t
+                          ? "bg-[#5b4dc7] text-white shadow-sm"
+                          : "text-white/50 hover:text-white hover:bg-white/5"
+                      }`}
+                    >
+                      {t === "expense" ? "Expense" : t === "income" ? "Income" : "Transfer"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Amount */}
+                <div>
+                  <label className="text-[11px] font-semibold text-white/50 uppercase tracking-wide block mb-1 font-sans">
+                    Amount ({currencySymbol.trim()})
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    placeholder="0.00"
+                    value={newAmount}
+                    onChange={(e) => setNewAmount(e.target.value)}
+                    className="w-full px-3.5 py-2 bg-[#1a1a26] border border-white/5 rounded-xl text-sm text-white focus:outline-none focus:border-[#5b4dc7]/50 focus:ring-1 focus:ring-[#5b4dc7]/20 font-mono"
+                  />
+                </div>
+
+                {/* Date */}
+                <div>
+                  <label className="text-[11px] font-semibold text-white/50 uppercase tracking-wide block mb-1 font-sans">
+                    Date
+                  </label>
+                  <input
+                    type="date"
+                    value={newDate}
+                    onChange={(e) => setNewDate(e.target.value)}
+                    className="w-full px-3.5 py-2 bg-[#1a1a26] border border-white/5 rounded-xl text-sm text-white focus:outline-none focus:border-[#5b4dc7]/50 focus:ring-1 focus:ring-[#5b4dc7]/20 font-sans"
+                  />
+                </div>
+
+                {/* Source Account */}
+                <div>
+                  <label className="text-[11px] font-semibold text-white/50 uppercase tracking-wide block mb-1 font-sans">
+                    {newType === "transfer" ? "From Account" : "Account"}
+                  </label>
+                  <select
+                    value={newAccountId || accounts[0]?.id}
+                    onChange={(e) => setNewAccountId(e.target.value)}
+                    required
+                    className="w-full px-3.5 py-2 bg-[#1a1a26] border border-white/5 rounded-xl text-sm text-white focus:outline-none focus:border-[#5b4dc7]/50 font-sans appearance-none cursor-pointer"
+                  >
+                    {accounts.length === 0 ? (
+                      <option value="">No accounts available</option>
+                    ) : (
+                      accounts.map((acc) => (
+                        <option key={acc.id} value={acc.id}>
+                          {acc.name} ({currencySymbol}{Number(acc.balance || 0).toFixed(2)})
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </div>
+
+                {/* Destination Account (Only for Transfer) */}
+                {newType === "transfer" ? (
+                  <div>
+                    <label className="text-[11px] font-semibold text-white/50 uppercase tracking-wide block mb-1 font-sans">
+                      To Account
+                    </label>
+                    <select
+                      value={newDestAccountId || accounts.find((a) => a.id !== (newAccountId || accounts[0]?.id))?.id || ""}
+                      onChange={(e) => setNewDestAccountId(e.target.value)}
+                      required
+                      className="w-full px-3.5 py-2 bg-[#1a1a26] border border-white/5 rounded-xl text-sm text-white focus:outline-none focus:border-[#5b4dc7]/50 font-sans appearance-none cursor-pointer"
+                    >
+                      {accounts
+                        .filter((a) => a.id !== (newAccountId || accounts[0]?.id))
+                        .map((acc) => (
+                          <option key={acc.id} value={acc.id}>
+                            {acc.name} ({currencySymbol}{Number(acc.balance || 0).toFixed(2)})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                ) : (
+                  /* Category */
+                  <div>
+                    <label className="text-[11px] font-semibold text-white/50 uppercase tracking-wide block mb-1 font-sans">
+                      Category
+                    </label>
+                    <select
+                      value={newCategoryId}
+                      onChange={(e) => setNewCategoryId(e.target.value)}
+                      className="w-full px-3.5 py-2 bg-[#1a1a26] border border-white/5 rounded-xl text-sm text-white focus:outline-none focus:border-[#5b4dc7]/50 font-sans appearance-none cursor-pointer"
+                    >
+                      <option value="">General</option>
+                      {categories.map((cat) => (
+                        <option key={cat.id} value={cat.id}>
+                          {cat.name}
+                        </option>
+                      ))}
+                      <option value="custom">+ Add / Enter custom category...</option>
+                    </select>
+                  </div>
+                )}
+
+                {/* Custom Category Input */}
+                {newType !== "transfer" && (newCategoryId === "custom" || categories.length === 0) && (
+                  <div className="sm:col-span-2">
+                    <label className="text-[11px] font-semibold text-white/50 uppercase tracking-wide block mb-1 font-sans">
+                      Custom Category Name
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Groceries, Rent, Freelance"
+                      value={newCustomCategory}
+                      onChange={(e) => setNewCustomCategory(e.target.value)}
+                      className="w-full px-3.5 py-2 bg-[#1a1a26] border border-white/5 rounded-xl text-sm text-white focus:outline-none focus:border-[#5b4dc7]/50 font-sans"
+                    />
+                  </div>
+                )}
+
+                {/* Note */}
+                <div className="sm:col-span-2">
+                  <label className="text-[11px] font-semibold text-white/50 uppercase tracking-wide block mb-1 font-sans">
+                    Note (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Coffee, Monthly subscription, Freelance payment"
+                    value={newNote}
+                    onChange={(e) => setNewNote(e.target.value)}
+                    className="w-full px-3.5 py-2 bg-[#1a1a26] border border-white/5 rounded-xl text-sm text-white focus:outline-none focus:border-[#5b4dc7]/50 font-sans"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-white/5">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-white/60 hover:text-white hover:bg-white/5 transition-colors font-sans cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-5 py-2 rounded-xl text-xs font-semibold bg-[#5b4dc7] text-white hover:bg-[#5b4dc7]/90 transition-all font-sans shadow-lg shadow-[#5b4dc7]/25 cursor-pointer disabled:opacity-50"
+                >
+                  {isSubmitting ? "Saving..." : "Save Transaction"}
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  )
+}
+
 function DashboardAccountsSection({ onNavigate }: { onNavigate?: (section: SectionId) => void }) {
   const { accounts, transactions } = useFinanceData()
   const { profile } = useUserProfile()
+  const [showAddTxModal, setShowAddTxModal] = useState(false)
   const currencySymbol = profile.currency === "EUR" ? "€" : profile.currency === "GBP" ? "£" : profile.currency === "EGP" ? "EGP " : profile.currency === "AED" ? "AED " : "$"
 
   const recentTx = transactions.slice(0, 6)
 
   return (
     <div className={`flex flex-col gap-5 ${SECTION_MIN_H}`}>
+      <AddTransactionModal isOpen={showAddTxModal} onClose={() => setShowAddTxModal(false)} />
+
       {accounts.length === 0 ? (
         <div className="rounded-2xl surface-card p-8 border border-dashed border-border/60 text-center flex flex-col items-center justify-center gap-2" style={{ boxShadow: CARD_SHADOW }}>
           <div className="size-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary mb-1">
@@ -475,7 +760,7 @@ function DashboardAccountsSection({ onNavigate }: { onNavigate?: (section: Secti
           </div>
           <div className="flex items-center gap-3">
             <button
-              onClick={() => onNavigate?.("transactions")}
+              onClick={() => setShowAddTxModal(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors font-sans cursor-pointer shadow-sm"
             >
               <Plus className="size-3.5" />
@@ -837,24 +1122,13 @@ function AccountsSection() {
 // ─── Section: Transactions ──────────────────────────────────────
 
 function TransactionsSection() {
-  const { transactions, accounts, categories, createTransaction, totalIncome, totalExpense } = useFinanceData()
+  const { transactions, totalIncome, totalExpense } = useFinanceData()
   const { profile } = useUserProfile()
   const [searchQuery, setSearchQuery] = useState("")
   const [typeFilter, setTypeFilter] = useState<"all" | "income" | "expense">("all")
   const [categoryFilter, setCategoryFilter] = useState<string>("all")
   const [accountFilter, setAccountFilter] = useState<string>("all")
   const [showAddModal, setShowAddModal] = useState(false)
-
-  const [newAmount, setNewAmount] = useState("")
-  const [newType, setNewType] = useState<"expense" | "income" | "transfer">("expense")
-  const [newAccountId, setNewAccountId] = useState(accounts[0]?.id || "")
-  const [newDestAccountId, setNewDestAccountId] = useState("")
-  const [newCategoryId, setNewCategoryId] = useState("")
-  const [newCustomCategory, setNewCustomCategory] = useState("")
-  const [newDate, setNewDate] = useState(new Date().toISOString().split("T")[0])
-  const [newNote, setNewNote] = useState("")
-  const [txError, setTxError] = useState("")
-  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const currencySymbol = profile.currency === "EUR" ? "€" : profile.currency === "GBP" ? "£" : profile.currency === "EGP" ? "EGP " : profile.currency === "AED" ? "AED " : "$"
 
@@ -876,63 +1150,10 @@ function TransactionsSection() {
 
   const netSavings = totalIncome - totalExpense
 
-  const handleAddTransaction = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setTxError("")
-
-    const amountNum = parseFloat(newAmount)
-    if (isNaN(amountNum) || amountNum <= 0) {
-      setTxError("Please enter a valid amount greater than 0.")
-      return
-    }
-
-    const accId = newAccountId || accounts[0]?.id
-    if (!accId) {
-      setTxError("Please create an account first before adding transactions.")
-      return
-    }
-
-    if (newType === "transfer") {
-      const destId = newDestAccountId || accounts.find((a) => a.id !== accId)?.id
-      if (!destId || destId === accId) {
-        setTxError("Please select two different accounts for the transfer.")
-        return
-      }
-    }
-
-    setIsSubmitting(true)
-    try {
-      const isCustomCat = newCategoryId === "custom" || (!newCategoryId && newCustomCategory.trim() !== "")
-      const catId = !isCustomCat && newCategoryId ? newCategoryId : undefined
-      const catName = isCustomCat && newCustomCategory.trim() ? newCustomCategory.trim() : undefined
-
-      await createTransaction({
-        account_id: accId,
-        destination_account_id: newType === "transfer" ? (newDestAccountId || accounts.find((a) => a.id !== accId)?.id) : undefined,
-        category_id: catId,
-        category_name: catName,
-        amount: amountNum,
-        type: newType,
-        note: newNote.trim(),
-        description: newNote.trim() || (newType === "transfer" ? "Transfer" : newType === "income" ? "Income" : "Expense"),
-        date: newDate || new Date().toISOString().split("T")[0],
-      })
-
-      // Reset form and close ONLY on success
-      setNewAmount("")
-      setNewNote("")
-      setNewCustomCategory("")
-      setTxError("")
-      setShowAddModal(false)
-    } catch (err: any) {
-      setTxError(err?.message || "Failed to create transaction. Please try again.")
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
   return (
     <div className={`flex flex-col gap-5 ${SECTION_MIN_H}`}>
+      <AddTransactionModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} />
+
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
         <KpiCard label="Total Income" value={totalIncome.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} prefix={currencySymbol} delay={0} icon={TrendingUp} />
@@ -969,7 +1190,7 @@ function TransactionsSection() {
                 ))}
               </div>
               <button
-                onClick={() => { setTxError(""); setShowAddModal(true) }}
+                onClick={() => setShowAddModal(true)}
                 className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors font-sans cursor-pointer shadow-sm shrink-0"
               >
                 <Plus className="size-3.5" />
@@ -977,172 +1198,6 @@ function TransactionsSection() {
               </button>
             </div>
           </div>
-
-          {/* Add Transaction Modal Form */}
-          <AnimatePresence>
-            {showAddModal && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.25 }}
-                className="overflow-hidden"
-              >
-                <form onSubmit={handleAddTransaction} className="p-5 rounded-2xl bg-muted/30 border border-primary/30 flex flex-col gap-4 glow-teal-sm">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-bold text-foreground font-display">Add New Transaction</h4>
-                    <button type="button" onClick={() => setShowAddModal(false)} className="text-muted-foreground hover:text-foreground transition-colors p-1 cursor-pointer">
-                      <X className="size-4" />
-                    </button>
-                  </div>
-
-                  {txError && (
-                    <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-sans flex items-center gap-2">
-                      <AlertTriangle className="size-4 shrink-0" />
-                      <span>{txError}</span>
-                    </div>
-                  )}
-
-                  {/* Transaction Type Segmented Control */}
-                  <div>
-                    <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5 font-sans">Transaction Type</label>
-                    <div className="grid grid-cols-3 gap-1.5 p-1 bg-background border border-border/60 rounded-xl">
-                      {(["expense", "income", "transfer"] as const).map((t) => (
-                        <button
-                          key={t}
-                          type="button"
-                          onClick={() => setNewType(t)}
-                          className={`py-2 rounded-lg text-xs font-semibold capitalize transition-all font-sans cursor-pointer ${
-                            newType === t
-                              ? "bg-primary text-primary-foreground shadow-sm"
-                              : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
-                          }`}
-                        >
-                          {t === "expense" ? "Expense" : t === "income" ? "Income" : "Transfer"}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {/* Amount */}
-                    <div>
-                      <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1 font-sans">Amount</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        required
-                        placeholder="0.00"
-                        value={newAmount}
-                        onChange={(e) => setNewAmount(e.target.value)}
-                        className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary font-mono"
-                      />
-                    </div>
-
-                    {/* Source Account (or single Account) */}
-                    <div>
-                      <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1 font-sans">
-                        {newType === "transfer" ? "From Account" : "Account"}
-                      </label>
-                      <select
-                        value={newAccountId || accounts[0]?.id}
-                        onChange={(e) => setNewAccountId(e.target.value)}
-                        required
-                        className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary font-sans appearance-none cursor-pointer"
-                      >
-                        {accounts.length === 0 ? (
-                          <option value="">No accounts available</option>
-                        ) : (
-                          accounts.map((acc) => (
-                            <option key={acc.id} value={acc.id}>{acc.name} ({currencySymbol}{acc.balance.toFixed(2)})</option>
-                          ))
-                        )}
-                      </select>
-                    </div>
-
-                    {/* Destination Account (Only for Transfer) */}
-                    {newType === "transfer" ? (
-                      <div>
-                        <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1 font-sans">To Account</label>
-                        <select
-                          value={newDestAccountId || accounts.find((a) => a.id !== (newAccountId || accounts[0]?.id))?.id || ""}
-                          onChange={(e) => setNewDestAccountId(e.target.value)}
-                          required
-                          className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary font-sans appearance-none cursor-pointer"
-                        >
-                          {accounts
-                            .filter((a) => a.id !== (newAccountId || accounts[0]?.id))
-                            .map((acc) => (
-                              <option key={acc.id} value={acc.id}>{acc.name} ({currencySymbol}{acc.balance.toFixed(2)})</option>
-                            ))}
-                        </select>
-                      </div>
-                    ) : (
-                      /* Category (For Income/Expense) */
-                      <div>
-                        <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1 font-sans">Category</label>
-                        <select
-                          value={newCategoryId}
-                          onChange={(e) => setNewCategoryId(e.target.value)}
-                          className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary font-sans appearance-none cursor-pointer"
-                        >
-                          <option value="">General</option>
-                          {categories.map((cat) => (
-                            <option key={cat.id} value={cat.id}>{cat.name}</option>
-                          ))}
-                          <option value="custom">+ Add / Enter custom category...</option>
-                        </select>
-                      </div>
-                    )}
-
-                    {/* Custom Category Input if selected or no categories exist */}
-                    {newType !== "transfer" && (newCategoryId === "custom" || categories.length === 0) && (
-                      <div>
-                        <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1 font-sans">Category Name</label>
-                        <input
-                          type="text"
-                          placeholder="e.g. Groceries, Rent, Salary"
-                          value={newCustomCategory}
-                          onChange={(e) => setNewCustomCategory(e.target.value)}
-                          className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary font-sans"
-                        />
-                      </div>
-                    )}
-
-                    {/* Date */}
-                    <div>
-                      <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1 font-sans">Date</label>
-                      <input
-                        type="date"
-                        value={newDate}
-                        onChange={(e) => setNewDate(e.target.value)}
-                        className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary font-sans"
-                      />
-                    </div>
-
-                    {/* Note / Description */}
-                    <div className={newType === "transfer" ? "sm:col-span-2" : ""}>
-                      <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1 font-sans">Note (Optional)</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Coffee with friends, Monthly rent"
-                        value={newNote}
-                        onChange={(e) => setNewNote(e.target.value)}
-                        className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary font-sans"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/40">
-                    <button type="button" onClick={() => setShowAddModal(false)} className="px-4 py-2 rounded-xl text-xs font-semibold text-muted-foreground hover:bg-accent/40 transition-colors font-sans cursor-pointer">Cancel</button>
-                    <button type="submit" disabled={isSubmitting} className="px-5 py-2 rounded-xl text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-sans shadow-md cursor-pointer disabled:opacity-50">
-                      {isSubmitting ? "Saving..." : "Save Transaction"}
-                    </button>
-                  </div>
-                </form>
-              </motion.div>
-            )}
-          </AnimatePresence>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="relative sm:col-span-1">

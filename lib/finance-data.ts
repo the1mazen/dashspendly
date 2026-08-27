@@ -46,7 +46,6 @@ export interface Category {
 const STORAGE_ACCOUNTS_KEY = "spendly_accounts"
 const STORAGE_TRANSACTIONS_KEY = "spendly_transactions"
 const STORAGE_CATEGORIES_KEY = "spendly_categories"
-const FINANCE_UPDATED_EVENT = "spendly_finance_updated"
 
 export function getLocalAccounts(): Account[] {
   if (typeof window === "undefined") return []
@@ -63,7 +62,6 @@ export function saveLocalAccounts(accounts: Account[]): Account[] {
   if (typeof window === "undefined") return accounts
   try {
     localStorage.setItem(STORAGE_ACCOUNTS_KEY, JSON.stringify(accounts))
-    window.dispatchEvent(new CustomEvent(FINANCE_UPDATED_EVENT))
   } catch {
     // Ignore write errors
   }
@@ -85,7 +83,6 @@ export function saveLocalTransactions(transactions: Transaction[]): Transaction[
   if (typeof window === "undefined") return transactions
   try {
     localStorage.setItem(STORAGE_TRANSACTIONS_KEY, JSON.stringify(transactions))
-    window.dispatchEvent(new CustomEvent(FINANCE_UPDATED_EVENT))
   } catch {
     // Ignore write errors
   }
@@ -107,7 +104,6 @@ export function saveLocalCategories(categories: Category[]): Category[] {
   if (typeof window === "undefined") return categories
   try {
     localStorage.setItem(STORAGE_CATEGORIES_KEY, JSON.stringify(categories))
-    window.dispatchEvent(new CustomEvent(FINANCE_UPDATED_EVENT))
   } catch {
     // Ignore write errors
   }
@@ -121,101 +117,91 @@ export function useFinanceData() {
   const [loading, setLoading] = useState(true)
 
   const fetchData = useCallback(async () => {
-    // 1. Try fetching from Supabase if configured
+    // 1. Try fetching from Supabase in parallel
     if (isSupabaseConfigured && supabase) {
       try {
         const userId = await resolveCurrentUserId()
-
-        // Fetch accounts
-        let query = supabase.from("accounts").select("*").order("created_at", { ascending: true })
         if (userId) {
-          query = query.eq("user_id", userId)
-        }
-        const { data: dbAccounts, error: accError } = await query
+          const [accRes, txRes, catRes] = await Promise.all([
+            supabase.from("accounts").select("*").eq("user_id", userId).order("created_at", { ascending: true }),
+            supabase.from("transactions").select("*").eq("user_id", userId).order("date", { ascending: false }),
+            supabase.from("categories").select("*").eq("user_id", userId).order("name", { ascending: true }),
+          ])
 
-        // Fetch transactions
-        let txQuery = supabase.from("transactions").select("*").order("date", { ascending: false })
-        if (userId) {
-          txQuery = txQuery.eq("user_id", userId)
-        }
-        const { data: dbTransactions } = await txQuery
+          const dbAccounts = accRes.data || []
+          const dbTransactions = txRes.data || []
+          const dbCategories = catRes.data || []
 
-        // Fetch categories
-        let catQuery = supabase.from("categories").select("*").order("created_at", { ascending: true })
-        if (userId) {
-          catQuery = catQuery.eq("user_id", userId)
-        }
-        const { data: dbCategories } = await catQuery
+          if (!accRes.error && dbAccounts.length > 0) {
+            const parsedTransactions: Transaction[] = dbTransactions.map((t: any) => {
+              const amountCents = t.amount_cents ?? 0
+              const amount = amountCents / 100
+              const accountObj = dbAccounts.find((a: any) => String(a.id) === String(t.account_id))
+              const catObj = dbCategories.find((c: any) => String(c.id) === String(t.category_id))
+              return {
+                id: String(t.id),
+                user_id: t.user_id,
+                account_id: String(t.account_id),
+                category_id: t.category_id ? String(t.category_id) : undefined,
+                amount_cents: amountCents,
+                amount,
+                type: t.type === "expense" ? "expense" : "income",
+                transfer_pair_id: t.transfer_pair_id ? String(t.transfer_pair_id) : undefined,
+                note: t.note,
+                description: t.note || t.description || "Transaction",
+                date: t.date || (t.created_at ? new Date(t.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Recent"),
+                created_at: t.created_at,
+                account_name: accountObj?.name || "Account",
+                category_name: catObj?.name || "General",
+              }
+            })
 
-        if (!accError && dbAccounts && dbAccounts.length > 0) {
-          const parsedTransactions: Transaction[] = (dbTransactions || []).map((t: any) => {
-            const amountCents = t.amount_cents ?? 0
-            const amount = amountCents / 100
-            const accountObj = dbAccounts?.find((a: any) => a.id === t.account_id)
-            const catObj = dbCategories?.find((c: any) => c.id === t.category_id)
-            return {
-              id: String(t.id),
-              user_id: t.user_id,
-              account_id: String(t.account_id),
-              category_id: t.category_id ? String(t.category_id) : undefined,
-              amount_cents: amountCents,
-              amount,
-              type: t.type === "expense" ? "expense" : "income",
-              transfer_pair_id: t.transfer_pair_id ? String(t.transfer_pair_id) : undefined,
-              note: t.note,
-              description: t.note || t.description || "Transaction",
-              date: t.date || (t.created_at ? new Date(t.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Recent"),
-              created_at: t.created_at,
-              account_name: accountObj?.name || "Account",
-              category_name: catObj?.name || "General",
-            }
-          })
+            const parsedAccounts: Account[] = dbAccounts.map((a: any) => {
+              const startCents = a.starting_balance_cents ?? 0
+              const accountTxSum = parsedTransactions
+                .filter((t) => t.account_id === String(a.id))
+                .reduce((sum, t) => sum + (t.type === "income" ? t.amount : -t.amount), 0)
+              const currentBalance = (startCents / 100) + accountTxSum
 
-          const parsedAccounts: Account[] = dbAccounts.map((a: any) => {
-            const startCents = a.starting_balance_cents ?? 0
-            const accountTxSum = parsedTransactions
-              .filter((t) => t.account_id === String(a.id))
-              .reduce((sum, t) => sum + (t.type === "income" ? t.amount : -t.amount), 0)
-            const currentBalance = (startCents / 100) + accountTxSum
+              return {
+                id: String(a.id),
+                user_id: a.user_id,
+                name: a.name,
+                type: a.type || "bank",
+                starting_balance_cents: startCents,
+                balance: currentBalance,
+                currency: a.currency || "USD",
+                created_at: a.created_at,
+              }
+            })
 
-            return {
-              id: String(a.id),
-              user_id: a.user_id,
-              name: a.name,
-              type: a.type || "bank",
-              starting_balance_cents: startCents,
-              balance: currentBalance,
-              currency: a.currency || "USD",
-              created_at: a.created_at,
-            }
-          })
+            const parsedCategories: Category[] = dbCategories.map((c: any) => {
+              const catSpent = parsedTransactions
+                .filter((t) => t.category_id === String(c.id) && t.type === "expense")
+                .reduce((sum, t) => sum + Math.abs(t.amount), 0)
 
-          const parsedCategories: Category[] = (dbCategories || []).map((c: any) => {
-            const catSpent = parsedTransactions
-              .filter((t) => t.category_id === String(c.id) && t.type === "expense")
-              .reduce((sum, t) => sum + Math.abs(t.amount), 0)
+              return {
+                id: String(c.id),
+                user_id: c.user_id,
+                name: c.name,
+                type: c.type || "expense",
+                parent_category_id: c.parent_category_id ? String(c.parent_category_id) : undefined,
+                currency: c.currency || "USD",
+                total_spent: catSpent,
+                created_at: c.created_at,
+              }
+            })
 
-            return {
-              id: String(c.id),
-              user_id: c.user_id,
-              name: c.name,
-              type: c.type || "expense",
-              parent_category_id: c.parent_category_id ? String(c.parent_category_id) : undefined,
-              currency: c.currency || "USD",
-              total_spent: catSpent,
-              created_at: c.created_at,
-            }
-          })
+            setAccounts(parsedAccounts)
+            setTransactions(parsedTransactions)
+            setCategories(parsedCategories)
 
-          setAccounts(parsedAccounts)
-          setTransactions(parsedTransactions)
-          setCategories(parsedCategories)
-
-          saveLocalAccounts(parsedAccounts)
-          saveLocalTransactions(parsedTransactions)
-          saveLocalCategories(parsedCategories)
-          setLoading(false)
-          return
+            saveLocalAccounts(parsedAccounts)
+            saveLocalTransactions(parsedTransactions)
+            saveLocalCategories(parsedCategories)
+            setLoading(false)
+            return
+          }
         }
       } catch (err) {
         console.warn("Supabase finance data fetch error:", err)
@@ -234,18 +220,6 @@ export function useFinanceData() {
 
   useEffect(() => {
     fetchData()
-
-    const handleSync = () => {
-      fetchData()
-    }
-
-    window.addEventListener(FINANCE_UPDATED_EVENT, handleSync)
-    window.addEventListener("storage", handleSync)
-
-    return () => {
-      window.removeEventListener(FINANCE_UPDATED_EVENT, handleSync)
-      window.removeEventListener("storage", handleSync)
-    }
   }, [fetchData])
 
   const createAccount = useCallback(async (accountData: { name: string; type: string; starting_balance: number; currency?: string }) => {
@@ -391,81 +365,57 @@ export function useFinanceData() {
           ? crypto.randomUUID()
           : "tp_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9)
 
-        // 1. Outgoing transfer row (source account)
         const outgoingNote = noteText ? `Transfer to ${destAcc?.name || "Account"}: ${noteText}` : `Transfer to ${destAcc?.name || "Account"}`
-        const { data: outData, error: outError } = await supabase
-          .from("transactions")
-          .insert({
-            user_id: userId,
-            account_id: txData.account_id,
-            category_id: resolvedCategoryId,
-            amount_cents: amountCents,
-            type: "expense",
-            transfer_pair_id: transferPairId,
-            note: outgoingNote,
-            date: dateStr,
-          })
-          .select()
-          .single()
-
-        if (outError) {
-          throw new Error(outError.message || "Failed to create outgoing transfer.")
-        }
-
-        // 2. Incoming transfer row (destination account)
         const incomingNote = noteText ? `Transfer from ${srcAcc?.name || "Account"}: ${noteText}` : `Transfer from ${srcAcc?.name || "Account"}`
-        const { data: inData, error: inError } = await supabase
+
+        const { data, error } = await supabase
           .from("transactions")
-          .insert({
-            user_id: userId,
-            account_id: txData.destination_account_id,
-            category_id: resolvedCategoryId,
-            amount_cents: amountCents,
-            type: "income",
-            transfer_pair_id: transferPairId,
-            note: incomingNote,
-            date: dateStr,
-          })
+          .insert([
+            {
+              user_id: userId,
+              account_id: txData.account_id,
+              category_id: resolvedCategoryId,
+              amount_cents: amountCents,
+              type: "expense",
+              transfer_pair_id: transferPairId,
+              note: outgoingNote,
+              date: dateStr,
+            },
+            {
+              user_id: userId,
+              account_id: txData.destination_account_id,
+              category_id: resolvedCategoryId,
+              amount_cents: amountCents,
+              type: "income",
+              transfer_pair_id: transferPairId,
+              note: incomingNote,
+              date: dateStr,
+            },
+          ])
           .select()
-          .single()
 
-        if (inError) {
-          throw new Error(inError.message || "Failed to create incoming transfer.")
+        if (error) {
+          throw new Error(error.message || "Failed to create transfer.")
         }
 
-        if (outData) {
-          createdTxs.push({
-            id: String(outData.id),
-            user_id: outData.user_id,
-            account_id: String(outData.account_id),
-            category_id: outData.category_id ? String(outData.category_id) : undefined,
-            amount_cents: outData.amount_cents,
-            amount: outData.amount_cents / 100,
-            type: "expense",
-            transfer_pair_id: outData.transfer_pair_id,
-            note: outData.note,
-            description: outData.note,
-            date: outData.date,
-            created_at: outData.created_at,
-            account_name: srcAcc?.name || "Source Account",
-          })
-        }
-
-        if (inData) {
-          createdTxs.push({
-            id: String(inData.id),
-            user_id: inData.user_id,
-            account_id: String(inData.account_id),
-            category_id: inData.category_id ? String(inData.category_id) : undefined,
-            amount_cents: inData.amount_cents,
-            amount: inData.amount_cents / 100,
-            type: "income",
-            transfer_pair_id: inData.transfer_pair_id,
-            note: inData.note,
-            description: inData.note,
-            date: inData.date,
-            created_at: inData.created_at,
-            account_name: destAcc?.name || "Destination Account",
+        if (data && data.length > 0) {
+          data.forEach((row: any) => {
+            const isSource = String(row.account_id) === String(txData.account_id)
+            createdTxs.push({
+              id: String(row.id),
+              user_id: row.user_id,
+              account_id: String(row.account_id),
+              category_id: row.category_id ? String(row.category_id) : undefined,
+              amount_cents: row.amount_cents,
+              amount: row.amount_cents / 100,
+              type: row.type === "expense" ? "expense" : "income",
+              transfer_pair_id: row.transfer_pair_id,
+              note: row.note,
+              description: row.note,
+              date: row.date,
+              created_at: row.created_at,
+              account_name: isSource ? (srcAcc?.name || "Source") : (destAcc?.name || "Destination"),
+            })
           })
         }
       } else {
@@ -562,11 +512,24 @@ export function useFinanceData() {
         saveLocalTransactions(updated)
         return updated
       })
+
+      setAccounts((prevAccounts) => {
+        const updated = prevAccounts.map((acc) => {
+          const accTxs = createdTxs.filter((t) => t.account_id === acc.id)
+          if (accTxs.length === 0) return acc
+          const delta = accTxs.reduce((sum, t) => sum + (t.type === "income" ? t.amount : -t.amount), 0)
+          return {
+            ...acc,
+            balance: (Number(acc.balance) || 0) + delta,
+          }
+        })
+        saveLocalAccounts(updated)
+        return updated
+      })
     }
 
-    await fetchData()
     return createdTxs[0]
-  }, [accounts, categories, fetchData])
+  }, [accounts, categories])
 
   const createCategory = useCallback(async (catData: { name: string; type: "income" | "expense"; currency?: string }) => {
     const currency = catData.currency || "USD"
