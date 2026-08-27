@@ -430,10 +430,10 @@ const accountSummaries = [
 function NetWorthCard() {
   return (
     <motion.div
-      initial={{ scale: 0.97 }}
-      animate={{ scale: [0.97, 0.97, 1] }}
-      transition={{ duration: 0.65, delay: 0, times: [0, 0.77, 1], ease: EASE_OUT }}
-      className="relative overflow-hidden rounded-2xl surface-card p-5 lg:p-6 glow-blue-sm"
+      initial={{ opacity: 0, y: 16, scale: 0.97 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.5, delay: 0, ease: EASE_OUT }}
+      className="relative overflow-hidden rounded-2xl surface-card p-5 lg:p-6 glow-blue-sm hover:scale-[1.01] transition-transform duration-300"
       style={{ boxShadow: CARD_SHADOW }}
     >
       <div className="flex items-start justify-between gap-4">
@@ -465,7 +465,7 @@ function AccountsSection() {
               initial={{ opacity: 0, y: 16, scale: 0.97 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               transition={{ duration: 0.5, delay: i * 0.06, ease: EASE_OUT }}
-              className={`relative overflow-hidden rounded-2xl surface-card p-4 lg:p-5 glow-${account.tone}-sm`}
+              className={`relative overflow-hidden rounded-2xl surface-card p-4 lg:p-5 glow-${account.tone}-sm group hover:scale-[1.01] transition-transform duration-300`}
               style={{ boxShadow: CARD_SHADOW }}
             >
               <div className="flex items-start justify-between">
