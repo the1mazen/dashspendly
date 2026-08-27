@@ -1920,8 +1920,8 @@ function MobileFloatingNavbar({
       onMouseEnter={() => setIsIdle(false)}
       onTouchStart={() => setIsIdle(false)}
     >
-      <div className="pointer-events-auto mx-auto w-auto max-w-[330px] rounded-2xl bg-white/5 px-4 py-2.5 backdrop-blur-sm shadow-xl shadow-black/50">
-        <div className="flex min-w-0 items-center justify-between gap-3">
+      <div className="pointer-events-auto mx-auto w-full max-w-[300px] rounded-2xl bg-white/5 px-3 py-2 backdrop-blur-sm shadow-xl shadow-black/50">
+        <div className="flex min-w-0 items-center justify-around">
           {navLinks.map((item) => {
             const isActive = activeSection === item.id
             return (
@@ -1931,7 +1931,7 @@ function MobileFloatingNavbar({
                   setIsIdle(false)
                   onNavigate(item.id)
                 }}
-                className={`text-xs font-open-sans-custom transition-colors cursor-pointer whitespace-nowrap px-1 py-0.5 ${
+                className={`text-[11px] font-open-sans-custom transition-colors cursor-pointer whitespace-nowrap px-1.5 py-0.5 ${
                   isActive
                     ? "font-semibold text-white [text-shadow:_0_2px_8px_rgb(0_0_0_/_40%)]"
                     : "text-gray-300 hover:text-white [text-shadow:_0_2px_6px_rgb(0_0_0_/_40%)]"
