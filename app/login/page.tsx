@@ -16,8 +16,8 @@ export default function AuthPage() {
   const [mounted, setMounted] = useState(false)
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [setupStep, setSetupStep] = useState<"auth" | "account" | "dashboard">("auth")
-  const [accountsList, setAccountsList] = useState<Array<{ name: string; type: string; balance: string }>>([
-    { name: "", type: "bank", balance: "" },
+  const [accountsList, setAccountsList] = useState<Array<{ name: string; type: string; balance: string; currency: string }>>([
+    { name: "", type: "bank", balance: "", currency: "USD" },
   ])
   const [authUserId, setAuthUserId] = useState<string>("")
 
@@ -38,6 +38,14 @@ export default function AuthPage() {
 
       if (isSupabaseConfigured && supabase) {
         try {
+          if (typeof window !== "undefined") {
+            const url = new URL(window.location.href)
+            const code = url.searchParams.get("code")
+            if (code) {
+              await supabase.auth.exchangeCodeForSession(code)
+            }
+          }
+
           let user: any = null
           const { data: userData } = await supabase.auth.getUser()
           user = userData?.user
@@ -78,6 +86,33 @@ export default function AuthPage() {
     }
 
     checkExistingSession()
+
+    let authSub: any = null
+    if (isSupabaseConfigured && supabase) {
+      const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (session?.user) {
+          setAuthUserId(session.user.id)
+          if (typeof window !== "undefined") {
+            localStorage.setItem("spendly_auth_user_id", session.user.id)
+          }
+          const { data: userAccounts } = await supabase
+            .from("accounts")
+            .select("id")
+            .eq("user_id", session.user.id)
+
+          if (!userAccounts || userAccounts.length === 0) {
+            setSetupStep("account")
+          } else if (!window.location.search.includes("step=account")) {
+            router.replace("/dashboard")
+          }
+        }
+      })
+      authSub = data?.subscription
+    }
+
+    return () => {
+      authSub?.unsubscribe?.()
+    }
   }, [router])
 
   const handleModeSwitch = () => {
@@ -90,7 +125,7 @@ export default function AuthPage() {
     }, 150)
   }
 
-  const handleAccountChange = (index: number, field: "name" | "type" | "balance", value: string) => {
+  const handleAccountChange = (index: number, field: "name" | "type" | "balance" | "currency", value: string) => {
     setAccountsList((prev) => {
       const updated = [...prev]
       updated[index] = { ...updated[index], [field]: value }
@@ -99,7 +134,7 @@ export default function AuthPage() {
   }
 
   const handleAddAccountField = () => {
-    setAccountsList((prev) => [...prev, { name: "", type: "bank", balance: "" }])
+    setAccountsList((prev) => [...prev, { name: "", type: "bank", balance: "", currency: "USD" }])
   }
 
   const handleRemoveAccountField = (index: number) => {
@@ -117,7 +152,7 @@ export default function AuthPage() {
       try {
         const effectiveUserId = authUserId || (await resolveCurrentUserId())
         if (effectiveUserId && validAccounts.length > 0) {
-          // Ensure profile is synced
+          const primaryCurrency = validAccounts[0]?.currency || "USD"
           const cleanUsername = username ? username.replace(/^@/, "").trim() : (email ? email.split("@")[0] : "user")
           try {
             await supabase.from("profiles").upsert({
@@ -125,7 +160,7 @@ export default function AuthPage() {
               username: cleanUsername,
               first_name: firstName || "",
               last_name: lastName || "",
-              default_currency: currency || "USD",
+              default_currency: primaryCurrency,
             })
           } catch (pErr) {
             console.warn("Profile upsert in handleSaveAccounts:", pErr)
@@ -133,6 +168,7 @@ export default function AuthPage() {
 
           for (const acc of validAccounts) {
             const startCents = Math.round((parseFloat(acc.balance) || 0) * 100)
+            const accCurrency = acc.currency || "USD"
             const { data, error } = await supabase
               .from("accounts")
               .insert({
@@ -140,7 +176,7 @@ export default function AuthPage() {
                 name: acc.name.trim(),
                 type: acc.type || "bank",
                 starting_balance_cents: startCents,
-                currency: currency || "USD",
+                currency: accCurrency,
               })
               .select()
               .single()
@@ -169,13 +205,14 @@ export default function AuthPage() {
     if (savedAccounts.length === 0 && validAccounts.length > 0) {
       validAccounts.forEach((acc, i) => {
         const bal = parseFloat(acc.balance) || 0
+        const accCurrency = acc.currency || "USD"
         savedAccounts.push({
           id: `acc_local_${Date.now()}_${i}`,
           name: acc.name.trim(),
           type: acc.type || "bank",
           starting_balance_cents: Math.round(bal * 100),
           balance: bal,
-          currency: currency || "USD",
+          currency: accCurrency,
           created_at: new Date().toISOString(),
         })
       })
@@ -198,9 +235,9 @@ export default function AuthPage() {
             <p className="text-white/40 text-sm mb-6">Set up one or more accounts to start tracking your finances.</p>
             <form className="space-y-4" onSubmit={handleSaveAccounts}>
               {accountsList.map((acc, index) => (
-                <div key={index} className="space-y-3 rounded-2xl border border-white/5 p-3 transition-all duration-300">
+                <div key={index} className="space-y-3 rounded-2xl border border-white/5 bg-[#171722]/50 p-3.5 transition-all duration-300">
                   <div className="flex items-center justify-between">
-                    <span className="text-white/50 text-xs font-medium">Account {index + 1}</span>
+                    <span className="text-white/50 text-xs font-medium font-sans">Account {index + 1}</span>
                     {accountsList.length > 1 && (
                       <button
                         type="button"
@@ -220,18 +257,34 @@ export default function AuthPage() {
                     onChange={(e) => handleAccountChange(index, "name", e.target.value)}
                     className="w-full bg-[#1a1a26] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#5b4dc7]/50 focus:ring-1 focus:ring-[#5b4dc7]/20 transition-all duration-300 font-sans"
                   />
-                  <select
-                    value={acc.type}
-                    onChange={(e) => handleAccountChange(index, "type", e.target.value)}
-                    required
-                    aria-label={`Account ${index + 1} type`}
-                    className="w-full bg-[#1a1a26] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#5b4dc7]/50 focus:ring-1 focus:ring-[#5b4dc7]/20 transition-all duration-300 appearance-none cursor-pointer font-sans"
-                  >
-                    <option value="bank">Bank / Checking</option>
-                    <option value="cash">Cash wallet</option>
-                    <option value="card">Credit card</option>
-                    <option value="savings">Savings account</option>
-                  </select>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <select
+                      value={acc.type}
+                      onChange={(e) => handleAccountChange(index, "type", e.target.value)}
+                      required
+                      aria-label={`Account ${index + 1} type`}
+                      className="w-full bg-[#1a1a26] border border-white/5 rounded-xl px-3 py-2.5 text-xs sm:text-sm text-white focus:outline-none focus:border-[#5b4dc7]/50 focus:ring-1 focus:ring-[#5b4dc7]/20 transition-all duration-300 appearance-none cursor-pointer font-sans"
+                    >
+                      <option value="bank">Bank / Checking</option>
+                      <option value="cash">Cash wallet</option>
+                      <option value="card">Credit card</option>
+                      <option value="savings">Savings account</option>
+                    </select>
+                    <select
+                      value={acc.currency || "USD"}
+                      onChange={(e) => handleAccountChange(index, "currency", e.target.value)}
+                      required
+                      aria-label={`Account ${index + 1} currency`}
+                      className="w-full bg-[#1a1a26] border border-white/5 rounded-xl px-3 py-2.5 text-xs sm:text-sm text-white focus:outline-none focus:border-[#5b4dc7]/50 focus:ring-1 focus:ring-[#5b4dc7]/20 transition-all duration-300 appearance-none cursor-pointer font-sans"
+                    >
+                      <option value="USD">USD ($)</option>
+                      <option value="EGP">EGP (EGP)</option>
+                      <option value="EUR">EUR (€)</option>
+                      <option value="GBP">GBP (£)</option>
+                      <option value="AED">AED (AED)</option>
+                      <option value="SAR">SAR (SAR)</option>
+                    </select>
+                  </div>
                   <input
                     type="number"
                     placeholder="Starting balance (e.g. 1000)"
@@ -460,20 +513,6 @@ export default function AuthPage() {
                       onChange={(e) => setUsername(e.target.value)}
                       className="w-full bg-[#1a1a26] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#5b4dc7]/50 focus:ring-1 focus:ring-[#5b4dc7]/20 transition-all duration-300 font-sans"
                     />
-                  </div>
-                  <div className="col-span-2">
-                    <select
-                      value={currency}
-                      onChange={(e) => setCurrency(e.target.value)}
-                      aria-label="Default currency"
-                      className="w-full bg-[#1a1a26] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#5b4dc7]/50 focus:ring-1 focus:ring-[#5b4dc7]/20 transition-all duration-300 appearance-none cursor-pointer font-sans"
-                    >
-                      <option value="USD">Default currency: USD ($)</option>
-                      <option value="EGP">Default currency: EGP (EGP)</option>
-                      <option value="EUR">Default currency: EUR (€)</option>
-                      <option value="GBP">Default currency: GBP (£)</option>
-                      <option value="AED">Default currency: AED (AED)</option>
-                    </select>
                   </div>
                 </div>
               </div>
