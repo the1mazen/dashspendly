@@ -34,20 +34,46 @@ export default function AuthPage() {
     setMounted(true)
 
     const checkExistingSession = async () => {
+      const isAccountStep = typeof window !== "undefined" && window.location.search.includes("step=account")
+
       if (isSupabaseConfigured && supabase) {
         try {
-          const { data: { user } } = await supabase.auth.getUser()
-          if (user) {
-            router.replace("/dashboard")
-            return
+          let user: any = null
+          const { data: userData } = await supabase.auth.getUser()
+          user = userData?.user
+          if (!user) {
+            const { data: sessionData } = await supabase.auth.getSession()
+            user = sessionData?.session?.user
           }
-          const { data: { session } } = await supabase.auth.getSession()
-          if (session?.user) {
-            router.replace("/dashboard")
+
+          if (user) {
+            setAuthUserId(user.id)
+            if (typeof window !== "undefined") {
+              localStorage.setItem("spendly_auth_user_id", user.id)
+            }
+
+            const { data: userAccounts } = await supabase
+              .from("accounts")
+              .select("id")
+              .eq("user_id", user.id)
+
+            const hasAccounts = userAccounts && userAccounts.length > 0
+
+            if (isAccountStep || !hasAccounts) {
+              setSetupStep("account")
+              return
+            } else {
+              router.replace("/dashboard")
+              return
+            }
           }
         } catch {
           // Ignore
         }
+      }
+
+      if (isAccountStep) {
+        setSetupStep("account")
       }
     }
 
