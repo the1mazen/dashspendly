@@ -1731,9 +1731,20 @@ export default function FinancialAnalyticsDashboard({ initialSection = "dashboar
     const checkAuthentication = async () => {
       if (isSupabaseConfigured && supabase) {
         try {
+          if (typeof window !== "undefined") {
+            const url = new URL(window.location.href)
+            const code = url.searchParams.get("code")
+            if (code) {
+              await supabase.auth.exchangeCodeForSession(code)
+            }
+          }
+
           const { data: { user } } = await supabase.auth.getUser()
           if (user) {
             if (isMounted) {
+              if (typeof window !== "undefined") {
+                localStorage.setItem("spendly_auth_user_id", user.id)
+              }
               setIsAuthenticated(true)
               setAuthLoading(false)
             }
@@ -1743,6 +1754,9 @@ export default function FinancialAnalyticsDashboard({ initialSection = "dashboar
           const { data: { session } } = await supabase.auth.getSession()
           if (session?.user) {
             if (isMounted) {
+              if (typeof window !== "undefined") {
+                localStorage.setItem("spendly_auth_user_id", session.user.id)
+              }
               setIsAuthenticated(true)
               setAuthLoading(false)
             }
@@ -1750,6 +1764,23 @@ export default function FinancialAnalyticsDashboard({ initialSection = "dashboar
           }
         } catch {
           // Ignore
+        }
+
+        // If URL contains hash tokens, give Supabase client a moment to resolve before redirecting
+        if (typeof window !== "undefined" && (window.location.hash.includes("access_token") || window.location.search.includes("code"))) {
+          setTimeout(async () => {
+            const { data } = await supabase.auth.getSession()
+            if (data?.session?.user && isMounted) {
+              localStorage.setItem("spendly_auth_user_id", data.session.user.id)
+              setIsAuthenticated(true)
+              setAuthLoading(false)
+            } else if (isMounted) {
+              setIsAuthenticated(false)
+              setAuthLoading(false)
+              router.replace("/login")
+            }
+          }, 800)
+          return
         }
 
         if (isMounted) {
