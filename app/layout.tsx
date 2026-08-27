@@ -1,11 +1,36 @@
 import type { Metadata } from 'next'
-import { JetBrains_Mono, Open_Sans, Rubik } from 'next/font/google'
+import { JetBrains_Mono, Open_Sans, Rubik, Instrument_Serif } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import './globals.css'
 
-const _openSans = Open_Sans({ subsets: ["latin"], weight: ["400", "500", "600", "700"] })
-const _jetbrains = JetBrains_Mono({ subsets: ["latin"], weight: ["400", "500", "600", "700"] })
-const _rubik = Rubik({ subsets: ["latin"], weight: ["400", "500", "600", "700", "800"] })
+const openSans = Open_Sans({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700", "800"],
+  variable: "--font-open-sans",
+  display: "swap",
+})
+
+const jetbrains = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-mono",
+  display: "swap",
+})
+
+const rubik = Rubik({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700", "800", "900"],
+  variable: "--font-rubik",
+  display: "swap",
+})
+
+const instrumentSerif = Instrument_Serif({
+  subsets: ["latin"],
+  weight: ["400"],
+  style: ["normal", "italic"],
+  variable: "--font-instrument",
+  display: "swap",
+})
 
 export const metadata: Metadata = {
   title: 'Spendly — Financial Analytics Dashboard',
@@ -37,7 +62,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="font-sans antialiased grain">
+      <body className={`font-sans antialiased grain ${openSans.variable} ${jetbrains.variable} ${rubik.variable} ${instrumentSerif.variable}`}>
         {children}
         <Analytics />
       </body>

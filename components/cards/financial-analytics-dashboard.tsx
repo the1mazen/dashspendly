@@ -1,7 +1,9 @@
 "use client"
 
 import React, { useState, useCallback, useMemo, useRef, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "motion/react"
+import { useUserProfile } from "@/lib/user-profile"
 import {
   BarChart3, TrendingUp, Shield, ArrowLeftRight, Globe, ArrowUpRight, ArrowDownRight,
   ChevronRight, Bell, Search, Settings, Wallet, CircleDot, Eye, FileText, UserCog,
@@ -98,81 +100,71 @@ const sectorExposure = [
   { name: "Energy", value: 38, fill: C.rose },
 ]
 
-const transactions = [
-  { id: 1, type: "buy" as const, asset: "AAPL", shares: 25, price: 189.45, total: 4736.25, date: "2026-02-18", time: "09:32" },
-  { id: 2, type: "sell" as const, asset: "TSLA", shares: 10, price: 248.72, total: 2487.2, date: "2026-02-17", time: "14:15" },
-  { id: 3, type: "buy" as const, asset: "NVDA", shares: 15, price: 875.3, total: 13129.5, date: "2026-02-15", time: "10:45" },
-  { id: 4, type: "sell" as const, asset: "AMZN", shares: 8, price: 178.9, total: 1431.2, date: "2026-02-14", time: "15:22" },
-  { id: 5, type: "buy" as const, asset: "MSFT", shares: 20, price: 415.6, total: 8312.0, date: "2026-02-13", time: "11:08" },
-  { id: 6, type: "buy" as const, asset: "GOOG", shares: 12, price: 174.25, total: 2091.0, date: "2026-02-12", time: "09:55" },
-  { id: 7, type: "sell" as const, asset: "META", shares: 18, price: 582.4, total: 10483.2, date: "2026-02-11", time: "13:30" },
-  { id: 8, type: "buy" as const, asset: "AMD", shares: 30, price: 168.15, total: 5044.5, date: "2026-02-10", time: "10:12" },
+interface SpendlyTransaction {
+  id: number
+  description: string
+  category: string
+  account: string
+  date: string
+  time?: string
+  amount: number
+  type: "income" | "expense"
+}
+
+const spendlyTransactions: SpendlyTransaction[] = [
+  { id: 1, description: "Salary deposit", category: "Income", account: "QNB", date: "Feb 20, 2026", time: "09:00", amount: 5200, type: "income" },
+  { id: 2, description: "Whole Foods Market", category: "Groceries", account: "Card", date: "Feb 19, 2026", time: "17:42", amount: -86.42, type: "expense" },
+  { id: 3, description: "Freelance UI project", category: "Income", account: "QNB", date: "Feb 18, 2026", time: "14:15", amount: 1250, type: "income" },
+  { id: 4, description: "Monthly rent", category: "Housing", account: "QNB", date: "Feb 17, 2026", time: "10:00", amount: -1850, type: "expense" },
+  { id: 5, description: "Metro transit pass", category: "Transport", account: "Card", date: "Feb 16, 2026", time: "08:24", amount: -95, type: "expense" },
+  { id: 6, description: "Electric bill", category: "Utilities", account: "QNB", date: "Feb 15, 2026", time: "11:30", amount: -124.18, type: "expense" },
+  { id: 7, description: "Blue Bottle Coffee", category: "Dining", account: "Cash", date: "Feb 14, 2026", time: "09:12", amount: -14.50, type: "expense" },
+  { id: 8, description: "Chevron gas station", category: "Transport", account: "Card", date: "Feb 13, 2026", time: "18:50", amount: -58.20, type: "expense" },
+  { id: 9, description: "Equinox gym membership", category: "Health", account: "Card", date: "Feb 12, 2026", time: "06:45", amount: -180.00, type: "expense" },
+  { id: 10, description: "Netflix & Spotify", category: "Entertainment", account: "Card", date: "Feb 11, 2026", time: "12:00", amount: -32.98, type: "expense" },
+  { id: 11, description: "Amazon order", category: "Shopping", account: "Card", date: "Feb 10, 2026", time: "16:20", amount: -142.60, type: "expense" },
+  { id: 12, description: "Dividend payment", category: "Income", account: "QNB", date: "Feb 08, 2026", time: "10:15", amount: 342.50, type: "income" },
+  { id: 13, description: "Trader Joe's groceries", category: "Groceries", account: "Card", date: "Feb 06, 2026", time: "15:30", amount: -112.35, type: "expense" },
+  { id: 14, description: "Uber airport ride", category: "Transport", account: "Card", date: "Feb 05, 2026", time: "22:10", amount: -46.75, type: "expense" },
+  { id: 15, description: "Consulting bonus", category: "Income", account: "QNB", date: "Feb 03, 2026", time: "13:00", amount: 800.00, type: "income" },
 ]
 
-const recentTransactions = [
-  { id: 1, description: "Salary deposit", category: "Income", date: "Feb 20, 2026", amount: 5200, type: "income" as const },
-  { id: 2, description: "Whole Foods Market", category: "Groceries", date: "Feb 19, 2026", amount: -86.42, type: "expense" as const },
-  { id: 3, description: "Freelance project", category: "Income", date: "Feb 18, 2026", amount: 1250, type: "income" as const },
-  { id: 4, description: "Monthly rent", category: "Housing", date: "Feb 17, 2026", amount: -1850, type: "expense" as const },
-  { id: 5, description: "Metro transit pass", category: "Transport", date: "Feb 16, 2026", amount: -95, type: "expense" as const },
-  { id: 6, description: "Electric bill", category: "Utilities", date: "Feb 15, 2026", amount: -124.18, type: "expense" as const },
-]
+const recentTransactions = spendlyTransactions.slice(0, 6)
 
-const marketIndices = [
-  { name: "S&P 500", value: "5,842.31", change: 1.24, data: [40, 42, 38, 45, 43, 47, 49, 48, 52, 50, 54, 56] },
-  { name: "NASDAQ", value: "18,471.52", change: 1.58, data: [60, 63, 58, 67, 65, 70, 72, 69, 75, 73, 78, 82] },
-  { name: "DOW Jones", value: "42,987.65", change: -0.32, data: [80, 78, 82, 79, 77, 80, 83, 81, 79, 82, 80, 78] },
-  { name: "Russell 2000", value: "2,198.44", change: 0.89, data: [20, 22, 19, 24, 23, 25, 27, 26, 28, 27, 30, 31] },
-]
+interface CategoryItem {
+  id: string
+  name: string
+  type: "income" | "expense"
+  total: number
+  budget?: number
+  color: string
+}
 
-const topMovers = [
-  { ticker: "NVDA", name: "NVIDIA Corp", change: 4.82, price: 892.15 },
-  { ticker: "SMCI", name: "Super Micro", change: 7.21, price: 845.3 },
-  { ticker: "PLTR", name: "Palantir", change: -3.15, price: 72.4 },
-  { ticker: "ARM", name: "ARM Holdings", change: 5.43, price: 168.9 },
-  { ticker: "COIN", name: "Coinbase", change: -2.87, price: 215.6 },
+const initialCategories: CategoryItem[] = [
+  { id: "housing", name: "Housing", type: "expense", total: 1850.00, budget: 1900.00, color: "#5b4dc7" },
+  { id: "groceries", name: "Groceries", type: "expense", total: 486.42, budget: 600.00, color: "oklch(0.68 0.14 245)" },
+  { id: "transport", name: "Transport", type: "expense", total: 245.50, budget: 300.00, color: "oklch(0.76 0.14 75)" },
+  { id: "health", name: "Health", type: "expense", total: 180.00, budget: 200.00, color: "oklch(0.62 0.22 18)" },
+  { id: "shopping", name: "Shopping", type: "expense", total: 142.60, budget: 250.00, color: "oklch(0.78 0.16 182)" },
+  { id: "utilities", name: "Utilities", type: "expense", total: 124.18, budget: 150.00, color: "oklch(0.50 0.02 260)" },
+  { id: "dining", name: "Dining", type: "expense", total: 84.50, budget: 200.00, color: "oklch(0.70 0.15 30)" },
+  { id: "entertainment", name: "Entertainment", type: "expense", total: 32.98, budget: 80.00, color: "oklch(0.65 0.18 300)" },
+  { id: "salary", name: "Salary", type: "income", total: 5200.00, budget: 5200.00, color: "oklch(0.76 0.16 162)" },
+  { id: "freelance", name: "Freelance", type: "income", total: 2050.00, budget: 1500.00, color: "oklch(0.76 0.16 162)" },
+  { id: "investments", name: "Investments", type: "income", total: 342.50, budget: 300.00, color: "oklch(0.76 0.16 162)" },
 ]
 
 const notifications = [
-  { id: 1, type: "success" as const, title: "Order Executed", message: "Bought 25 shares of AAPL at $189.45", time: "2 min ago", read: false },
-  { id: 2, type: "warning" as const, title: "Price Alert", message: "TSLA dropped below your $250 threshold", time: "18 min ago", read: false },
-  { id: 3, type: "info" as const, title: "Portfolio Rebalance", message: "Your quarterly rebalance is scheduled for tomorrow", time: "1h ago", read: false },
-  { id: 4, type: "success" as const, title: "Dividend Received", message: "$342.50 dividend from MSFT credited to your account", time: "3h ago", read: true },
-  { id: 5, type: "warning" as const, title: "Risk Alert", message: "Concentration in Technology sector exceeds 45% limit", time: "5h ago", read: true },
-  { id: 6, type: "info" as const, title: "Market Update", message: "Fed minutes released — markets react positively", time: "6h ago", read: true },
-  { id: 7, type: "success" as const, title: "Transfer Complete", message: "$10,000 deposit successfully processed", time: "1d ago", read: true },
+  { id: 1, type: "success" as const, title: "Salary Credited", message: "$5,200.00 salary deposit received from employer", time: "2 min ago", read: false },
+  { id: 2, type: "warning" as const, title: "Budget Alert", message: "Groceries spending is at 81% of your monthly limit", time: "18 min ago", read: false },
+  { id: 3, type: "info" as const, title: "Recurring Bill Due", message: "Electric bill ($124.18) due in 3 days", time: "1h ago", read: false },
+  { id: 4, type: "success" as const, title: "Dividend Received", message: "$342.50 quarterly dividend credited to QNB Checking", time: "3h ago", read: true },
+  { id: 5, type: "warning" as const, title: "Expense Alert", message: "Card transaction of $142.60 at Amazon recorded", time: "5h ago", read: true },
+  { id: 6, type: "info" as const, title: "Monthly Report", message: "Your monthly spending summary is ready to view", time: "6h ago", read: true },
+  { id: 7, type: "success" as const, title: "Transfer Complete", message: "$1,250 freelance payment credited to checking", time: "1d ago", read: true },
 ]
 
-const watchlistItems = [
-  { ticker: "AAPL", name: "Apple Inc.", price: 189.45, change: 2.31, volume: "48.2M", pe: 28.4, marketCap: "2.94T", data: [180, 183, 181, 185, 187, 184, 189, 188, 190, 189, 191, 189] },
-  { ticker: "NVDA", name: "NVIDIA Corp", price: 892.15, change: 4.82, volume: "62.1M", pe: 65.2, marketCap: "2.20T", data: [820, 835, 845, 860, 855, 870, 880, 875, 890, 885, 895, 892] },
-  { ticker: "MSFT", name: "Microsoft Corp", price: 415.60, change: 1.15, volume: "22.8M", pe: 34.1, marketCap: "3.09T", data: [400, 403, 408, 405, 410, 412, 408, 414, 416, 413, 417, 416] },
-  { ticker: "AMZN", name: "Amazon.com Inc", price: 178.90, change: -0.72, volume: "38.5M", pe: 42.8, marketCap: "1.86T", data: [175, 178, 180, 179, 182, 181, 179, 180, 178, 179, 177, 179] },
-  { ticker: "GOOG", name: "Alphabet Inc", price: 174.25, change: 0.98, volume: "18.9M", pe: 22.6, marketCap: "2.15T", data: [168, 170, 172, 171, 173, 172, 174, 173, 175, 174, 176, 174] },
-  { ticker: "META", name: "Meta Platforms", price: 582.40, change: 3.12, volume: "15.4M", pe: 25.9, marketCap: "1.48T", data: [555, 560, 565, 570, 568, 575, 578, 572, 580, 576, 585, 582] },
-  { ticker: "TSLA", name: "Tesla Inc", price: 248.72, change: -2.45, volume: "85.7M", pe: 58.3, marketCap: "792B", data: [260, 258, 255, 252, 256, 253, 250, 252, 248, 251, 247, 249] },
-  { ticker: "BRK.B", name: "Berkshire Hathaway", price: 462.30, change: 0.45, volume: "3.2M", pe: 9.1, marketCap: "1.05T", data: [455, 457, 458, 460, 459, 461, 460, 462, 461, 463, 462, 462] },
-]
 
-const reportsData = [
-  { id: 1, name: "Q4 2025 Performance Report", type: "Performance", date: "2026-01-15", status: "ready" as const, size: "2.4 MB" },
-  { id: 2, name: "Annual Tax Summary 2025", type: "Tax", date: "2026-02-01", status: "ready" as const, size: "1.8 MB" },
-  { id: 3, name: "Risk Assessment — February", type: "Risk", date: "2026-02-10", status: "ready" as const, size: "3.1 MB" },
-  { id: 4, name: "Dividend Income Report", type: "Income", date: "2026-02-14", status: "ready" as const, size: "0.9 MB" },
-  { id: 5, name: "Portfolio Allocation Analysis", type: "Analysis", date: "2026-02-18", status: "generating" as const, size: "—" },
-  { id: 6, name: "Monthly Statement — January", type: "Statement", date: "2026-02-05", status: "ready" as const, size: "1.2 MB" },
-  { id: 7, name: "Custom Benchmark Comparison", type: "Performance", date: "2026-02-12", status: "ready" as const, size: "2.7 MB" },
-  { id: 8, name: "ESG Compliance Summary", type: "Compliance", date: "2026-02-08", status: "ready" as const, size: "1.5 MB" },
-]
-
-const incomeByMonth = [
-  { month: "Sep", dividends: 285, interest: 120, other: 45 },
-  { month: "Oct", dividends: 310, interest: 125, other: 30 },
-  { month: "Nov", dividends: 420, interest: 130, other: 55 },
-  { month: "Dec", dividends: 580, interest: 135, other: 40 },
-  { month: "Jan", dividends: 345, interest: 128, other: 35 },
-  { month: "Feb", dividends: 390, interest: 132, other: 50 },
-]
 
 // ─── Sub-Components ─────────────────────────────────────────────
 
@@ -579,185 +571,74 @@ function AccountsSection() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div><h2 className="text-lg font-bold text-foreground font-display tracking-tight">Accounts</h2><p className="text-xs text-muted-foreground font-sans">Manage balances and account activity</p></div>
         <div className="flex items-center gap-1 rounded-xl border border-border/40 bg-card/60 p-1">
-          {(Object.keys(accountDetails) as Array<keyof typeof accountDetails>).map((name) => <button key={name} onClick={() => setSelectedAccount(name)} className={`rounded-lg px-4 py-2 text-xs font-semibold font-sans transition-colors ${selectedAccount === name ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>{name}</button>)}
+          {(Object.keys(accountDetails) as Array<keyof typeof accountDetails>).map((name) => (
+            <button key={name} onClick={() => setSelectedAccount(name)} className={`rounded-lg px-4 py-2 text-xs font-semibold font-sans transition-colors ${selectedAccount === name ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground cursor-pointer"}`}>{name}</button>
+          ))}
         </div>
       </div>
       <motion.div initial={{ opacity: 0, y: 16, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.5, ease: EASE_OUT }} className={`relative overflow-hidden rounded-2xl surface-card p-5 lg:p-6 glow-${account.tone}-sm group hover:scale-[1.01] transition-transform duration-300`} style={{ boxShadow: CARD_SHADOW }}>
         <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-start gap-3"><div className="size-10 rounded-xl bg-accent/60 flex items-center justify-center"><Icon className="size-4 text-primary" /></div><div><p className="text-lg font-bold text-foreground font-display">{selectedAccount}</p><p className="text-xs text-muted-foreground font-sans">{account.type} · {account.currency}</p><p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Available balance</p><p className="mt-1 text-3xl font-bold tracking-tighter text-foreground font-mono">${account.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p></div></div>
-          <div className="h-32 w-full max-w-md"><ResponsiveContainer width="100%" height="100%"><LineChart data={accountTrend}><Line type="monotone" dataKey="balance" stroke={C.teal} strokeWidth={2.5} dot={false} animationDuration={700} /><XAxis dataKey="day" hide /><YAxis hide domain={["dataMin - 1000", "dataMax + 1000"]} /></LineChart></ResponsiveContainer></div>
-          <div className="flex flex-row gap-3 lg:flex-col lg:items-end"><span className="text-xs font-semibold text-primary">Manage</span><button className="text-xs font-semibold text-muted-foreground hover:text-foreground font-sans">Edit</button><button className="text-xs font-semibold text-fin-loss/80 hover:text-fin-loss font-sans">Delete / Close</button></div>
-        </div>
-      </motion.div>
-      <SectionPanel className="!p-0 overflow-hidden">
-        <div className="border-b border-border/50 p-5 lg:p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-sm font-bold text-foreground font-display">Recent transactions</h3><p className="mt-0.5 text-[11px] text-muted-foreground font-sans">Activity for {selectedAccount}</p></div><button className="text-xs font-semibold text-primary hover:underline font-sans">View all</button></div><div className="mt-4 flex flex-wrap gap-2"><div className="flex min-w-48 flex-1 items-center gap-2 rounded-lg border border-border/40 bg-muted/20 px-3 py-2"><Search className="size-3.5 text-muted-foreground" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search description" className="w-full bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground font-sans" /></div><input value={minAmount} onChange={(event) => setMinAmount(event.target.value)} type="number" min="0" placeholder="Min amount" className="w-28 rounded-lg border border-border/40 bg-muted/20 px-3 py-2 text-xs text-foreground outline-none placeholder:text-muted-foreground font-mono" /><input value={maxAmount} onChange={(event) => setMaxAmount(event.target.value)} type="number" min="0" placeholder="Max amount" className="w-28 rounded-lg border border-border/40 bg-muted/20 px-3 py-2 text-xs text-foreground outline-none placeholder:text-muted-foreground font-mono" /></div></div>
-        <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b border-border/50"><th className="p-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Description</th><th className="p-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Category</th><th className="p-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Date</th><th className="p-4 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Amount</th></tr></thead><tbody>{filteredTransactions.map((transaction, i) => <motion.tr key={`${selectedAccount}-${transaction.description}`} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.35, delay: i * 0.04 }} className="border-b border-border/30 hover:bg-accent/20 transition-all duration-200"><td className="p-4 text-[13px] font-semibold text-foreground font-sans">{transaction.description}</td><td className="p-4 text-xs text-muted-foreground font-sans">{transaction.category}</td><td className="p-4 text-xs text-muted-foreground font-mono">{transaction.date}</td><td className={`p-4 text-right font-bold font-mono ${transaction.type === "income" ? "text-fin-gain" : "text-fin-loss"}`}>{transaction.amount >= 0 ? "+" : "-"}${Math.abs(transaction.amount).toFixed(2)}</td></motion.tr>)}</tbody></table></div>
-      </SectionPanel>
-    </div>
-  )
-}
-
-// ─── Section: Performance ───────────────────────────────────────
-
-function PerformanceSection() {
-  return (
-    <div className={`flex flex-col gap-5 ${SECTION_MIN_H}`}>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
-        <KpiCard label="YTD Return" value="18.42" suffix="%" change={18.42} delay={0} icon={TrendingUp} />
-        <KpiCard label="1Y Return" value="24.87" suffix="%" change={24.87} delay={0.06} icon={ArrowUpRight} />
-        <KpiCard label="Alpha" value="3.61" suffix="%" delay={0.12} icon={Zap} />
-        <KpiCard label="Win Rate" value="68.5" suffix="%" delay={0.18} icon={Check} />
-      </div>
-
-      <SectionPanel className="relative overflow-hidden">
-        <GlowOrb className="w-48 h-48 -top-24 -left-24 bg-chart-2/8" />
-        <SectionHeader title="Monthly Returns vs Benchmark" subtitle="Portfolio outperformance by month">
-          <div className="flex items-center gap-5 text-[11px]">
-            <div className="flex items-center gap-2"><div className="size-2.5 rounded-full bg-primary" /><span className="text-muted-foreground font-sans">Portfolio</span></div>
-            <div className="flex items-center gap-2"><div className="size-2.5 rounded-full" style={{ background: C.slate }} /><span className="text-muted-foreground font-sans">Benchmark</span></div>
-          </div>
-        </SectionHeader>
-        <div className="h-72">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={performanceMonthly} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.grid} vertical={false} />
-              <XAxis dataKey="month" tick={{ fontSize: 11, fill: C.tick }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: C.tick }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v}%`} />
-              <Tooltip content={<ChartTooltipContent />} />
-              <Bar dataKey="return" name="return" fill={C.teal} radius={[6, 6, 0, 0]} animationDuration={900} />
-              <Bar dataKey="benchmark" name="benchmark" fill={C.slate} radius={[6, 6, 0, 0]} animationDuration={900} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </SectionPanel>
-
-      <SectionPanel>
-        <SectionHeader title="Performance Attribution" subtitle="Contribution by sector" />
-        <div className="flex flex-col gap-4">
-          {[
-            { sector: "Technology", contrib: 8.2, weight: 45 },
-            { sector: "Healthcare", contrib: 3.1, weight: 18 },
-            { sector: "Financials", contrib: 2.4, weight: 15 },
-            { sector: "Consumer", contrib: 1.8, weight: 12 },
-            { sector: "Energy", contrib: -0.7, weight: 10 },
-          ].map((item, i) => (
-            <div key={i} className="flex items-center gap-4">
-              <span className="text-xs text-muted-foreground w-24 shrink-0 font-sans font-medium">{item.sector}</span>
-              <div className="flex-1 h-2.5 rounded-full bg-muted/60 overflow-hidden">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${item.weight}%` }}
-                  transition={{ duration: 1, delay: 0.3 + i * 0.1, ease: EASE_OUT }}
-                  className="h-full rounded-full"
-                  style={{ background: item.contrib >= 0 ? C.teal : C.rose }}
-                />
-              </div>
-              <span className={`text-xs font-mono font-bold w-14 text-right ${item.contrib >= 0 ? "text-fin-gain" : "text-fin-loss"}`}>
-                {item.contrib > 0 ? "+" : ""}{item.contrib}%
-              </span>
+          <div className="flex items-start gap-3">
+            <div className="size-10 rounded-xl bg-accent/60 flex items-center justify-center"><Icon className="size-4 text-primary" /></div>
+            <div>
+              <p className="text-lg font-bold text-foreground font-display">{selectedAccount}</p>
+              <p className="text-xs text-muted-foreground font-sans">{account.type} · {account.currency}</p>
+              <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Available balance</p>
+              <p className="mt-1 text-3xl font-bold tracking-tighter text-foreground font-mono">${account.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
             </div>
-          ))}
-        </div>
-      </SectionPanel>
-    </div>
-  )
-}
-
-// ─── Section: Risk ──────────────────────────────────────────────
-
-function RiskSection() {
-  return (
-    <div className={`flex flex-col gap-5 ${SECTION_MIN_H}`}>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
-        {riskMetrics.map((m, i) => {
-          const Icon = m.icon
-          return (
-            <motion.div
-              key={m.metric}
-              initial={{ opacity: 0, y: 16, scale: 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.5, delay: i * 0.06, ease: EASE_OUT }}
-              className="relative overflow-hidden rounded-2xl surface-card p-4 lg:p-5 group hover:scale-[1.01] transition-transform duration-300"
-              style={{ boxShadow: CARD_SHADOW }}
-            >
-              <div className="absolute top-0 right-0 w-20 h-20 opacity-[0.04] pointer-events-none">
-                <Icon className="size-20 -translate-y-3 translate-x-3" />
-              </div>
-              <div className="flex items-center justify-between mb-2.5">
-                <p className="text-[11px] font-semibold tracking-[0.08em] uppercase text-muted-foreground font-sans">{m.metric}</p>
-                <div className={`size-2.5 rounded-full ${m.status === "good" ? "bg-fin-gain" : "bg-chart-3"} ${m.status === "good" ? "glow-teal-sm" : ""}`} />
-              </div>
-              <p className="text-2xl lg:text-3xl font-bold text-foreground font-mono tracking-tighter leading-none">
-                {m.value > 0 ? m.value.toFixed(2) : `${m.value}%`}
-              </p>
-            </motion.div>
-          )
-        })}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <SectionPanel className="relative overflow-hidden">
-          <GlowOrb className="w-40 h-40 -bottom-20 -left-20 bg-chart-2/6" />
-          <SectionHeader title="Volatility Comparison" subtitle="Portfolio vs Market (annualized)" />
-          <div className="h-60">
+          </div>
+          <div className="h-32 w-full max-w-md">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={volatilityData} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={C.grid} vertical={false} />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fill: C.tick }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: C.tick }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `${v}%`} />
-                <Tooltip content={<ChartTooltipContent />} />
-                <Line type="monotone" dataKey="portfolio" name="portfolio" stroke={C.teal} strokeWidth={2.5} dot={false} animationDuration={1100} />
-                <Line type="monotone" dataKey="market" name="market" stroke={C.rose} strokeWidth={2} dot={false} strokeDasharray="6 3" animationDuration={1100} />
+              <LineChart data={accountTrend}>
+                <Line type="monotone" dataKey="balance" stroke={C.teal} strokeWidth={2.5} dot={false} animationDuration={700} />
+                <XAxis dataKey="day" hide />
+                <YAxis hide domain={["dataMin - 1000", "dataMax + 1000"]} />
               </LineChart>
             </ResponsiveContainer>
           </div>
-        </SectionPanel>
-
-        <SectionPanel>
-          <SectionHeader title="Sector Exposure" subtitle="Concentration risk by sector" />
-          <div className="h-60">
-            <ResponsiveContainer width="100%" height="100%">
-              <RadialBarChart cx="50%" cy="50%" innerRadius="20%" outerRadius="90%" data={sectorExposure} startAngle={180} endAngle={0}>
-                <RadialBar dataKey="value" cornerRadius={8} animationDuration={1100} label={false} background={{ fill: C.surface }} />
-                <Tooltip content={<ChartTooltipContent />} />
-              </RadialBarChart>
-            </ResponsiveContainer>
+          <div className="flex flex-row gap-3 lg:flex-col lg:items-end">
+            <span className="text-xs font-semibold text-primary">Manage</span>
+            <button className="text-xs font-semibold text-muted-foreground hover:text-foreground font-sans cursor-pointer">Edit</button>
+            <button className="text-xs font-semibold text-fin-loss/80 hover:text-fin-loss font-sans cursor-pointer">Delete / Close</button>
           </div>
-          <div className="flex flex-wrap gap-x-5 gap-y-2 mt-3">
-            {sectorExposure.map((s, i) => (
-              <div key={i} className="flex items-center gap-2 text-xs">
-                <div className="size-2.5 rounded-full" style={{ backgroundColor: s.fill }} />
-                <span className="text-muted-foreground font-sans">{s.name}</span>
-                <span className="font-mono font-bold text-foreground">{s.value}%</span>
-              </div>
-            ))}
+        </div>
+      </motion.div>
+      <SectionPanel className="!p-0 overflow-hidden">
+        <div className="border-b border-border/50 p-5 lg:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div><h3 className="text-sm font-bold text-foreground font-display">Recent transactions</h3><p className="mt-0.5 text-[11px] text-muted-foreground font-sans">Activity for {selectedAccount}</p></div>
+            <button className="text-xs font-semibold text-primary hover:underline font-sans cursor-pointer">View all</button>
           </div>
-        </SectionPanel>
-      </div>
-
-      <SectionPanel>
-        <SectionHeader title="Risk Score Overview" subtitle="Aggregated risk dimensions" />
-        <div className="flex flex-col gap-5">
-          {[
-            { label: "Overall Risk", score: 42, category: "Moderate" },
-            { label: "Concentration Risk", score: 58, category: "Elevated" },
-            { label: "Liquidity Risk", score: 22, category: "Low" },
-            { label: "Currency Risk", score: 35, category: "Moderate" },
-          ].map((item, i) => (
-            <div key={i} className="flex items-center gap-4">
-              <span className="text-xs text-muted-foreground font-sans font-medium w-36 shrink-0">{item.label}</span>
-              <div className="flex-1 h-2.5 rounded-full bg-muted/60 overflow-hidden">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${item.score}%` }}
-                  transition={{ duration: 1, delay: 0.3 + i * 0.1, ease: EASE_OUT }}
-                  className="h-full rounded-full"
-                  style={{ background: item.score <= 30 ? C.gain : item.score <= 50 ? C.amber : C.rose }}
-                />
-              </div>
-              <span className="text-xs font-semibold text-foreground w-20 text-right font-sans">{item.category}</span>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <div className="flex min-w-48 flex-1 items-center gap-2 rounded-lg border border-border/40 bg-muted/20 px-3 py-2">
+              <Search className="size-3.5 text-muted-foreground" />
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search description" className="w-full bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground font-sans" />
             </div>
-          ))}
+            <input value={minAmount} onChange={(event) => setMinAmount(event.target.value)} type="number" min="0" placeholder="Min amount" className="w-28 rounded-lg border border-border/40 bg-muted/20 px-3 py-2 text-xs text-foreground outline-none placeholder:text-muted-foreground font-mono" />
+            <input value={maxAmount} onChange={(event) => setMaxAmount(event.target.value)} type="number" min="0" placeholder="Max amount" className="w-28 rounded-lg border border-border/40 bg-muted/20 px-3 py-2 text-xs text-foreground outline-none placeholder:text-muted-foreground font-mono" />
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border/50">
+                <th className="p-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Description</th>
+                <th className="p-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Category</th>
+                <th className="p-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Date</th>
+                <th className="p-4 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredTransactions.map((transaction, i) => (
+                <motion.tr key={`${selectedAccount}-${transaction.description}`} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.35, delay: i * 0.04 }} className="border-b border-border/30 hover:bg-accent/20 transition-all duration-200">
+                  <td className="p-4 text-[13px] font-semibold text-foreground font-sans">{transaction.description}</td>
+                  <td className="p-4 text-xs text-muted-foreground font-sans">{transaction.category}</td>
+                  <td className="p-4 text-xs text-muted-foreground font-mono">{transaction.date}</td>
+                  <td className={`p-4 text-right font-bold font-mono ${transaction.type === "income" ? "text-fin-gain" : "text-fin-loss"}`}>{transaction.amount >= 0 ? "+" : "-"}${Math.abs(transaction.amount).toFixed(2)}</td>
+                </motion.tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </SectionPanel>
     </div>
@@ -767,331 +648,443 @@ function RiskSection() {
 // ─── Section: Transactions ──────────────────────────────────────
 
 function TransactionsSection() {
+  const [searchQuery, setSearchQuery] = useState("")
+  const [typeFilter, setTypeFilter] = useState<"all" | "income" | "expense">("all")
+  const [categoryFilter, setCategoryFilter] = useState<string>("all")
+  const [accountFilter, setAccountFilter] = useState<string>("all")
+
+  const filteredTransactions = useMemo(() => {
+    return spendlyTransactions.filter((tx) => {
+      const matchesSearch =
+        tx.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        tx.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        tx.account.toLowerCase().includes(searchQuery.toLowerCase())
+
+      const matchesType = typeFilter === "all" || tx.type === typeFilter
+      const matchesCategory = categoryFilter === "all" || tx.category.toLowerCase() === categoryFilter.toLowerCase()
+      const matchesAccount = accountFilter === "all" || tx.account.toLowerCase() === accountFilter.toLowerCase()
+
+      return matchesSearch && matchesType && matchesCategory && matchesAccount
+    })
+  }, [searchQuery, typeFilter, categoryFilter, accountFilter])
+
+  const totalIncome = useMemo(() => {
+    return spendlyTransactions
+      .filter((t) => t.type === "income")
+      .reduce((sum, t) => sum + t.amount, 0)
+  }, [])
+
+  const totalExpense = useMemo(() => {
+    return spendlyTransactions
+      .filter((t) => t.type === "expense")
+      .reduce((sum, t) => sum + Math.abs(t.amount), 0)
+  }, [])
+
+  const netSavings = totalIncome - totalExpense
+
+  const categories = useMemo(() => {
+    const set = new Set(spendlyTransactions.map((t) => t.category))
+    return Array.from(set)
+  }, [])
+
   return (
     <div className={`flex flex-col gap-5 ${SECTION_MIN_H}`}>
+      {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
-        <KpiCard label="Total Volume" value="47,714" prefix="$" delay={0} icon={DollarSign} />
-        <KpiCard label="Transactions" value="8" delay={0.06} icon={ArrowLeftRight} />
-        <KpiCard label="Avg. Size" value="5,964" prefix="$" delay={0.12} icon={BarChart3} />
-        <KpiCard label="Buy/Sell Ratio" value="5:3" delay={0.18} icon={Activity} />
+        <KpiCard label="Total Income" value={totalIncome.toLocaleString("en-US", { minimumFractionDigits: 2 })} prefix="$" delay={0} icon={TrendingUp} change={12.4} />
+        <KpiCard label="Total Expenses" value={totalExpense.toLocaleString("en-US", { minimumFractionDigits: 2 })} prefix="$" delay={0.06} icon={ArrowDownRight} change={-4.2} />
+        <KpiCard label="Net Balance" value={netSavings.toLocaleString("en-US", { minimumFractionDigits: 2 })} prefix="$" delay={0.12} icon={Wallet} />
+        <KpiCard label="Total Transactions" value={String(spendlyTransactions.length)} delay={0.18} icon={ArrowLeftRight} />
       </div>
 
+      {/* Main Transactions Panel */}
       <SectionPanel className="!p-0 overflow-hidden">
-        <div className="p-5 lg:p-6 border-b border-border/50">
-          <SectionHeader title="Recent Transactions" subtitle="Latest activity across all accounts" />
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border/50">
-                <th className="text-left p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans">Type</th>
-                <th className="text-left p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans">Asset</th>
-                <th className="text-right p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans hidden sm:table-cell">Shares</th>
-                <th className="text-right p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans hidden md:table-cell">Price</th>
-                <th className="text-right p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans">Total</th>
-                <th className="text-right p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans hidden lg:table-cell">Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {transactions.map((tx, i) => (
-                <motion.tr
-                  key={tx.id}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.35, delay: 0.15 + i * 0.04 }}
-                  className="border-b border-border/30 hover:bg-accent/20 transition-all duration-200"
-                >
-                  <td className="p-4">
-                    <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-lg ${tx.type === "buy" ? "bg-fin-gain/10 text-fin-gain" : "bg-fin-loss/10 text-fin-loss"}`}>
-                      {tx.type === "buy" ? <ArrowDownRight className="size-3" /> : <ArrowUpRight className="size-3" />}
-                      {tx.type.toUpperCase()}
-                    </span>
-                  </td>
-                  <td className="p-4"><span className="font-bold font-mono text-foreground text-sm">{tx.asset}</span></td>
-                  <td className="p-4 text-right font-mono text-muted-foreground hidden sm:table-cell">{tx.shares}</td>
-                  <td className="p-4 text-right font-mono text-muted-foreground hidden md:table-cell">${tx.price.toFixed(2)}</td>
-                  <td className="p-4 text-right font-mono font-bold text-foreground">${tx.total.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
-                  <td className="p-4 text-right text-xs text-muted-foreground hidden lg:table-cell font-mono">{tx.date} <span className="text-muted-foreground/50">{tx.time}</span></td>
-                </motion.tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </SectionPanel>
-    </div>
-  )
-}
-
-// ─── Section: Market ────────────────────────────────────────────
-
-function MarketSection() {
-  return (
-    <div className={`flex flex-col gap-5 ${SECTION_MIN_H}`}>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
-        {marketIndices.map((idx, i) => (
-          <motion.div
-            key={idx.name}
-initial={{ scale: 0.97 }}
-              animate={{ scale: [0.97, 0.97, 1] }}
-              transition={{ duration: 0.65, delay: i * 0.06, times: [0, 0.77, 1], ease: EASE_OUT }}
-            className="rounded-2xl surface-card p-4 lg:p-5 hover:scale-[1.01] transition-transform duration-300"
-            style={{ boxShadow: CARD_SHADOW }}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.06em] font-sans">{idx.name}</p>
-              <div className={`flex items-center gap-0.5 text-[11px] font-bold font-mono px-1.5 py-0.5 rounded-md ${idx.change >= 0 ? "text-fin-gain bg-fin-gain/8" : "text-fin-loss bg-fin-loss/8"}`}>
-                {idx.change >= 0 ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
-                {idx.change > 0 ? "+" : ""}{idx.change}%
+        {/* Header with Search and Filter Controls */}
+        <div className="p-5 lg:p-6 border-b border-border/50 flex flex-col gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <h3 className="text-base font-bold text-foreground tracking-tight font-display">All Transactions</h3>
+              <p className="text-xs text-muted-foreground mt-0.5 font-sans">
+                Showing {filteredTransactions.length} of {spendlyTransactions.length} transactions
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center rounded-xl bg-muted/40 p-1 border border-border/30">
+                {(["all", "expense", "income"] as const).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setTypeFilter(t)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all font-sans cursor-pointer ${
+                      typeFilter === t
+                        ? "bg-primary text-primary-foreground shadow-xs"
+                        : "text-muted-foreground hover:text-foreground hover:bg-accent/30"
+                    }`}
+                  >
+                    {t === "all" ? "All" : t === "expense" ? "Expenses" : "Income"}
+                  </button>
+                ))}
               </div>
             </div>
-            <p className="text-xl font-bold font-mono text-foreground mb-3 tracking-tight">{idx.value}</p>
-            <MiniSparkline data={idx.data} color={idx.change >= 0 ? C.gain : C.rose} height={36} />
-          </motion.div>
-        ))}
-      </div>
+          </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <SectionPanel>
-          <SectionHeader title="Top Movers" subtitle="Today's biggest changes" />
-          <div className="flex flex-col gap-2.5">
-            {topMovers.map((stock, i) => (
-              <motion.div
-                key={stock.ticker}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.35, delay: 0.15 + i * 0.05 }}
-                className="flex items-center justify-between p-3.5 rounded-xl bg-muted/30 hover:bg-muted/50 transition-all duration-200 group"
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="relative sm:col-span-1">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search description, category, account..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-muted/30 border border-border/40 rounded-xl text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all font-sans"
+              />
+            </div>
+
+            <div>
+              <select
+                aria-label="Filter by category"
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="w-full px-3 py-2 bg-muted/30 border border-border/40 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all font-sans appearance-none cursor-pointer"
               >
-                <div className="flex items-center gap-3.5">
-                  <div className="size-9 rounded-xl bg-accent/60 flex items-center justify-center group-hover:bg-accent transition-colors">
-                    <span className="text-xs font-bold text-foreground font-mono">{stock.ticker.slice(0, 2)}</span>
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-foreground font-mono">{stock.ticker}</p>
-                    <p className="text-[11px] text-muted-foreground font-sans">{stock.name}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-mono font-bold text-foreground">${stock.price.toFixed(2)}</p>
-                  <p className={`text-[11px] font-mono font-bold ${stock.change >= 0 ? "text-fin-gain" : "text-fin-loss"}`}>
-                    {stock.change > 0 ? "+" : ""}{stock.change}%
-                  </p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </SectionPanel>
+                <option value="all" className="bg-card text-foreground">All Categories</option>
+                {categories.map((cat) => (
+                  <option key={cat} value={cat} className="bg-card text-foreground">{cat}</option>
+                ))}
+              </select>
+            </div>
 
-        <SectionPanel>
-          <SectionHeader title="Market Sentiment" subtitle="Aggregated indicators" />
-          <div className="flex flex-col gap-6">
-            {[
-              { label: "Fear & Greed Index", value: 68, display: "68 — Greed", color: C.gain },
-              { label: "VIX (Volatility)", value: 35, display: "14.2", color: C.amber },
-              { label: "Put/Call Ratio", value: 45, display: "0.82", color: C.azure },
-              { label: "Advance/Decline", value: 72, display: "1.84", color: C.teal },
-              { label: "New Highs/Lows", value: 62, display: "3.21", color: C.amber },
-            ].map((item, i) => (
-              <div key={i}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs text-muted-foreground font-sans font-medium">{item.label}</span>
-                  <span className="text-xs font-mono font-bold text-foreground">{item.display}</span>
-                </div>
-                <div className="h-2 rounded-full bg-muted/60 overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${item.value}%` }}
-                    transition={{ duration: 1, delay: 0.2 + i * 0.1, ease: EASE_OUT }}
-                    className="h-full rounded-full"
-                    style={{ background: item.color }}
-                  />
-                </div>
-              </div>
-            ))}
+            <div>
+              <select
+                aria-label="Filter by account"
+                value={accountFilter}
+                onChange={(e) => setAccountFilter(e.target.value)}
+                className="w-full px-3 py-2 bg-muted/30 border border-border/40 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all font-sans appearance-none cursor-pointer"
+              >
+                <option value="all" className="bg-card text-foreground">All Accounts</option>
+                <option value="QNB" className="bg-card text-foreground">QNB Checking</option>
+                <option value="Cash" className="bg-card text-foreground">Cash Wallet</option>
+                <option value="Card" className="bg-card text-foreground">Credit Card</option>
+              </select>
+            </div>
           </div>
-        </SectionPanel>
-      </div>
+        </div>
+
+        {/* Transactions Table (Matching Recent Transactions style) */}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border/50">
+                <th className="text-left p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans">Description</th>
+                <th className="text-left p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans">Category</th>
+                <th className="text-left p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans hidden sm:table-cell">Account</th>
+                <th className="text-left p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans">Date</th>
+                <th className="text-right p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredTransactions.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="p-8 text-center text-xs text-muted-foreground font-sans">
+                    No transactions match your search filters.
+                  </td>
+                </tr>
+              ) : (
+                filteredTransactions.map((tx, i) => (
+                  <motion.tr
+                    key={tx.id}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.3, delay: Math.min(i * 0.03, 0.3) }}
+                    className="border-b border-border/30 hover:bg-accent/20 transition-all duration-200"
+                  >
+                    <td className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="size-8 rounded-lg bg-accent/40 flex items-center justify-center shrink-0">
+                          <div className={`size-2 rounded-full ${tx.type === "income" ? "bg-fin-gain" : "bg-fin-loss"}`} />
+                        </div>
+                        <div>
+                          <span className="text-[13px] font-semibold text-foreground font-sans block">{tx.description}</span>
+                          <span className="text-[10px] text-muted-foreground/70 font-mono sm:hidden">{tx.account}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="p-4 text-xs text-muted-foreground font-sans">{tx.category}</td>
+                    <td className="p-4 text-xs font-mono text-muted-foreground hidden sm:table-cell">
+                      <span className="px-2 py-0.5 rounded-md bg-accent/40 text-[11px]">{tx.account}</span>
+                    </td>
+                    <td className="p-4 text-xs font-mono text-muted-foreground">
+                      <span>{tx.date}</span>
+                      {tx.time && <span className="text-muted-foreground/50 ml-1.5 hidden md:inline">{tx.time}</span>}
+                    </td>
+                    <td className={`p-4 text-right font-mono font-bold ${tx.type === "income" ? "text-fin-gain" : "text-fin-loss"}`}>
+                      {tx.type === "income" ? "+" : "-"}${Math.abs(tx.amount).toFixed(2)}
+                    </td>
+                  </motion.tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </SectionPanel>
     </div>
   )
 }
 
-// ─── Section: Watchlist ─────────────────────────────────────────
+// ─── Section: Categories ────────────────────────────────────────
 
-function WatchlistSection() {
+function CategoriesSection() {
+  const [categoriesList, setCategoriesList] = useState<CategoryItem[]>(initialCategories)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [typeFilter, setTypeFilter] = useState<"all" | "expense" | "income">("all")
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [newCatName, setNewCatName] = useState("")
+  const [newCatType, setNewCatType] = useState<"expense" | "income">("expense")
+  const [newCatBudget, setNewCatBudget] = useState("")
+
+  const filteredCategories = useMemo(() => {
+    return categoriesList.filter((cat) => {
+      const matchesSearch = cat.name.toLowerCase().includes(searchQuery.toLowerCase())
+      const matchesType = typeFilter === "all" || cat.type === typeFilter
+      return matchesSearch && matchesType
+    })
+  }, [categoriesList, searchQuery, typeFilter])
+
+  const totalExpense = useMemo(() => {
+    return categoriesList
+      .filter((c) => c.type === "expense")
+      .reduce((sum, c) => sum + c.total, 0)
+  }, [categoriesList])
+
+  const totalIncome = useMemo(() => {
+    return categoriesList
+      .filter((c) => c.type === "income")
+      .reduce((sum, c) => sum + c.total, 0)
+  }, [categoriesList])
+
+  const expenseCount = useMemo(() => categoriesList.filter((c) => c.type === "expense").length, [categoriesList])
+  const incomeCount = useMemo(() => categoriesList.filter((c) => c.type === "income").length, [categoriesList])
+
+  const handleAddCategory = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newCatName.trim()) return
+
+    const budgetVal = parseFloat(newCatBudget) || 0
+    const newCategory: CategoryItem = {
+      id: newCatName.toLowerCase().replace(/\s+/g, "-"),
+      name: newCatName.trim(),
+      type: newCatType,
+      total: 0,
+      budget: budgetVal > 0 ? budgetVal : undefined,
+      color: newCatType === "income" ? "oklch(0.76 0.16 162)" : "#5b4dc7",
+    }
+
+    setCategoriesList((prev) => [newCategory, ...prev])
+    setNewCatName("")
+    setNewCatBudget("")
+    setShowAddModal(false)
+  }
+
   return (
     <div className={`flex flex-col gap-5 ${SECTION_MIN_H}`}>
+      {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
-        <KpiCard label="Watchlist Items" value="8" delay={0} icon={Eye} />
-        <KpiCard label="Avg. Change" value="1.08" suffix="%" change={1.08} delay={0.06} icon={TrendingUp} />
-        <KpiCard label="Top Gainer" value="SMCI" delay={0.12} icon={ArrowUpRight} />
-        <KpiCard label="Top Loser" value="TSLA" delay={0.18} icon={ArrowDownRight} />
+        <KpiCard label="Total Categories" value={String(categoriesList.length)} delay={0} icon={CircleDot} />
+        <KpiCard label="Expense Categories" value={String(expenseCount)} delay={0.06} icon={ArrowDownRight} />
+        <KpiCard label="Income Categories" value={String(incomeCount)} delay={0.12} icon={TrendingUp} />
+        <KpiCard label="Monthly Spent" value={totalExpense.toLocaleString("en-US", { minimumFractionDigits: 2 })} prefix="$" delay={0.18} icon={DollarSign} />
       </div>
 
-      <SectionPanel className="!p-0 overflow-hidden">
-        <div className="p-5 lg:p-6 border-b border-border/50 flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-bold text-foreground tracking-tight font-display">Your Watchlist</h3>
-            <p className="text-[11px] text-muted-foreground mt-0.5 font-sans">Track your favorite assets</p>
+      {/* Main Panel */}
+      <SectionPanel className="flex flex-col gap-5">
+        {/* Controls Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-border/50 pb-5">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search categories..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-muted/30 border border-border/40 rounded-xl text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all font-sans"
+              />
+            </div>
+            <div className="flex items-center rounded-xl bg-muted/40 p-1 border border-border/30">
+              {(["all", "expense", "income"] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setTypeFilter(t)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all font-sans cursor-pointer ${
+                    typeFilter === t
+                      ? "bg-primary text-primary-foreground shadow-xs"
+                      : "text-muted-foreground hover:text-foreground hover:bg-accent/30"
+                  }`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
           </div>
-          <button className="flex items-center gap-1.5 text-xs font-bold text-primary hover:text-primary/80 transition-colors px-3.5 py-2 rounded-xl bg-primary/8 hover:bg-primary/12 font-sans">
-            <Plus className="size-3.5" />Add Asset
+
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-xs font-semibold shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-all duration-200 cursor-pointer font-sans shrink-0"
+          >
+            <Plus className="size-4" />
+            <span>Add Category</span>
           </button>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border/50">
-                <th className="text-left p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans">Asset</th>
-                <th className="text-right p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans">Price</th>
-                <th className="text-right p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans">Change</th>
-                <th className="text-right p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans hidden md:table-cell">Volume</th>
-                <th className="text-right p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans hidden lg:table-cell">P/E</th>
-                <th className="text-right p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans hidden lg:table-cell">Mkt Cap</th>
-                <th className="text-center p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans hidden sm:table-cell w-28">Trend</th>
-              </tr>
-            </thead>
-            <tbody>
-              {watchlistItems.map((item, i) => (
-                <motion.tr
-                  key={item.ticker}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.35, delay: 0.15 + i * 0.04 }}
-                  className="border-b border-border/30 hover:bg-accent/20 transition-all duration-200"
-                >
-                  <td className="p-4">
-                    <div className="flex items-center gap-3.5">
-                      <div className="size-9 rounded-xl bg-accent/60 flex items-center justify-center shrink-0">
-                        <span className="text-xs font-bold text-foreground font-mono">{item.ticker.slice(0, 2)}</span>
+
+        {/* Add Category Form Modal */}
+        <AnimatePresence>
+          {showAddModal && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.25 }}
+              className="overflow-hidden"
+            >
+              <form
+                onSubmit={handleAddCategory}
+                className="p-5 rounded-2xl bg-muted/30 border border-primary/30 flex flex-col gap-4 glow-teal-sm"
+              >
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-foreground font-display">Create New Category</h4>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddModal(false)}
+                    className="text-muted-foreground hover:text-foreground transition-colors p-1 cursor-pointer"
+                  >
+                    <X className="size-4" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5 font-sans">
+                      Category Name
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. Subscriptions, Gifts"
+                      value={newCatName}
+                      onChange={(e) => setNewCatName(e.target.value)}
+                      className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary font-sans"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5 font-sans">
+                      Type
+                    </label>
+                    <select
+                      value={newCatType}
+                      onChange={(e) => setNewCatType(e.target.value as "expense" | "income")}
+                      className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary font-sans appearance-none cursor-pointer"
+                    >
+                      <option value="expense">Expense</option>
+                      <option value="income">Income</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5 font-sans">
+                      Monthly Budget (Optional)
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="e.g. 500"
+                      value={newCatBudget}
+                      onChange={(e) => setNewCatBudget(e.target.value)}
+                      className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary font-sans"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddModal(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold text-muted-foreground hover:bg-accent/40 transition-colors font-sans cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-xl text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-sans shadow-md cursor-pointer"
+                  >
+                    Save Category
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Categories Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredCategories.map((cat, i) => {
+            const isIncome = cat.type === "income"
+            const maxVal = isIncome ? totalIncome : totalExpense
+            const percent = maxVal > 0 ? Math.min(100, Math.round((cat.total / maxVal) * 100)) : 0
+            const budgetPercent = cat.budget && cat.budget > 0 ? Math.min(100, Math.round((cat.total / cat.budget) * 100)) : null
+
+            return (
+              <motion.div
+                key={cat.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: i * 0.03 }}
+                className="surface-card rounded-2xl p-5 flex flex-col justify-between hover:scale-[1.01] transition-transform duration-200 group border border-border/40"
+                style={{ boxShadow: CARD_SHADOW }}
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="size-8 rounded-lg bg-accent/50 flex items-center justify-center">
+                        <CircleDot className="size-4 text-foreground" style={{ color: cat.color }} />
                       </div>
-                      <div>
-                        <p className="text-sm font-bold font-mono text-foreground">{item.ticker}</p>
-                        <p className="text-[11px] text-muted-foreground hidden sm:block font-sans">{item.name}</p>
-                      </div>
+                      <span className="font-bold text-sm text-foreground font-display">{cat.name}</span>
                     </div>
-                  </td>
-                  <td className="p-4 text-right font-mono font-bold text-foreground">${item.price.toFixed(2)}</td>
-                  <td className="p-4 text-right">
-                    <span className={`inline-flex items-center gap-0.5 text-[11px] font-mono font-bold px-1.5 py-0.5 rounded-md ${item.change >= 0 ? "text-fin-gain bg-fin-gain/8" : "text-fin-loss bg-fin-loss/8"}`}>
-                      {item.change >= 0 ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
-                      {item.change > 0 ? "+" : ""}{item.change}%
+                    <span
+                      className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${
+                        isIncome ? "bg-fin-gain/10 text-fin-gain" : "bg-fin-loss/10 text-fin-loss"
+                      }`}
+                    >
+                      {cat.type}
                     </span>
-                  </td>
-                  <td className="p-4 text-right text-xs font-mono text-muted-foreground hidden md:table-cell">{item.volume}</td>
-                  <td className="p-4 text-right text-xs font-mono text-muted-foreground hidden lg:table-cell">{item.pe}</td>
-                  <td className="p-4 text-right text-xs font-mono text-muted-foreground hidden lg:table-cell">{item.marketCap}</td>
-                  <td className="p-4 hidden sm:table-cell w-28">
-                    <MiniSparkline data={item.data} color={item.change >= 0 ? C.gain : C.rose} height={24} />
-                  </td>
-                </motion.tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </SectionPanel>
-    </div>
-  )
-}
+                  </div>
 
-// ─── Section: Reports ───────────────────────────────────────────
+                  <div className="my-2">
+                    <p className={`text-2xl font-bold font-mono tracking-tight ${isIncome ? "text-fin-gain" : "text-foreground"}`}>
+                      {isIncome ? "+" : ""}${cat.total.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground font-sans mt-0.5">
+                      {cat.budget ? `Budget: $${cat.budget.toLocaleString("en-US", { minimumFractionDigits: 2 })} (${budgetPercent}% used)` : `${percent}% of monthly ${cat.type}s`}
+                    </p>
+                  </div>
+                </div>
 
-function ReportsSection() {
-  return (
-    <div className={`flex flex-col gap-5 ${SECTION_MIN_H}`}>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
-        <KpiCard label="Total Reports" value="8" delay={0} icon={FileText} />
-        <KpiCard label="Generated This Month" value="5" delay={0.06} icon={Calendar} />
-        <KpiCard label="Total Dividends" value="2,330" prefix="$" delay={0.12} icon={DollarSign} />
-        <KpiCard label="Avg. Income/Mo" value="612" prefix="$" change={8.4} delay={0.18} icon={TrendingUp} />
-      </div>
-
-      <SectionPanel className="relative overflow-hidden">
-        <GlowOrb className="w-48 h-48 -top-24 -right-24 bg-primary/6" />
-        <SectionHeader title="Income Breakdown" subtitle="Dividends, interest, and other income sources">
-          <div className="flex items-center gap-5 text-[11px]">
-            <div className="flex items-center gap-2"><div className="size-2.5 rounded-full" style={{ background: C.teal }} /><span className="text-muted-foreground font-sans">Dividends</span></div>
-            <div className="flex items-center gap-2"><div className="size-2.5 rounded-full" style={{ background: C.azure }} /><span className="text-muted-foreground font-sans">Interest</span></div>
-            <div className="flex items-center gap-2"><div className="size-2.5 rounded-full" style={{ background: C.amber }} /><span className="text-muted-foreground font-sans">Other</span></div>
-          </div>
-        </SectionHeader>
-        <div className="h-60">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={incomeByMonth} margin={{ top: 5, right: 5, bottom: 0, left: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={C.grid} vertical={false} />
-              <XAxis dataKey="month" tick={{ fontSize: 11, fill: C.tick }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: C.tick }} axisLine={false} tickLine={false} tickFormatter={(v: number) => `$${v}`} />
-              <Tooltip content={<ChartTooltipContent />} />
-              <Bar dataKey="dividends" name="dividends" stackId="income" fill={C.teal} animationDuration={900} />
-              <Bar dataKey="interest" name="interest" stackId="income" fill={C.azure} animationDuration={900} />
-              <Bar dataKey="other" name="other" stackId="income" fill={C.amber} radius={[6, 6, 0, 0]} animationDuration={900} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </SectionPanel>
-
-      <SectionPanel className="!p-0 overflow-hidden">
-        <div className="p-5 lg:p-6 border-b border-border/50 flex items-center justify-between">
-          <div>
-            <h3 className="text-sm font-bold text-foreground tracking-tight font-display">Available Reports</h3>
-            <p className="text-[11px] text-muted-foreground mt-0.5 font-sans">Download or generate new financial reports</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors px-3 py-2 rounded-xl surface-card hover:bg-accent/50 font-sans">
-              <Filter className="size-3.5" />Filter
-            </button>
-            <button className="flex items-center gap-1.5 text-xs font-bold text-primary hover:text-primary/80 transition-colors px-3.5 py-2 rounded-xl bg-primary/8 hover:bg-primary/12 font-sans">
-              <Plus className="size-3.5" />Generate
-            </button>
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border/50">
-                <th className="text-left p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans">Report</th>
-                <th className="text-left p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans hidden sm:table-cell">Type</th>
-                <th className="text-left p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans hidden md:table-cell">Date</th>
-                <th className="text-left p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans hidden lg:table-cell">Size</th>
-                <th className="text-center p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans">Status</th>
-                <th className="text-center p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {reportsData.map((report, i) => (
-                <motion.tr
-                  key={report.id}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.35, delay: 0.2 + i * 0.04 }}
-                  className="border-b border-border/30 hover:bg-accent/20 transition-all duration-200"
-                >
-                  <td className="p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="size-8 rounded-lg bg-accent/40 flex items-center justify-center shrink-0"><FileText className="size-4 text-muted-foreground" /></div>
-                      <span className="text-[13px] font-semibold text-foreground truncate max-w-64 font-sans">{report.name}</span>
-                    </div>
-                  </td>
-                  <td className="p-4 hidden sm:table-cell">
-                    <span className="text-[11px] text-muted-foreground bg-muted/40 px-2.5 py-1 rounded-lg font-medium font-sans">{report.type}</span>
-                  </td>
-                  <td className="p-4 text-xs font-mono text-muted-foreground hidden md:table-cell">{report.date}</td>
-                  <td className="p-4 text-xs font-mono text-muted-foreground hidden lg:table-cell">{report.size}</td>
-                  <td className="p-4 text-center">
-                    {report.status === "ready" ? (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-fin-gain bg-fin-gain/8 px-2.5 py-1 rounded-lg"><Check className="size-3" />Ready</span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-chart-3 bg-chart-3/8 px-2.5 py-1 rounded-lg"><div className="size-2 rounded-full bg-chart-3 animate-pulse" />Generating</span>
-                    )}
-                  </td>
-                  <td className="p-4 text-center">
-                    <button disabled={report.status !== "ready"} className="p-2 rounded-lg hover:bg-accent transition-colors disabled:opacity-25 disabled:cursor-not-allowed" aria-label={`Download ${report.name}`}>
-                      <Download className="size-4 text-muted-foreground" />
-                    </button>
-                  </td>
-                </motion.tr>
-              ))}
-            </tbody>
-          </table>
+                <div className="mt-4 pt-3 border-t border-border/30">
+                  <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-1.5 font-sans">
+                    <span>Monthly Share</span>
+                    <span className="font-mono font-semibold text-foreground">{percent}%</span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-muted/60 overflow-hidden">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${percent}%` }}
+                      transition={{ duration: 0.8, delay: 0.1 + i * 0.02, ease: EASE_OUT }}
+                      className="h-full rounded-full"
+                      style={{ background: cat.color }}
+                    />
+                  </div>
+                </div>
+              </motion.div>
+            )
+          })}
         </div>
       </SectionPanel>
     </div>
@@ -1102,12 +1095,47 @@ function ReportsSection() {
 
 function SettingsSection() {
   const [activeTab, setActiveTab] = useState("profile")
+  const { profile, updateProfile, initials } = useUserProfile()
+  const router = useRouter()
+
+  const [isEditing, setIsEditing] = useState(false)
+  const [fullName, setFullName] = useState(profile.fullName)
+  const [username, setUsername] = useState(profile.username)
+  const [email, setEmail] = useState(profile.email)
+  const [currency, setCurrency] = useState(profile.currency)
+  const [phone, setPhone] = useState(profile.phone || "+1 (555) 019-2834")
+  const [language, setLanguage] = useState(profile.language || "English (US)")
+  const [saveSuccess, setSaveSuccess] = useState(false)
+
+  useEffect(() => {
+    setFullName(profile.fullName)
+    setUsername(profile.username)
+    setEmail(profile.email)
+    setCurrency(profile.currency)
+    setPhone(profile.phone || "+1 (555) 019-2834")
+    setLanguage(profile.language || "English (US)")
+  }, [profile])
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault()
+    updateProfile({
+      fullName,
+      username: username.startsWith("@") ? username : `@${username}`,
+      email,
+      currency,
+      phone,
+      language,
+    })
+    setIsEditing(false)
+    setSaveSuccess(true)
+    setTimeout(() => setSaveSuccess(false), 3000)
+  }
+
   const tabs = [
     { id: "profile", label: "Profile", icon: UserCog },
     { id: "notifications", label: "Notifications", icon: BellRing },
     { id: "security", label: "Security", icon: Lock },
     { id: "display", label: "Display", icon: Monitor },
-    { id: "billing", label: "Billing", icon: CreditCard },
   ]
 
   return (
@@ -1115,7 +1143,7 @@ function SettingsSection() {
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="rounded-2xl surface-card p-5 lg:p-6 relative overflow-hidden" style={{ boxShadow: CARD_SHADOW }}>
         <GlowOrb className="w-48 h-48 -top-24 -right-24 bg-primary/6" />
         <h3 className="text-lg font-bold text-foreground font-display tracking-tight">Account Settings</h3>
-        <p className="text-xs text-muted-foreground mt-1 font-sans">Manage your profile, preferences, and security</p>
+        <p className="text-xs text-muted-foreground mt-1 font-sans">Manage your personal profile, preferences, and security</p>
       </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
@@ -1125,7 +1153,7 @@ function SettingsSection() {
               const Icon = tab.icon
               return (
                 <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                  className={`relative flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-semibold transition-all duration-200 w-full text-left font-sans ${
+                  className={`relative flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-semibold transition-all duration-200 w-full text-left font-sans cursor-pointer ${
                     activeTab === tab.id ? "text-foreground bg-primary/8" : "text-muted-foreground hover:text-foreground hover:bg-accent/40"
                   }`}>
                   <Icon className="size-4" />{tab.label}
@@ -1134,7 +1162,10 @@ function SettingsSection() {
               )
             })}
             <div className="border-t border-border/50 my-2" />
-            <button className="flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-semibold text-fin-loss/70 hover:text-fin-loss hover:bg-fin-loss/5 transition-all duration-200 w-full text-left font-sans">
+            <button
+              onClick={() => router.push("/login")}
+              className="flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-semibold text-fin-loss/70 hover:text-fin-loss hover:bg-fin-loss/5 transition-all duration-200 w-full text-left font-sans cursor-pointer"
+            >
               <LogOut className="size-4" />Sign Out
             </button>
           </nav>
@@ -1145,39 +1176,157 @@ function SettingsSection() {
             <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.25 }}>
               {activeTab === "profile" && (
                 <div className="flex flex-col gap-6">
-                  <div><h4 className="text-sm font-bold text-foreground font-display">Personal Information</h4><p className="text-xs text-muted-foreground mt-0.5 font-sans">Update your personal details</p></div>
-                  <div className="flex items-center gap-4">
-                    <div className="size-16 rounded-2xl bg-primary/15 flex items-center justify-center glow-teal-sm"><span className="text-lg font-bold text-primary font-display">JD</span></div>
-                    <div><p className="text-sm font-bold text-foreground font-display">John Doe</p><p className="text-xs text-muted-foreground font-sans">Premium Account</p></div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-bold text-foreground font-display">Personal Information</h4>
+                      <p className="text-xs text-muted-foreground mt-0.5 font-sans">Manage your personal profile and account details</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditing(!isEditing)}
+                      className="px-3.5 py-1.5 rounded-xl border border-border/50 hover:border-primary/40 text-xs font-semibold text-foreground hover:bg-accent/40 transition-colors font-sans cursor-pointer"
+                    >
+                      {isEditing ? "Cancel" : "Edit Details"}
+                    </button>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {[
-                      { label: "Full Name", value: "John Doe", icon: UserCog },
-                      { label: "Email", value: "john.doe@meridian.io", icon: Mail },
-                      { label: "Phone", value: "+1 (555) 123-4567", icon: HelpCircle },
-                      { label: "Language", value: "English (US)", icon: Languages },
-                    ].map((field, i) => (
-                      <div key={i} className="flex flex-col gap-2">
-                        <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.06em] font-sans">{field.label}</label>
-                        <div className="flex items-center gap-2.5 bg-muted/30 rounded-xl px-4 py-3 border border-border/30">
-                          <field.icon className="size-4 text-muted-foreground shrink-0" />
-                          <span className="text-sm text-foreground font-sans">{field.value}</span>
+
+                  {saveSuccess && (
+                    <div className="p-3 rounded-xl bg-fin-gain/10 border border-fin-gain/20 text-fin-gain text-xs font-sans flex items-center gap-2">
+                      <Check className="size-4" /> Profile details updated successfully!
+                    </div>
+                  )}
+
+                  {/* Profile Header Card */}
+                  <div className="flex items-center gap-4 p-4 rounded-2xl bg-muted/20 border border-border/30">
+                    <div className="size-16 rounded-2xl bg-primary/15 flex items-center justify-center glow-teal-sm shrink-0">
+                      <span className="text-xl font-bold text-primary font-display">{initials}</span>
+                    </div>
+                    <div>
+                      <p className="text-base font-bold text-foreground font-display">{profile.fullName || "Spendly User"}</p>
+                      <p className="text-xs text-muted-foreground font-sans mt-0.5">{profile.username || "@user"}</p>
+                    </div>
+                  </div>
+
+                  {isEditing ? (
+                    <form onSubmit={handleSave} className="flex flex-col gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.06em] font-sans">Full Name</label>
+                          <input
+                            type="text"
+                            value={fullName}
+                            onChange={(e) => setFullName(e.target.value)}
+                            required
+                            className="bg-muted/30 rounded-xl px-4 py-2.5 border border-border/40 text-sm text-foreground focus:outline-none focus:border-primary/60 font-sans"
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.06em] font-sans">Username</label>
+                          <input
+                            type="text"
+                            value={username}
+                            onChange={(e) => setUsername(e.target.value)}
+                            required
+                            className="bg-muted/30 rounded-xl px-4 py-2.5 border border-border/40 text-sm text-foreground focus:outline-none focus:border-primary/60 font-sans"
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.06em] font-sans">Email</label>
+                          <input
+                            type="email"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            required
+                            className="bg-muted/30 rounded-xl px-4 py-2.5 border border-border/40 text-sm text-foreground focus:outline-none focus:border-primary/60 font-sans"
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.06em] font-sans">Default Currency</label>
+                          <select
+                            value={currency}
+                            onChange={(e) => setCurrency(e.target.value)}
+                            className="bg-muted/30 rounded-xl px-4 py-2.5 border border-border/40 text-sm text-foreground focus:outline-none focus:border-primary/60 font-sans cursor-pointer appearance-none"
+                          >
+                            <option value="USD" className="bg-card text-foreground">USD ($)</option>
+                            <option value="EGP" className="bg-card text-foreground">EGP (EGP)</option>
+                            <option value="EUR" className="bg-card text-foreground">EUR (€)</option>
+                            <option value="GBP" className="bg-card text-foreground">GBP (£)</option>
+                            <option value="AED" className="bg-card text-foreground">AED (AED)</option>
+                          </select>
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.06em] font-sans">Phone</label>
+                          <input
+                            type="text"
+                            value={phone}
+                            onChange={(e) => setPhone(e.target.value)}
+                            className="bg-muted/30 rounded-xl px-4 py-2.5 border border-border/40 text-sm text-foreground focus:outline-none focus:border-primary/60 font-sans"
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.06em] font-sans">Language</label>
+                          <input
+                            type="text"
+                            value={language}
+                            onChange={(e) => setLanguage(e.target.value)}
+                            className="bg-muted/30 rounded-xl px-4 py-2.5 border border-border/40 text-sm text-foreground focus:outline-none focus:border-primary/60 font-sans"
+                          />
                         </div>
                       </div>
-                    ))}
-                  </div>
+
+                      <div className="flex items-center justify-end gap-3 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setIsEditing(false)}
+                          className="px-4 py-2 rounded-xl text-xs font-semibold text-muted-foreground hover:bg-accent/40 font-sans cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="px-5 py-2 rounded-xl text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-sans shadow-md cursor-pointer"
+                        >
+                          Save Changes
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {[
+                        { label: "Full Name", value: profile.fullName || "Spendly User", icon: UserCog },
+                        { label: "Username", value: profile.username || "@user", icon: UserCog },
+                        { label: "Email", value: profile.email || "user@spendly.app", icon: Mail },
+                        { label: "Default Currency", value: `${profile.currency || "USD"}`, icon: DollarSign },
+                        { label: "Phone", value: profile.phone || "+1 (555) 019-2834", icon: HelpCircle },
+                        { label: "Language", value: profile.language || "English (US)", icon: Languages },
+                      ].map((field, i) => (
+                        <div key={i} className="flex flex-col gap-2">
+                          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.06em] font-sans">{field.label}</label>
+                          <div className="flex items-center gap-2.5 bg-muted/30 rounded-xl px-4 py-3 border border-border/30">
+                            <field.icon className="size-4 text-muted-foreground shrink-0" />
+                            <span className="text-sm text-foreground font-sans font-medium">{field.value}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
               {activeTab === "notifications" && (
                 <div className="flex flex-col gap-6">
                   <div><h4 className="text-sm font-bold text-foreground font-display">Notification Preferences</h4><p className="text-xs text-muted-foreground mt-0.5 font-sans">Choose how you want to be notified</p></div>
                   {[
-                    { label: "Price Alerts", desc: "Get notified when a stock hits your target price", enabled: true },
-                    { label: "Trade Confirmations", desc: "Receive confirmation when orders are executed", enabled: true },
-                    { label: "Portfolio Rebalance", desc: "Alerts when portfolio drifts from target allocation", enabled: true },
-                    { label: "Dividend Payments", desc: "Notifications for incoming dividend payments", enabled: false },
-                    { label: "Market News", desc: "Breaking news affecting your holdings", enabled: false },
-                    { label: "Weekly Summary", desc: "Weekly performance recap sent via email", enabled: true },
+                    { label: "Budget Alerts", desc: "Get notified when a category approaches its spending limit", enabled: true },
+                    { label: "Large Transaction Alerts", desc: "Receive confirmation when transactions over $100 occur", enabled: true },
+                    { label: "Bill Due Reminders", desc: "Alerts 3 days before recurring bills and rent payments", enabled: true },
+                    { label: "Income & Deposits", desc: "Notifications for incoming salary and freelance payments", enabled: true },
+                    { label: "Weekly Spending Summary", desc: "Weekly expense recap sent via email", enabled: false },
+                    { label: "Monthly Digest", desc: "Monthly breakdown of savings rate and net worth", enabled: true },
                   ].map((item, i) => (
                     <div key={i} className="flex items-center justify-between py-1">
                       <div><p className="text-sm font-semibold text-foreground font-sans">{item.label}</p><p className="text-xs text-muted-foreground mt-0.5 font-sans">{item.desc}</p></div>
@@ -1194,8 +1343,8 @@ function SettingsSection() {
                   {[
                     { label: "Two-Factor Authentication", desc: "Add an extra layer of security to your account", status: "Enabled", statusColor: "text-fin-gain" },
                     { label: "Password", desc: "Last changed 45 days ago", status: "Update", statusColor: "text-primary" },
-                    { label: "Active Sessions", desc: "2 devices currently logged in", status: "Manage", statusColor: "text-primary" },
-                    { label: "API Keys", desc: "3 active API keys", status: "View", statusColor: "text-primary" },
+                    { label: "Active Sessions", desc: "1 device currently logged in", status: "Manage", statusColor: "text-primary" },
+                    { label: "Data Encryption", desc: "End-to-end encrypted financial records", status: "Active", statusColor: "text-fin-gain" },
                   ].map((item, i) => (
                     <div key={i} className="flex items-center justify-between p-4 rounded-xl bg-muted/20 border border-border/30">
                       <div className="flex items-center gap-3.5">
@@ -1212,9 +1361,9 @@ function SettingsSection() {
                   <div><h4 className="text-sm font-bold text-foreground font-display">Display Preferences</h4><p className="text-xs text-muted-foreground mt-0.5 font-sans">Customize how the dashboard looks</p></div>
                   {[
                     { label: "Theme", desc: "Choose your preferred color scheme", value: "Dark", icon: Palette },
-                    { label: "Currency", desc: "Default display currency", value: "USD ($)", icon: DollarSign },
+                    { label: "Default Currency", desc: "Primary currency for accounts & analytics", value: profile.currency || "USD ($)", icon: DollarSign },
                     { label: "Date Format", desc: "How dates are displayed", value: "YYYY-MM-DD", icon: Calendar },
-                    { label: "Default Chart Type", desc: "Preferred chart visualization", value: "Area Chart", icon: BarChart3 },
+                    { label: "Number Format", desc: "Standard separator format", value: "1,234.56", icon: Monitor },
                   ].map((item, i) => {
                     const Icon = item.icon
                     return (
@@ -1227,28 +1376,6 @@ function SettingsSection() {
                       </div>
                     )
                   })}
-                </div>
-              )}
-              {activeTab === "billing" && (
-                <div className="flex flex-col gap-6">
-                  <div><h4 className="text-sm font-bold text-foreground font-display">Billing & Subscription</h4><p className="text-xs text-muted-foreground mt-0.5 font-sans">Manage your plan and payment methods</p></div>
-                  <div className="rounded-xl bg-primary/6 border border-primary/15 p-5 flex items-center justify-between glow-teal-sm">
-                    <div className="flex items-center gap-4">
-                      <div className="size-12 rounded-xl bg-primary/12 flex items-center justify-center"><Star className="size-5 text-primary" /></div>
-                      <div><p className="text-sm font-bold text-foreground font-display">Premium Plan</p><p className="text-xs text-muted-foreground font-sans">$29.99/month — Renews Mar 15, 2026</p></div>
-                    </div>
-                    <button className="text-xs font-bold text-primary hover:underline font-sans">Manage Plan</button>
-                  </div>
-                  <div className="flex flex-col gap-3">
-                    <h5 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans">Payment Method</h5>
-                    <div className="flex items-center justify-between p-4 rounded-xl bg-muted/20 border border-border/30">
-                      <div className="flex items-center gap-3.5">
-                        <CreditCard className="size-4 text-muted-foreground" />
-                        <div><p className="text-sm font-semibold text-foreground font-sans">Visa ending in 4242</p><p className="text-xs text-muted-foreground font-sans">Expires 12/2027</p></div>
-                      </div>
-                      <span className="text-xs font-bold text-primary">Update</span>
-                    </div>
-                  </div>
                 </div>
               )}
             </motion.div>
@@ -1274,15 +1401,20 @@ const sectionComponents: Record<SectionId, React.FC> = {
   dashboard: DashboardSection,
   transactions: TransactionsSection,
   accounts: AccountsSection,
-  categories: TransactionsSection,
+  categories: CategoriesSection,
   settings: SettingsSection,
 }
 
-export default function FinancialAnalyticsDashboard() {
-  const [activeSection, setActiveSection] = useState<SectionId>("dashboard")
+export interface FinancialAnalyticsDashboardProps {
+  initialSection?: SectionId
+}
+
+export default function FinancialAnalyticsDashboard({ initialSection = "dashboard" }: FinancialAnalyticsDashboardProps = {}) {
+  const [activeSection, setActiveSection] = useState<SectionId>(initialSection)
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [notifItems, setNotifItems] = useState(notifications)
+  const { initials } = useUserProfile()
 
   const handleNavigation = useCallback((sectionId: SectionId) => {
     if (sectionId === activeSection) return
@@ -1319,7 +1451,7 @@ export default function FinancialAnalyticsDashboard() {
                 const Icon = item.icon
                 return (
                   <button key={item.id} onClick={() => handleNavigation(item.id)}
-                    className={`relative flex items-center gap-2 rounded-xl px-3 py-2 text-[13px] font-semibold whitespace-nowrap transition-all duration-250 font-sans ${
+                    className={`relative flex items-center gap-2 rounded-xl px-3 py-2 text-[13px] font-semibold whitespace-nowrap transition-all duration-250 font-sans cursor-pointer ${
                       isActive ? "text-foreground bg-accent/40" : "text-muted-foreground hover:text-foreground hover:bg-accent/30"
                     }`}
                     aria-current={isActive ? "page" : undefined}
@@ -1333,21 +1465,21 @@ export default function FinancialAnalyticsDashboard() {
             </nav>
 
             <div className="flex items-center gap-1.5">
-              <button className="rounded-xl p-2.5 transition-all duration-200 hover:bg-accent/50" aria-label="Search">
+              <button className="rounded-xl p-2.5 transition-all duration-200 hover:bg-accent/50 cursor-pointer" aria-label="Search">
                 <Search className="size-4 text-muted-foreground" />
               </button>
               <div className="relative">
-                <button onClick={() => setNotificationsOpen((prev) => !prev)} className="relative rounded-xl p-2.5 transition-all duration-200 hover:bg-accent/50" aria-label="Notifications" aria-expanded={notificationsOpen}>
+                <button onClick={() => setNotificationsOpen((prev) => !prev)} className="relative rounded-xl p-2.5 transition-all duration-200 hover:bg-accent/50 cursor-pointer" aria-label="Notifications" aria-expanded={notificationsOpen}>
                   <Bell className="size-4 text-muted-foreground" />
                   {unreadCount > 0 && <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={SPRING} className="absolute -right-0.5 -top-0.5 flex size-5 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground font-mono">{unreadCount}</motion.span>}
                 </button>
                 <NotificationPanel isOpen={notificationsOpen} onClose={() => setNotificationsOpen(false)} items={notifItems} onMarkRead={handleMarkRead} onMarkAllRead={handleMarkAllRead} />
               </div>
-              <button className="rounded-xl p-2.5 transition-all duration-200 hover:bg-accent/50" aria-label="Settings" onClick={() => handleNavigation("settings")}>
+              <button className="rounded-xl p-2.5 transition-all duration-200 hover:bg-accent/50 cursor-pointer" aria-label="Settings" onClick={() => handleNavigation("settings")}>
                 <Settings className="size-4 text-muted-foreground" />
               </button>
-              <div className="ml-1.5 flex size-9 cursor-pointer items-center justify-center rounded-xl bg-primary/12 glow-teal-sm transition-colors hover:bg-primary/18">
-                <span className="text-xs font-bold text-primary font-display">JD</span>
+              <div onClick={() => handleNavigation("settings")} className="ml-1.5 flex size-9 cursor-pointer items-center justify-center rounded-xl bg-primary/12 glow-teal-sm transition-colors hover:bg-primary/18">
+                <span className="text-xs font-bold text-primary font-display">{initials}</span>
               </div>
             </div>
           </div>
