@@ -1249,7 +1249,7 @@ export default function FinancialAnalyticsDashboard() {
 
       {/* Floating navigation */}
       <header className="sticky top-0 z-30 px-2 py-3 sm:px-4 sm:py-4">
-        <div className="mx-auto w-full max-w-7xl rounded-2xl border-2 border-border/40 bg-card/60 px-3 py-3 backdrop-blur-xl sm:px-6 sm:py-4">
+        <div className="mx-auto w-full rounded-2xl border-2 border-border/40 bg-card/60 px-3 py-3 backdrop-blur-xl sm:px-6 sm:py-4">
           <div className="flex min-w-0 items-center justify-between gap-3">
             <button onClick={() => handleNavigation("dashboard")} className="cursor-pointer shrink-0" aria-label="Go to Dashboard">
               <span className="text-lg font-semibold tracking-tight text-foreground font-sans sm:text-xl">Spendly</span>
