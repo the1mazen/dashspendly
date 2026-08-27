@@ -1921,7 +1921,7 @@ function MobileFloatingNavbar({
       onMouseEnter={() => setIsIdle(false)}
       onTouchStart={() => setIsIdle(false)}
     >
-      <div className="mx-auto w-full max-w-md rounded-2xl border-2 border-white/10 bg-white/5 px-3 py-3 backdrop-blur-sm sm:px-6 sm:py-4">
+      <div className="mx-auto w-full max-w-md rounded-2xl bg-white/5 px-3 py-3 backdrop-blur-sm sm:px-6 sm:py-4">
         <div className="flex min-w-0 items-center justify-around gap-2">
           {navLinks.map((item) => {
             const isActive = activeSection === item.id
