@@ -115,50 +115,39 @@ export function saveLocalCategories(categories: Category[]): Category[] {
 }
 
 export function useFinanceData() {
-  const [accounts, setAccounts] = useState<Account[]>([])
-  const [transactions, setTransactions] = useState<Transaction[]>([])
-  const [categories, setCategories] = useState<Category[]>([])
+  const [accounts, setAccounts] = useState<Account[]>(() => getLocalAccounts())
+  const [transactions, setTransactions] = useState<Transaction[]>(() => getLocalTransactions())
+  const [categories, setCategories] = useState<Category[]>(() => getLocalCategories())
   const [loading, setLoading] = useState(true)
 
   const fetchData = useCallback(async () => {
     // 1. Try fetching from Supabase if configured
     if (isSupabaseConfigured && supabase) {
       try {
-        let userId: string | null = null
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
-          userId = user.id
-        } else {
-          const { data: { session } } = await supabase.auth.getSession()
-          if (session?.user?.id) {
-            userId = session.user.id
-          } else if (typeof window !== "undefined") {
-            userId = localStorage.getItem("spendly_auth_user_id")
-          }
-        }
+        const userId = await resolveCurrentUserId()
 
+        // Fetch accounts
+        let query = supabase.from("accounts").select("*").order("created_at", { ascending: true })
         if (userId) {
-          // Fetch accounts
-          const { data: dbAccounts } = await supabase
-            .from("accounts")
-            .select("*")
-            .eq("user_id", userId)
-            .order("created_at", { ascending: true })
+          query = query.eq("user_id", userId)
+        }
+        const { data: dbAccounts, error: accError } = await query
 
-          // Fetch transactions
-          const { data: dbTransactions } = await supabase
-            .from("transactions")
-            .select("*")
-            .eq("user_id", userId)
-            .order("date", { ascending: false })
+        // Fetch transactions
+        let txQuery = supabase.from("transactions").select("*").order("date", { ascending: false })
+        if (userId) {
+          txQuery = txQuery.eq("user_id", userId)
+        }
+        const { data: dbTransactions } = await txQuery
 
-          // Fetch categories
-          const { data: dbCategories } = await supabase
-            .from("categories")
-            .select("*")
-            .eq("user_id", userId)
-            .order("created_at", { ascending: true })
+        // Fetch categories
+        let catQuery = supabase.from("categories").select("*").order("created_at", { ascending: true })
+        if (userId) {
+          catQuery = catQuery.eq("user_id", userId)
+        }
+        const { data: dbCategories } = await catQuery
 
+        if (!accError && dbAccounts && dbAccounts.length > 0) {
           const parsedTransactions: Transaction[] = (dbTransactions || []).map((t: any) => {
             const amountCents = t.amount_cents ?? 0
             const amount = amountCents / 100
@@ -182,9 +171,8 @@ export function useFinanceData() {
             }
           })
 
-          const parsedAccounts: Account[] = (dbAccounts || []).map((a: any) => {
+          const parsedAccounts: Account[] = dbAccounts.map((a: any) => {
             const startCents = a.starting_balance_cents ?? 0
-            // calculate current balance based on transactions for this account
             const accountTxSum = parsedTransactions
               .filter((t) => t.account_id === String(a.id))
               .reduce((sum, t) => sum + (t.type === "income" ? t.amount : -t.amount), 0)
