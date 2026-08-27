@@ -1912,9 +1912,9 @@ function MobileFloatingNavbar({
     <nav
       aria-label="Mobile Navigation"
       style={{
-        opacity: isIdle ? 0 : 0.9,
-        transition: "opacity 0.4s ease-in-out",
-        pointerEvents: isIdle ? "none" : "auto",
+        opacity: isIdle ? 0.5 : 1,
+        transition: "opacity 0.6s ease-in-out",
+        pointerEvents: "auto",
       }}
       className="fixed inset-x-0 bottom-4 z-50 px-2 py-3 sm:px-4 sm:py-4 md:hidden flex justify-center"
       onMouseEnter={() => setIsIdle(false)}
