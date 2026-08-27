@@ -1901,6 +1901,14 @@ function MobileFloatingNavbar({
     }
   }, [resetIdleTimer])
 
+  const navLinks: { id: SectionId; label: string }[] = [
+    { id: "dashboard", label: "Dashboard" },
+    { id: "transactions", label: "Transactions" },
+    { id: "accounts", label: "Accounts" },
+    { id: "categories", label: "Categories" },
+    { id: "settings", label: "Settings" },
+  ]
+
   return (
     <nav
       aria-label="Mobile Navigation"
@@ -1909,17 +1917,14 @@ function MobileFloatingNavbar({
         transition: "opacity 0.4s ease-in-out",
         pointerEvents: isIdle ? "none" : "auto",
       }}
-      className="fixed bottom-4 inset-x-0 z-50 px-3 flex justify-center pointer-events-none md:hidden"
+      className="fixed inset-x-0 bottom-4 z-50 px-2 py-3 sm:px-4 sm:py-4 md:hidden flex justify-center"
+      onMouseEnter={() => setIsIdle(false)}
+      onTouchStart={() => setIsIdle(false)}
     >
-      <div
-        className="pointer-events-auto w-full max-w-[370px] rounded-2xl border-2 border-white/10 bg-white/5 px-2 py-2 backdrop-blur-md shadow-[0_4px_24px_-1px_rgba(0,0,0,0.5)]"
-        onMouseEnter={() => setIsIdle(false)}
-        onTouchStart={() => setIsIdle(false)}
-      >
-        <div className="flex items-center justify-around gap-1">
-          {NAV_ITEMS.map((item) => {
-            const isActive = item.id === activeSection
-            const Icon = item.icon
+      <div className="mx-auto w-full max-w-md rounded-2xl border-2 border-white/10 bg-white/5 px-3 py-3 backdrop-blur-sm sm:px-6 sm:py-4">
+        <div className="flex min-w-0 items-center justify-around gap-2">
+          {navLinks.map((item) => {
+            const isActive = activeSection === item.id
             return (
               <button
                 key={item.id}
@@ -1927,22 +1932,13 @@ function MobileFloatingNavbar({
                   setIsIdle(false)
                   onNavigate(item.id)
                 }}
-                className={`relative flex flex-col items-center justify-center flex-1 py-1.5 px-1 rounded-xl text-[11px] transition-colors cursor-pointer font-open-sans-custom ${
+                className={`text-xs font-open-sans-custom transition-colors cursor-pointer whitespace-nowrap ${
                   isActive
-                    ? "text-white font-semibold [text-shadow:_0_2px_8px_rgb(0_0_0_/_40%)] bg-white/10"
+                    ? "font-semibold text-white [text-shadow:_0_2px_8px_rgb(0_0_0_/_40%)]"
                     : "text-gray-300 hover:text-white [text-shadow:_0_2px_6px_rgb(0_0_0_/_40%)]"
                 }`}
-                aria-current={isActive ? "page" : undefined}
               >
-                <Icon className={`size-4.5 mb-1 ${isActive ? "text-white" : "text-gray-300"}`} />
-                <span className="leading-none tracking-tight">{item.label}</span>
-                {isActive && (
-                  <motion.div
-                    layoutId="mobile-nav-indicator"
-                    className="absolute -bottom-0.5 left-2.5 right-2.5 h-0.5 rounded-full bg-white"
-                    transition={SPRING}
-                  />
-                )}
+                {item.label}
               </button>
             )
           })}
