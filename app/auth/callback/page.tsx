@@ -43,26 +43,8 @@ export default function AuthCallbackPage() {
               // Ignore
             }
 
-            // Check if user already has accounts
-            let hasAccounts = false
-            try {
-              const { data: accounts } = await supabase
-                .from("accounts")
-                .select("id")
-                .eq("user_id", user.id)
-              if (accounts && accounts.length > 0) {
-                hasAccounts = true
-              }
-            } catch {
-              // Ignore
-            }
-
             if (isMounted) {
-              if (hasAccounts) {
-                router.replace("/dashboard")
-              } else {
-                router.replace("/login?step=account")
-              }
+              router.replace("/dashboard")
             }
             return
           }

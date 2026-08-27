@@ -60,20 +60,12 @@ export default function AuthPage() {
               localStorage.setItem("spendly_auth_user_id", user.id)
             }
 
-            const { data: userAccounts } = await supabase
-              .from("accounts")
-              .select("id")
-              .eq("user_id", user.id)
-
-            const hasAccounts = userAccounts && userAccounts.length > 0
-
-            if (isAccountStep || !hasAccounts) {
+            if (isAccountStep) {
               setSetupStep("account")
-              return
             } else {
               router.replace("/dashboard")
-              return
             }
+            return
           }
         } catch {
           // Ignore
@@ -95,14 +87,9 @@ export default function AuthPage() {
           if (typeof window !== "undefined") {
             localStorage.setItem("spendly_auth_user_id", session.user.id)
           }
-          const { data: userAccounts } = await supabase
-            .from("accounts")
-            .select("id")
-            .eq("user_id", session.user.id)
-
-          if (!userAccounts || userAccounts.length === 0) {
+          if (window.location.search.includes("step=account")) {
             setSetupStep("account")
-          } else if (!window.location.search.includes("step=account")) {
+          } else {
             router.replace("/dashboard")
           }
         }
