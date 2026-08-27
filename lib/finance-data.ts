@@ -323,76 +323,250 @@ export function useFinanceData() {
 
   const createTransaction = useCallback(async (txData: {
     account_id: string
+    destination_account_id?: string
     category_id?: string
+    category_name?: string
     amount: number
-    type: "income" | "expense"
-    description: string
+    type: "income" | "expense" | "transfer"
+    description?: string
     date?: string
     note?: string
   }) => {
-    const amountCents = Math.round(Math.abs(txData.amount) * 100)
-    const dateStr = txData.date || new Date().toISOString().split("T")[0]
-    let newTx: Transaction = {
-      id: "tx_" + Date.now() + "_" + Math.random().toString(36).substr(2, 4),
-      account_id: txData.account_id,
-      category_id: txData.category_id,
-      amount_cents: amountCents,
-      amount: Math.abs(txData.amount),
-      type: txData.type,
-      description: txData.description,
-      note: txData.note,
-      date: dateStr,
-      created_at: new Date().toISOString(),
+    if (!txData.account_id) {
+      throw new Error("Please select an account.")
+    }
+    if (isNaN(txData.amount) || txData.amount <= 0) {
+      throw new Error("Please enter a valid amount greater than 0.")
+    }
+    if (txData.type === "transfer" && (!txData.destination_account_id || txData.destination_account_id === txData.account_id)) {
+      throw new Error("Please select a different destination account for the transfer.")
     }
 
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const userId = await resolveCurrentUserId()
-        if (userId) {
-          const { data, error } = await supabase
-            .from("transactions")
-            .insert({
-              user_id: userId,
-              account_id: txData.account_id,
-              category_id: txData.category_id || null,
-              amount_cents: amountCents,
-              type: txData.type,
-              note: txData.description,
-              date: dateStr,
-            })
-            .select()
-            .single()
+    const amountCents = Math.round(Math.abs(txData.amount) * 100)
+    const dateStr = txData.date || new Date().toISOString().split("T")[0]
+    const noteText = txData.note?.trim() || txData.description?.trim() || ""
 
-          if (!error && data) {
-            newTx = {
-              id: String(data.id),
-              user_id: data.user_id,
-              account_id: String(data.account_id),
-              category_id: data.category_id ? String(data.category_id) : undefined,
-              amount_cents: data.amount_cents,
-              amount: data.amount_cents / 100,
-              type: data.type === "expense" ? "expense" : "income",
-              description: data.note || txData.description,
-              date: data.date,
-              created_at: data.created_at,
+    const srcAcc = accounts.find((a) => a.id === txData.account_id)
+    const destAcc = txData.destination_account_id ? accounts.find((a) => a.id === txData.destination_account_id) : null
+
+    const createdTxs: Transaction[] = []
+
+    if (isSupabaseConfigured && supabase) {
+      const userId = await resolveCurrentUserId()
+      if (!userId) {
+        throw new Error("User session not found. Please log in again.")
+      }
+
+      // Handle free text category if provided
+      let resolvedCategoryId: string | null = txData.category_id || null
+      if (!resolvedCategoryId && txData.category_name?.trim()) {
+        const catName = txData.category_name.trim()
+        const existingCat = categories.find((c) => c.name.toLowerCase() === catName.toLowerCase())
+        if (existingCat) {
+          resolvedCategoryId = existingCat.id
+        } else {
+          try {
+            const { data: newCatData } = await supabase
+              .from("categories")
+              .insert({
+                user_id: userId,
+                name: catName,
+                type: txData.type === "income" ? "income" : "expense",
+                currency: srcAcc?.currency || "USD",
+              })
+              .select()
+              .single()
+
+            if (newCatData) {
+              resolvedCategoryId = String(newCatData.id)
             }
+          } catch {
+            // Ignore category creation failure and continue
           }
         }
-      } catch (err) {
-        console.warn("Error creating transaction in Supabase:", err)
+      }
+
+      if (txData.type === "transfer") {
+        const transferPairId = typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : "tp_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9)
+
+        // 1. Outgoing transfer row (source account)
+        const outgoingNote = noteText ? `Transfer to ${destAcc?.name || "Account"}: ${noteText}` : `Transfer to ${destAcc?.name || "Account"}`
+        const { data: outData, error: outError } = await supabase
+          .from("transactions")
+          .insert({
+            user_id: userId,
+            account_id: txData.account_id,
+            category_id: resolvedCategoryId,
+            amount_cents: amountCents,
+            type: "expense",
+            transfer_pair_id: transferPairId,
+            note: outgoingNote,
+            date: dateStr,
+          })
+          .select()
+          .single()
+
+        if (outError) {
+          throw new Error(outError.message || "Failed to create outgoing transfer.")
+        }
+
+        // 2. Incoming transfer row (destination account)
+        const incomingNote = noteText ? `Transfer from ${srcAcc?.name || "Account"}: ${noteText}` : `Transfer from ${srcAcc?.name || "Account"}`
+        const { data: inData, error: inError } = await supabase
+          .from("transactions")
+          .insert({
+            user_id: userId,
+            account_id: txData.destination_account_id,
+            category_id: resolvedCategoryId,
+            amount_cents: amountCents,
+            type: "income",
+            transfer_pair_id: transferPairId,
+            note: incomingNote,
+            date: dateStr,
+          })
+          .select()
+          .single()
+
+        if (inError) {
+          throw new Error(inError.message || "Failed to create incoming transfer.")
+        }
+
+        if (outData) {
+          createdTxs.push({
+            id: String(outData.id),
+            user_id: outData.user_id,
+            account_id: String(outData.account_id),
+            category_id: outData.category_id ? String(outData.category_id) : undefined,
+            amount_cents: outData.amount_cents,
+            amount: outData.amount_cents / 100,
+            type: "expense",
+            transfer_pair_id: outData.transfer_pair_id,
+            note: outData.note,
+            description: outData.note,
+            date: outData.date,
+            created_at: outData.created_at,
+            account_name: srcAcc?.name || "Source Account",
+          })
+        }
+
+        if (inData) {
+          createdTxs.push({
+            id: String(inData.id),
+            user_id: inData.user_id,
+            account_id: String(inData.account_id),
+            category_id: inData.category_id ? String(inData.category_id) : undefined,
+            amount_cents: inData.amount_cents,
+            amount: inData.amount_cents / 100,
+            type: "income",
+            transfer_pair_id: inData.transfer_pair_id,
+            note: inData.note,
+            description: inData.note,
+            date: inData.date,
+            created_at: inData.created_at,
+            account_name: destAcc?.name || "Destination Account",
+          })
+        }
+      } else {
+        // Standard Income or Expense
+        const defaultDesc = noteText || (txData.type === "income" ? "Income" : "Expense")
+        const { data, error } = await supabase
+          .from("transactions")
+          .insert({
+            user_id: userId,
+            account_id: txData.account_id,
+            category_id: resolvedCategoryId,
+            amount_cents: amountCents,
+            type: txData.type,
+            note: defaultDesc,
+            date: dateStr,
+          })
+          .select()
+          .single()
+
+        if (error) {
+          throw new Error(error.message || "Failed to insert transaction.")
+        }
+
+        if (data) {
+          const catObj = categories.find((c) => c.id === data.category_id)
+          createdTxs.push({
+            id: String(data.id),
+            user_id: data.user_id,
+            account_id: String(data.account_id),
+            category_id: data.category_id ? String(data.category_id) : undefined,
+            amount_cents: data.amount_cents,
+            amount: data.amount_cents / 100,
+            type: data.type === "expense" ? "expense" : "income",
+            note: data.note,
+            description: data.note,
+            date: data.date,
+            created_at: data.created_at,
+            account_name: srcAcc?.name || "Account",
+            category_name: catObj?.name || txData.category_name || "General",
+          })
+        }
+      }
+    } else {
+      // Local fallback
+      if (txData.type === "transfer") {
+        const transferPairId = "tp_local_" + Date.now()
+        createdTxs.push({
+          id: "tx_out_" + Date.now(),
+          account_id: txData.account_id,
+          amount_cents: amountCents,
+          amount: txData.amount,
+          type: "expense",
+          transfer_pair_id: transferPairId,
+          note: `Transfer to ${destAcc?.name || "Account"}`,
+          description: `Transfer to ${destAcc?.name || "Account"}`,
+          date: dateStr,
+          created_at: new Date().toISOString(),
+          account_name: srcAcc?.name,
+        })
+        createdTxs.push({
+          id: "tx_in_" + Date.now() + 1,
+          account_id: txData.destination_account_id!,
+          amount_cents: amountCents,
+          amount: txData.amount,
+          type: "income",
+          transfer_pair_id: transferPairId,
+          note: `Transfer from ${srcAcc?.name || "Account"}`,
+          description: `Transfer from ${srcAcc?.name || "Account"}`,
+          date: dateStr,
+          created_at: new Date().toISOString(),
+          account_name: destAcc?.name,
+        })
+      } else {
+        createdTxs.push({
+          id: "tx_local_" + Date.now(),
+          account_id: txData.account_id,
+          category_id: txData.category_id,
+          amount_cents: amountCents,
+          amount: txData.amount,
+          type: txData.type,
+          note: noteText || (txData.type === "income" ? "Income" : "Expense"),
+          description: noteText || (txData.type === "income" ? "Income" : "Expense"),
+          date: dateStr,
+          created_at: new Date().toISOString(),
+          account_name: srcAcc?.name,
+          category_name: txData.category_name || "General",
+        })
       }
     }
 
-    setTransactions((prev) => {
-      const updated = [newTx, ...prev]
-      saveLocalTransactions(updated)
-      return updated
-    })
+    if (createdTxs.length > 0) {
+      setTransactions((prev) => {
+        const updated = [...createdTxs, ...prev]
+        saveLocalTransactions(updated)
+        return updated
+      })
+    }
 
-    // Refresh accounts balance
-    fetchData()
-    return newTx
-  }, [fetchData])
+    await fetchData()
+    return createdTxs[0]
+  }, [accounts, categories, fetchData])
 
   const createCategory = useCallback(async (catData: { name: string; type: "income" | "expense"; currency?: string }) => {
     const currency = catData.currency || "USD"

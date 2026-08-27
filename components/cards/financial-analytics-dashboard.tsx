@@ -473,7 +473,16 @@ function DashboardAccountsSection({ onNavigate }: { onNavigate?: (section: Secti
             <h3 className="text-sm font-bold text-foreground tracking-tight font-display">All recent transactions</h3>
             <p className="text-[11px] text-muted-foreground mt-0.5 font-sans">Your latest income and expenses</p>
           </div>
-          <button onClick={() => onNavigate?.("transactions")} className="text-xs font-semibold text-primary hover:underline font-sans cursor-pointer">View all</button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => onNavigate?.("transactions")}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors font-sans cursor-pointer shadow-sm"
+            >
+              <Plus className="size-3.5" />
+              <span>Add Transaction</span>
+            </button>
+            <button onClick={() => onNavigate?.("transactions")} className="text-xs font-semibold text-muted-foreground hover:text-foreground hover:underline font-sans cursor-pointer">View all</button>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -836,12 +845,15 @@ function TransactionsSection() {
   const [accountFilter, setAccountFilter] = useState<string>("all")
   const [showAddModal, setShowAddModal] = useState(false)
 
-  const [newDesc, setNewDesc] = useState("")
   const [newAmount, setNewAmount] = useState("")
-  const [newType, setNewType] = useState<"expense" | "income">("expense")
+  const [newType, setNewType] = useState<"expense" | "income" | "transfer">("expense")
   const [newAccountId, setNewAccountId] = useState(accounts[0]?.id || "")
+  const [newDestAccountId, setNewDestAccountId] = useState("")
   const [newCategoryId, setNewCategoryId] = useState("")
+  const [newCustomCategory, setNewCustomCategory] = useState("")
   const [newDate, setNewDate] = useState(new Date().toISOString().split("T")[0])
+  const [newNote, setNewNote] = useState("")
+  const [txError, setTxError] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const currencySymbol = profile.currency === "EUR" ? "€" : profile.currency === "GBP" ? "£" : profile.currency === "EGP" ? "EGP " : profile.currency === "AED" ? "AED " : "$"
@@ -851,7 +863,8 @@ function TransactionsSection() {
       const matchesSearch =
         (tx.description || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
         (tx.category_name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (tx.account_name || "").toLowerCase().includes(searchQuery.toLowerCase())
+        (tx.account_name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (tx.note || "").toLowerCase().includes(searchQuery.toLowerCase())
 
       const matchesType = typeFilter === "all" || tx.type === typeFilter
       const matchesCategory = categoryFilter === "all" || tx.category_id === categoryFilter || tx.category_name?.toLowerCase() === categoryFilter.toLowerCase()
@@ -865,27 +878,57 @@ function TransactionsSection() {
 
   const handleAddTransaction = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newDesc.trim() || !newAmount) return
-    const accId = newAccountId || accounts[0]?.id
-    if (!accId) {
-      alert("Please create an account first before adding transactions.")
+    setTxError("")
+
+    const amountNum = parseFloat(newAmount)
+    if (isNaN(amountNum) || amountNum <= 0) {
+      setTxError("Please enter a valid amount greater than 0.")
       return
     }
+
+    const accId = newAccountId || accounts[0]?.id
+    if (!accId) {
+      setTxError("Please create an account first before adding transactions.")
+      return
+    }
+
+    if (newType === "transfer") {
+      const destId = newDestAccountId || accounts.find((a) => a.id !== accId)?.id
+      if (!destId || destId === accId) {
+        setTxError("Please select two different accounts for the transfer.")
+        return
+      }
+    }
+
     setIsSubmitting(true)
+    try {
+      const isCustomCat = newCategoryId === "custom" || (!newCategoryId && newCustomCategory.trim() !== "")
+      const catId = !isCustomCat && newCategoryId ? newCategoryId : undefined
+      const catName = isCustomCat && newCustomCategory.trim() ? newCustomCategory.trim() : undefined
 
-    await createTransaction({
-      account_id: accId,
-      category_id: newCategoryId || undefined,
-      amount: parseFloat(newAmount) || 0,
-      type: newType,
-      description: newDesc.trim(),
-      date: newDate,
-    })
+      await createTransaction({
+        account_id: accId,
+        destination_account_id: newType === "transfer" ? (newDestAccountId || accounts.find((a) => a.id !== accId)?.id) : undefined,
+        category_id: catId,
+        category_name: catName,
+        amount: amountNum,
+        type: newType,
+        note: newNote.trim(),
+        description: newNote.trim() || (newType === "transfer" ? "Transfer" : newType === "income" ? "Income" : "Expense"),
+        date: newDate || new Date().toISOString().split("T")[0],
+      })
 
-    setNewDesc("")
-    setNewAmount("")
-    setIsSubmitting(false)
-    setShowAddModal(false)
+      // Reset form and close ONLY on success
+      setNewAmount("")
+      setNewNote("")
+      setNewCustomCategory("")
+      setTxError("")
+      setShowAddModal(false)
+    } catch (err: any) {
+      setTxError(err?.message || "Failed to create transaction. Please try again.")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -926,7 +969,7 @@ function TransactionsSection() {
                 ))}
               </div>
               <button
-                onClick={() => setShowAddModal(true)}
+                onClick={() => { setTxError(""); setShowAddModal(true) }}
                 className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors font-sans cursor-pointer shadow-sm shrink-0"
               >
                 <Plus className="size-3.5" />
@@ -952,18 +995,37 @@ function TransactionsSection() {
                       <X className="size-4" />
                     </button>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div>
-                      <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1 font-sans">Description</label>
-                      <input
-                        type="text"
-                        required
-                        placeholder="e.g. Groceries, Freelance"
-                        value={newDesc}
-                        onChange={(e) => setNewDesc(e.target.value)}
-                        className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary font-sans"
-                      />
+
+                  {txError && (
+                    <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-sans flex items-center gap-2">
+                      <AlertTriangle className="size-4 shrink-0" />
+                      <span>{txError}</span>
                     </div>
+                  )}
+
+                  {/* Transaction Type Segmented Control */}
+                  <div>
+                    <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5 font-sans">Transaction Type</label>
+                    <div className="grid grid-cols-3 gap-1.5 p-1 bg-background border border-border/60 rounded-xl">
+                      {(["expense", "income", "transfer"] as const).map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => setNewType(t)}
+                          className={`py-2 rounded-lg text-xs font-semibold capitalize transition-all font-sans cursor-pointer ${
+                            newType === t
+                              ? "bg-primary text-primary-foreground shadow-sm"
+                              : "text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                          }`}
+                        >
+                          {t === "expense" ? "Expense" : t === "income" ? "Income" : "Transfer"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {/* Amount */}
                     <div>
                       <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1 font-sans">Amount</label>
                       <input
@@ -976,21 +1038,14 @@ function TransactionsSection() {
                         className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary font-mono"
                       />
                     </div>
+
+                    {/* Source Account (or single Account) */}
                     <div>
-                      <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1 font-sans">Type</label>
+                      <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1 font-sans">
+                        {newType === "transfer" ? "From Account" : "Account"}
+                      </label>
                       <select
-                        value={newType}
-                        onChange={(e) => setNewType(e.target.value as "expense" | "income")}
-                        className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary font-sans appearance-none cursor-pointer"
-                      >
-                        <option value="expense">Expense</option>
-                        <option value="income">Income</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1 font-sans">Account</label>
-                      <select
-                        value={newAccountId}
+                        value={newAccountId || accounts[0]?.id}
                         onChange={(e) => setNewAccountId(e.target.value)}
                         required
                         className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary font-sans appearance-none cursor-pointer"
@@ -1004,19 +1059,57 @@ function TransactionsSection() {
                         )}
                       </select>
                     </div>
-                    <div>
-                      <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1 font-sans">Category</label>
-                      <select
-                        value={newCategoryId}
-                        onChange={(e) => setNewCategoryId(e.target.value)}
-                        className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary font-sans appearance-none cursor-pointer"
-                      >
-                        <option value="">General</option>
-                        {categories.map((cat) => (
-                          <option key={cat.id} value={cat.id}>{cat.name}</option>
-                        ))}
-                      </select>
-                    </div>
+
+                    {/* Destination Account (Only for Transfer) */}
+                    {newType === "transfer" ? (
+                      <div>
+                        <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1 font-sans">To Account</label>
+                        <select
+                          value={newDestAccountId || accounts.find((a) => a.id !== (newAccountId || accounts[0]?.id))?.id || ""}
+                          onChange={(e) => setNewDestAccountId(e.target.value)}
+                          required
+                          className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary font-sans appearance-none cursor-pointer"
+                        >
+                          {accounts
+                            .filter((a) => a.id !== (newAccountId || accounts[0]?.id))
+                            .map((acc) => (
+                              <option key={acc.id} value={acc.id}>{acc.name} ({currencySymbol}{acc.balance.toFixed(2)})</option>
+                            ))}
+                        </select>
+                      </div>
+                    ) : (
+                      /* Category (For Income/Expense) */
+                      <div>
+                        <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1 font-sans">Category</label>
+                        <select
+                          value={newCategoryId}
+                          onChange={(e) => setNewCategoryId(e.target.value)}
+                          className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary font-sans appearance-none cursor-pointer"
+                        >
+                          <option value="">General</option>
+                          {categories.map((cat) => (
+                            <option key={cat.id} value={cat.id}>{cat.name}</option>
+                          ))}
+                          <option value="custom">+ Add / Enter custom category...</option>
+                        </select>
+                      </div>
+                    )}
+
+                    {/* Custom Category Input if selected or no categories exist */}
+                    {newType !== "transfer" && (newCategoryId === "custom" || categories.length === 0) && (
+                      <div>
+                        <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1 font-sans">Category Name</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Groceries, Rent, Salary"
+                          value={newCustomCategory}
+                          onChange={(e) => setNewCustomCategory(e.target.value)}
+                          className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary font-sans"
+                        />
+                      </div>
+                    )}
+
+                    {/* Date */}
                     <div>
                       <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1 font-sans">Date</label>
                       <input
@@ -1026,11 +1119,24 @@ function TransactionsSection() {
                         className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary font-sans"
                       />
                     </div>
+
+                    {/* Note / Description */}
+                    <div className={newType === "transfer" ? "sm:col-span-2" : ""}>
+                      <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1 font-sans">Note (Optional)</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Coffee with friends, Monthly rent"
+                        value={newNote}
+                        onChange={(e) => setNewNote(e.target.value)}
+                        className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary font-sans"
+                      />
+                    </div>
                   </div>
-                  <div className="flex items-center justify-end gap-2 pt-1">
+
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/40">
                     <button type="button" onClick={() => setShowAddModal(false)} className="px-4 py-2 rounded-xl text-xs font-semibold text-muted-foreground hover:bg-accent/40 transition-colors font-sans cursor-pointer">Cancel</button>
-                    <button type="submit" disabled={isSubmitting} className="px-4 py-2 rounded-xl text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-sans shadow-md cursor-pointer">
-                      {isSubmitting ? "Adding..." : "Save Transaction"}
+                    <button type="submit" disabled={isSubmitting} className="px-5 py-2 rounded-xl text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-sans shadow-md cursor-pointer disabled:opacity-50">
+                      {isSubmitting ? "Saving..." : "Save Transaction"}
                     </button>
                   </div>
                 </form>
