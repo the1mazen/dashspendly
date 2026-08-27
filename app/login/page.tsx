@@ -6,7 +6,7 @@ import Link from "next/link"
 import { Eye, EyeOff, Plus, Trash2, ArrowRight } from "lucide-react"
 import { saveLocalUserProfile } from "@/lib/user-profile"
 import { saveLocalAccounts, Account } from "@/lib/finance-data"
-import { supabase, isSupabaseConfigured } from "@/lib/supabase"
+import { supabase, isSupabaseConfigured, resolveCurrentUserId } from "@/lib/supabase"
 
 export default function AuthPage() {
   const router = useRouter()
@@ -19,6 +19,7 @@ export default function AuthPage() {
   const [accountsList, setAccountsList] = useState<Array<{ name: string; type: string; balance: string }>>([
     { name: "", type: "bank", balance: "" },
   ])
+  const [authUserId, setAuthUserId] = useState<string>("")
 
   const [firstName, setFirstName] = useState("")
   const [lastName, setLastName] = useState("")
@@ -68,14 +69,28 @@ export default function AuthPage() {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user && validAccounts.length > 0) {
+        const effectiveUserId = authUserId || (await resolveCurrentUserId())
+        if (effectiveUserId && validAccounts.length > 0) {
+          // Ensure profile is synced
+          const cleanUsername = username ? username.replace(/^@/, "").trim() : (email ? email.split("@")[0] : "user")
+          try {
+            await supabase.from("profiles").upsert({
+              id: effectiveUserId,
+              username: cleanUsername,
+              first_name: firstName || "",
+              last_name: lastName || "",
+              default_currency: currency || "USD",
+            })
+          } catch (pErr) {
+            console.warn("Profile upsert in handleSaveAccounts:", pErr)
+          }
+
           for (const acc of validAccounts) {
             const startCents = Math.round((parseFloat(acc.balance) || 0) * 100)
             const { data, error } = await supabase
               .from("accounts")
               .insert({
-                user_id: user.id,
+                user_id: effectiveUserId,
                 name: acc.name.trim(),
                 type: acc.type || "bank",
                 starting_balance_cents: startCents,
@@ -95,6 +110,8 @@ export default function AuthPage() {
                 currency: data.currency,
                 created_at: data.created_at,
               })
+            } else if (error) {
+              console.error("Account insert error:", error)
             }
           }
         }
@@ -294,6 +311,34 @@ export default function AuthPage() {
                       setLoading(false)
                       return
                     }
+
+                    let uid = authData?.user?.id || ""
+                    if (!authData?.session) {
+                      try {
+                        const { data: sData } = await supabase.auth.signInWithPassword({ email, password })
+                        if (sData?.user?.id) uid = sData.user.id
+                      } catch {
+                        // Ignore
+                      }
+                    }
+
+                    if (uid) {
+                      setAuthUserId(uid)
+                      if (typeof window !== "undefined") {
+                        localStorage.setItem("spendly_auth_user_id", uid)
+                      }
+                      try {
+                        await supabase.from("profiles").upsert({
+                          id: uid,
+                          username: cleanUsername,
+                          first_name: firstName || "",
+                          last_name: lastName || "",
+                          default_currency: currency || "USD",
+                        })
+                      } catch (pErr) {
+                        console.warn("Profiles upsert err:", pErr)
+                      }
+                    }
                   } else {
                     const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
                       email,
@@ -304,6 +349,13 @@ export default function AuthPage() {
                       setAuthError(signInError.message)
                       setLoading(false)
                       return
+                    }
+
+                    if (signInData?.user?.id) {
+                      setAuthUserId(signInData.user.id)
+                      if (typeof window !== "undefined") {
+                        localStorage.setItem("spendly_auth_user_id", signInData.user.id)
+                      }
                     }
                   }
                 } catch (err: any) {

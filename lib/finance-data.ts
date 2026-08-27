@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback, useMemo } from "react"
-import { supabase, isSupabaseConfigured } from "./supabase"
+import { supabase, isSupabaseConfigured, resolveCurrentUserId } from "./supabase"
 
 export interface Account {
   id: string
@@ -121,30 +121,42 @@ export function useFinanceData() {
   const [loading, setLoading] = useState(true)
 
   const fetchData = useCallback(async () => {
-    // 1. Try fetching from Supabase if configured and user is authenticated
+    // 1. Try fetching from Supabase if configured
     if (isSupabaseConfigured && supabase) {
       try {
+        let userId: string | null = null
         const { data: { user } } = await supabase.auth.getUser()
         if (user) {
+          userId = user.id
+        } else {
+          const { data: { session } } = await supabase.auth.getSession()
+          if (session?.user?.id) {
+            userId = session.user.id
+          } else if (typeof window !== "undefined") {
+            userId = localStorage.getItem("spendly_auth_user_id")
+          }
+        }
+
+        if (userId) {
           // Fetch accounts
           const { data: dbAccounts } = await supabase
             .from("accounts")
             .select("*")
-            .eq("user_id", user.id)
+            .eq("user_id", userId)
             .order("created_at", { ascending: true })
 
           // Fetch transactions
           const { data: dbTransactions } = await supabase
             .from("transactions")
             .select("*")
-            .eq("user_id", user.id)
+            .eq("user_id", userId)
             .order("date", { ascending: false })
 
           // Fetch categories
           const { data: dbCategories } = await supabase
             .from("categories")
             .select("*")
-            .eq("user_id", user.id)
+            .eq("user_id", userId)
             .order("created_at", { ascending: true })
 
           const parsedTransactions: Transaction[] = (dbTransactions || []).map((t: any) => {
@@ -263,12 +275,12 @@ export function useFinanceData() {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
+        const userId = await resolveCurrentUserId()
+        if (userId) {
           const { data, error } = await supabase
             .from("accounts")
             .insert({
-              user_id: user.id,
+              user_id: userId,
               name: accountData.name,
               type: accountData.type || "bank",
               starting_balance_cents: startingCents,
@@ -347,12 +359,12 @@ export function useFinanceData() {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
+        const userId = await resolveCurrentUserId()
+        if (userId) {
           const { data, error } = await supabase
             .from("transactions")
             .insert({
-              user_id: user.id,
+              user_id: userId,
               account_id: txData.account_id,
               category_id: txData.category_id || null,
               amount_cents: amountCents,
@@ -407,12 +419,12 @@ export function useFinanceData() {
 
     if (isSupabaseConfigured && supabase) {
       try {
-        const { data: { user } } = await supabase.auth.getUser()
-        if (user) {
+        const userId = await resolveCurrentUserId()
+        if (userId) {
           const { data, error } = await supabase
             .from("categories")
             .insert({
-              user_id: user.id,
+              user_id: userId,
               name: catData.name,
               type: catData.type,
               currency,
@@ -443,7 +455,7 @@ export function useFinanceData() {
       return updated
     })
     return newCat
-  }, [])
+  }, [fetchData])
 
   const netWorth = useMemo(() => {
     return accounts.reduce((sum, a) => sum + (Number(a.balance) || 0), 0)
