@@ -1122,7 +1122,7 @@ function AccountsSection() {
 // ─── Section: Transactions ──────────────────────────────────────
 
 function TransactionsSection() {
-  const { transactions, totalIncome, totalExpense } = useFinanceData()
+  const { transactions, accounts, categories, totalIncome, totalExpense } = useFinanceData()
   const { profile } = useUserProfile()
   const [searchQuery, setSearchQuery] = useState("")
   const [typeFilter, setTypeFilter] = useState<"all" | "income" | "expense">("all")
@@ -1133,7 +1133,7 @@ function TransactionsSection() {
   const currencySymbol = profile.currency === "EUR" ? "€" : profile.currency === "GBP" ? "£" : profile.currency === "EGP" ? "EGP " : profile.currency === "AED" ? "AED " : "$"
 
   const filteredTransactions = useMemo(() => {
-    return transactions.filter((tx) => {
+    return (transactions || []).filter((tx) => {
       const matchesSearch =
         (tx.description || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
         (tx.category_name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -1159,7 +1159,7 @@ function TransactionsSection() {
         <KpiCard label="Total Income" value={totalIncome.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} prefix={currencySymbol} delay={0} icon={TrendingUp} />
         <KpiCard label="Total Expenses" value={totalExpense.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} prefix={currencySymbol} delay={0.06} icon={ArrowDownRight} />
         <KpiCard label="Net Balance" value={netSavings.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} prefix={currencySymbol} delay={0.12} icon={Wallet} />
-        <KpiCard label="Total Transactions" value={String(transactions.length)} delay={0.18} icon={ArrowLeftRight} />
+        <KpiCard label="Total Transactions" value={String((transactions || []).length)} delay={0.18} icon={ArrowLeftRight} />
       </div>
 
       {/* Main Transactions Panel */}
@@ -1170,7 +1170,7 @@ function TransactionsSection() {
             <div>
               <h3 className="text-base font-bold text-foreground tracking-tight font-display">All Transactions</h3>
               <p className="text-xs text-muted-foreground mt-0.5 font-sans">
-                Showing {filteredTransactions.length} of {transactions.length} transactions
+                Showing {filteredTransactions.length} of {(transactions || []).length} transactions
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -1219,7 +1219,7 @@ function TransactionsSection() {
                 className="w-full px-3 py-2 bg-muted/30 border border-border/40 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all font-sans appearance-none cursor-pointer"
               >
                 <option value="all" className="bg-card text-foreground">All Categories</option>
-                {categories.map((cat) => (
+                {(categories || []).map((cat) => (
                   <option key={cat.id} value={cat.id} className="bg-card text-foreground">{cat.name}</option>
                 ))}
               </select>
@@ -1233,7 +1233,7 @@ function TransactionsSection() {
                 className="w-full px-3 py-2 bg-muted/30 border border-border/40 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all font-sans appearance-none cursor-pointer"
               >
                 <option value="all" className="bg-card text-foreground">All Accounts</option>
-                {accounts.map((acc) => (
+                {(accounts || []).map((acc) => (
                   <option key={acc.id} value={acc.id} className="bg-card text-foreground">{acc.name}</option>
                 ))}
               </select>
