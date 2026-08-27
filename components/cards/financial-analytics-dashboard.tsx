@@ -1902,20 +1902,17 @@ function MobileFloatingNavbar({
   }, [resetIdleTimer])
 
   return (
-    <motion.nav
-      aria-label="Mobile navigation"
-      initial={{ y: 24, opacity: 0 }}
-      animate={{
-        y: 0,
-        opacity: isIdle ? 0.1 : 0.9,
+    <nav
+      aria-label="Mobile Navigation"
+      style={{
+        opacity: isIdle ? 0 : 0.9,
+        transition: "opacity 0.4s ease-in-out",
+        pointerEvents: isIdle ? "none" : "auto",
       }}
-      transition={{ duration: 0.35, ease: "easeOut" }}
-      className="fixed bottom-4 inset-x-0 z-40 px-3 flex justify-center pointer-events-none md:hidden transition-opacity duration-500"
+      className="fixed bottom-4 inset-x-0 z-50 px-3 flex justify-center pointer-events-none md:hidden"
     >
       <div
-        className={`pointer-events-auto w-full max-w-[370px] rounded-2xl border-2 border-white/10 bg-[#12121a]/90 px-2 py-2 backdrop-blur-xl shadow-2xl shadow-black/80 transition-all duration-300 ${
-          isIdle ? "opacity-20 hover:opacity-100 touch:opacity-100" : "opacity-100"
-        }`}
+        className="pointer-events-auto w-full max-w-[370px] rounded-2xl border-2 border-white/10 bg-white/5 px-2 py-2 backdrop-blur-md shadow-[0_4px_24px_-1px_rgba(0,0,0,0.5)]"
         onMouseEnter={() => setIsIdle(false)}
         onTouchStart={() => setIsIdle(false)}
       >
@@ -1930,18 +1927,19 @@ function MobileFloatingNavbar({
                   setIsIdle(false)
                   onNavigate(item.id)
                 }}
-                className={`relative flex flex-col items-center justify-center flex-1 py-1 px-1 rounded-xl text-[10px] font-semibold transition-all duration-200 cursor-pointer ${
-                  isActive ? "text-foreground font-bold" : "text-muted-foreground hover:text-foreground"
+                className={`relative flex flex-col items-center justify-center flex-1 py-1.5 px-1 rounded-xl text-[11px] transition-colors cursor-pointer font-open-sans-custom ${
+                  isActive
+                    ? "text-white font-semibold [text-shadow:_0_2px_8px_rgb(0_0_0_/_40%)] bg-white/10"
+                    : "text-gray-300 hover:text-white [text-shadow:_0_2px_6px_rgb(0_0_0_/_40%)]"
                 }`}
                 aria-current={isActive ? "page" : undefined}
               >
-                <Icon className={`size-4.5 mb-1 transition-colors ${isActive ? "text-primary" : "text-muted-foreground"}`} />
-                <span className="font-sans tracking-tight leading-none">{item.label}</span>
+                <Icon className={`size-4.5 mb-1 ${isActive ? "text-white" : "text-gray-300"}`} />
+                <span className="leading-none tracking-tight">{item.label}</span>
                 {isActive && (
                   <motion.div
                     layoutId="mobile-nav-indicator"
-                    className="absolute -bottom-1 left-2 right-2 h-0.5 rounded-full bg-primary"
-                    style={{ boxShadow: `0 0 8px 2px rgb(91 77 199 / 0.5)` }}
+                    className="absolute -bottom-0.5 left-2.5 right-2.5 h-0.5 rounded-full bg-white"
                     transition={SPRING}
                   />
                 )}
@@ -1950,7 +1948,7 @@ function MobileFloatingNavbar({
           })}
         </div>
       </div>
-    </motion.nav>
+    </nav>
   )
 }
 
