@@ -4,7 +4,7 @@ import React, { useState, useCallback, useMemo, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "motion/react"
 import { useUserProfile } from "@/lib/user-profile"
-import { useFinanceData } from "@/lib/finance-data"
+import { useFinanceData, FinanceDataProvider } from "@/lib/finance-data"
 import { supabase, isSupabaseConfigured } from "@/lib/supabase"
 import {
   BarChart3, TrendingUp, Shield, ArrowLeftRight, Globe, ArrowUpRight, ArrowDownRight,
@@ -1876,7 +1876,7 @@ export interface FinancialAnalyticsDashboardProps {
   initialSection?: SectionId
 }
 
-export default function FinancialAnalyticsDashboard({ initialSection = "dashboard" }: FinancialAnalyticsDashboardProps = {}) {
+function FinancialAnalyticsDashboardInner({ initialSection = "dashboard" }: FinancialAnalyticsDashboardProps = {}) {
   const router = useRouter()
   const [activeSection, setActiveSection] = useState<SectionId>(initialSection)
   const [isTransitioning, setIsTransitioning] = useState(false)
@@ -2105,3 +2105,13 @@ export default function FinancialAnalyticsDashboard({ initialSection = "dashboar
     </div>
   )
 }
+
+export default function FinancialAnalyticsDashboard(props: FinancialAnalyticsDashboardProps = {}) {
+  return (
+    <FinanceDataProvider>
+      <FinancialAnalyticsDashboardInner {...props} />
+    </FinanceDataProvider>
+  )
+}
+
+export { FinancialAnalyticsDashboard }

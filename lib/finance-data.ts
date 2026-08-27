@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo } from "react"
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react"
 import { supabase, isSupabaseConfigured, resolveCurrentUserId } from "./supabase"
 
 export interface Account {
@@ -110,7 +110,7 @@ export function saveLocalCategories(categories: Category[]): Category[] {
   return categories
 }
 
-export function useFinanceData() {
+function useFinanceDataInternal() {
   const [accounts, setAccounts] = useState<Account[]>(() => getLocalAccounts())
   const [transactions, setTransactions] = useState<Transaction[]>(() => getLocalTransactions())
   const [categories, setCategories] = useState<Category[]>(() => getLocalCategories())
@@ -612,4 +612,19 @@ export function useFinanceData() {
     createCategory,
     refreshFinanceData: fetchData,
   }
+}
+
+export type FinanceDataContextType = ReturnType<typeof useFinanceDataInternal>
+
+const FinanceDataContext = createContext<FinanceDataContextType | null>(null)
+
+export function FinanceDataProvider({ children }: { children: React.ReactNode }) {
+  const value = useFinanceDataInternal()
+  return React.createElement(FinanceDataContext.Provider, { value }, children)
+}
+
+export function useFinanceData() {
+  const context = useContext(FinanceDataContext)
+  if (context) return context
+  return useFinanceDataInternal()
 }
