@@ -1906,7 +1906,6 @@ function MobileFloatingNavbar({
     { id: "transactions", label: "Transactions" },
     { id: "accounts", label: "Accounts" },
     { id: "categories", label: "Categories" },
-    { id: "settings", label: "Settings" },
   ]
 
   return (
