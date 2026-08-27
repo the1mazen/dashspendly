@@ -453,7 +453,7 @@ function NetWorthCard() {
   )
 }
 
-function AccountsSection() {
+function DashboardAccountsSection() {
   return (
     <div className={`flex flex-col gap-5 ${SECTION_MIN_H}`}>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 lg:gap-4">
@@ -534,6 +534,64 @@ function AccountsSection() {
             </tbody>
           </table>
         </div>
+      </SectionPanel>
+    </div>
+  )
+}
+
+const accountDetails = {
+  QNB: { type: "Checking account", currency: "USD", balance: 32450, icon: Landmark, tone: "blue" },
+  Cash: { type: "Cash wallet", currency: "USD", balance: 8275, icon: Wallet, tone: "green" },
+  Card: { type: "Credit card", currency: "USD", balance: 21725, icon: CreditCard, tone: "red" },
+} as const
+
+const accountTransactions = [
+  { account: "QNB", description: "Salary deposit", category: "Income", date: "Feb 20, 2026", amount: 5200, type: "income" as const },
+  { account: "QNB", description: "Monthly rent", category: "Housing", date: "Feb 17, 2026", amount: -1850, type: "expense" as const },
+  { account: "Cash", description: "Freelance project", category: "Income", date: "Feb 18, 2026", amount: 1250, type: "income" as const },
+  { account: "Cash", description: "Metro transit pass", category: "Transport", date: "Feb 16, 2026", amount: -95, type: "expense" as const },
+  { account: "Card", description: "Whole Foods Market", category: "Groceries", date: "Feb 19, 2026", amount: -86.42, type: "expense" as const },
+  { account: "Card", description: "Electric bill", category: "Utilities", date: "Feb 15, 2026", amount: -124.18, type: "expense" as const },
+]
+
+const accountTrend = [
+  { day: "1", balance: 29600 }, { day: "6", balance: 30120 }, { day: "11", balance: 30950 },
+  { day: "16", balance: 31680 }, { day: "21", balance: 32100 }, { day: "26", balance: 32450 },
+  { day: "30", balance: 32450 },
+]
+
+function AccountsSection() {
+  const [selectedAccount, setSelectedAccount] = useState<keyof typeof accountDetails>("QNB")
+  const [query, setQuery] = useState("")
+  const [minAmount, setMinAmount] = useState("")
+  const [maxAmount, setMaxAmount] = useState("")
+  const account = accountDetails[selectedAccount]
+  const Icon = account.icon
+  const filteredTransactions = accountTransactions.filter((transaction) => {
+    const matchesQuery = transaction.description.toLowerCase().includes(query.toLowerCase())
+    const matchesMin = !minAmount || Math.abs(transaction.amount) >= Number(minAmount)
+    const matchesMax = !maxAmount || Math.abs(transaction.amount) <= Number(maxAmount)
+    return transaction.account === selectedAccount && matchesQuery && matchesMin && matchesMax
+  })
+
+  return (
+    <div className={`flex flex-col gap-5 ${SECTION_MIN_H}`}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div><h2 className="text-lg font-bold text-foreground font-display tracking-tight">Accounts</h2><p className="text-xs text-muted-foreground font-sans">Manage balances and account activity</p></div>
+        <div className="flex items-center gap-1 rounded-xl border border-border/40 bg-card/60 p-1">
+          {(Object.keys(accountDetails) as Array<keyof typeof accountDetails>).map((name) => <button key={name} onClick={() => setSelectedAccount(name)} className={`rounded-lg px-4 py-2 text-xs font-semibold font-sans transition-colors ${selectedAccount === name ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>{name}</button>)}
+        </div>
+      </div>
+      <motion.div initial={{ opacity: 0, y: 16, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.5, ease: EASE_OUT }} className={`relative overflow-hidden rounded-2xl surface-card p-5 lg:p-6 glow-${account.tone}-sm group hover:scale-[1.01] transition-transform duration-300`} style={{ boxShadow: CARD_SHADOW }}>
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-start gap-3"><div className="size-10 rounded-xl bg-accent/60 flex items-center justify-center"><Icon className="size-4 text-primary" /></div><div><p className="text-lg font-bold text-foreground font-display">{selectedAccount}</p><p className="text-xs text-muted-foreground font-sans">{account.type} · {account.currency}</p><p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Available balance</p><p className="mt-1 text-3xl font-bold tracking-tighter text-foreground font-mono">${account.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p></div></div>
+          <div className="h-32 w-full max-w-md"><ResponsiveContainer width="100%" height="100%"><LineChart data={accountTrend}><Line type="monotone" dataKey="balance" stroke={C.teal} strokeWidth={2.5} dot={false} animationDuration={700} /><XAxis dataKey="day" hide /><YAxis hide domain={["dataMin - 1000", "dataMax + 1000"]} /></LineChart></ResponsiveContainer></div>
+          <div className="flex flex-row gap-3 lg:flex-col lg:items-end"><span className="text-xs font-semibold text-primary">Manage</span><button className="text-xs font-semibold text-muted-foreground hover:text-foreground font-sans">Edit</button><button className="text-xs font-semibold text-fin-loss/80 hover:text-fin-loss font-sans">Delete / Close</button></div>
+        </div>
+      </motion.div>
+      <SectionPanel className="!p-0 overflow-hidden">
+        <div className="border-b border-border/50 p-5 lg:p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-sm font-bold text-foreground font-display">Recent transactions</h3><p className="mt-0.5 text-[11px] text-muted-foreground font-sans">Activity for {selectedAccount}</p></div><button className="text-xs font-semibold text-primary hover:underline font-sans">View all</button></div><div className="mt-4 flex flex-wrap gap-2"><div className="flex min-w-48 flex-1 items-center gap-2 rounded-lg border border-border/40 bg-muted/20 px-3 py-2"><Search className="size-3.5 text-muted-foreground" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search description" className="w-full bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground font-sans" /></div><input value={minAmount} onChange={(event) => setMinAmount(event.target.value)} type="number" min="0" placeholder="Min amount" className="w-28 rounded-lg border border-border/40 bg-muted/20 px-3 py-2 text-xs text-foreground outline-none placeholder:text-muted-foreground font-mono" /><input value={maxAmount} onChange={(event) => setMaxAmount(event.target.value)} type="number" min="0" placeholder="Max amount" className="w-28 rounded-lg border border-border/40 bg-muted/20 px-3 py-2 text-xs text-foreground outline-none placeholder:text-muted-foreground font-mono" /></div></div>
+        <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b border-border/50"><th className="p-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Description</th><th className="p-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Category</th><th className="p-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Date</th><th className="p-4 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Amount</th></tr></thead><tbody>{filteredTransactions.map((transaction, i) => <motion.tr key={`${selectedAccount}-${transaction.description}`} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.35, delay: i * 0.04 }} className="border-b border-border/30 hover:bg-accent/20 transition-all duration-200"><td className="p-4 text-[13px] font-semibold text-foreground font-sans">{transaction.description}</td><td className="p-4 text-xs text-muted-foreground font-sans">{transaction.category}</td><td className="p-4 text-xs text-muted-foreground font-mono">{transaction.date}</td><td className={`p-4 text-right font-bold font-mono ${transaction.type === "income" ? "text-fin-gain" : "text-fin-loss"}`}>{transaction.amount >= 0 ? "+" : "-"}${Math.abs(transaction.amount).toFixed(2)}</td></motion.tr>)}</tbody></table></div>
       </SectionPanel>
     </div>
   )
@@ -1207,7 +1265,7 @@ function DashboardSection() {
   return (
     <div className={`flex flex-col gap-5 ${SECTION_MIN_H}`}>
       <NetWorthCard />
-      <AccountsSection />
+      <DashboardAccountsSection />
     </div>
   )
 }
