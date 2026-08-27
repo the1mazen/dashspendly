@@ -32,7 +32,27 @@ export default function AuthPage() {
 
   useEffect(() => {
     setMounted(true)
-  }, [])
+
+    const checkExistingSession = async () => {
+      if (isSupabaseConfigured && supabase) {
+        try {
+          const { data: { user } } = await supabase.auth.getUser()
+          if (user) {
+            router.replace("/dashboard")
+            return
+          }
+          const { data: { session } } = await supabase.auth.getSession()
+          if (session?.user) {
+            router.replace("/dashboard")
+          }
+        } catch {
+          // Ignore
+        }
+      }
+    }
+
+    checkExistingSession()
+  }, [router])
 
   const handleModeSwitch = () => {
     setIsTransitioning(true)

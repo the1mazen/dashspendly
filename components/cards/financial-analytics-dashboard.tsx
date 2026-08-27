@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "motion/react"
 import { useUserProfile } from "@/lib/user-profile"
 import { useFinanceData } from "@/lib/finance-data"
+import { supabase, isSupabaseConfigured } from "@/lib/supabase"
 import {
   BarChart3, TrendingUp, Shield, ArrowLeftRight, Globe, ArrowUpRight, ArrowDownRight,
   ChevronRight, Bell, Search, Settings, Wallet, CircleDot, Eye, FileText, UserCog,
@@ -1454,7 +1455,23 @@ function SettingsSection() {
             })}
             <div className="border-t border-border/50 my-2" />
             <button
-              onClick={() => router.push("/login")}
+              onClick={async () => {
+                if (isSupabaseConfigured && supabase) {
+                  try {
+                    await supabase.auth.signOut()
+                  } catch {
+                    // Ignore
+                  }
+                }
+                if (typeof window !== "undefined") {
+                  localStorage.removeItem("spendly_auth_user_id")
+                  localStorage.removeItem("spendly_accounts")
+                  localStorage.removeItem("spendly_transactions")
+                  localStorage.removeItem("spendly_categories")
+                  localStorage.removeItem("spendly_user_profile")
+                }
+                router.replace("/login")
+              }}
               className="flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-semibold text-fin-loss/70 hover:text-fin-loss hover:bg-fin-loss/5 transition-all duration-200 w-full text-left font-sans cursor-pointer"
             >
               <LogOut className="size-4" />Sign Out
@@ -1699,11 +1716,91 @@ export interface FinancialAnalyticsDashboardProps {
 }
 
 export default function FinancialAnalyticsDashboard({ initialSection = "dashboard" }: FinancialAnalyticsDashboardProps = {}) {
+  const router = useRouter()
   const [activeSection, setActiveSection] = useState<SectionId>(initialSection)
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [notifItems, setNotifItems] = useState(notifications)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
   const { initials } = useUserProfile()
+
+  useEffect(() => {
+    let isMounted = true
+
+    const checkAuthentication = async () => {
+      if (isSupabaseConfigured && supabase) {
+        try {
+          const { data: { user } } = await supabase.auth.getUser()
+          if (user) {
+            if (isMounted) {
+              setIsAuthenticated(true)
+              setAuthLoading(false)
+            }
+            return
+          }
+
+          const { data: { session } } = await supabase.auth.getSession()
+          if (session?.user) {
+            if (isMounted) {
+              setIsAuthenticated(true)
+              setAuthLoading(false)
+            }
+            return
+          }
+        } catch {
+          // Ignore
+        }
+
+        if (isMounted) {
+          setIsAuthenticated(false)
+          setAuthLoading(false)
+          router.replace("/login")
+        }
+        return
+      }
+
+      // If Supabase not configured, check local storage
+      const localUid = typeof window !== "undefined" ? localStorage.getItem("spendly_auth_user_id") : null
+      if (localUid) {
+        if (isMounted) {
+          setIsAuthenticated(true)
+          setAuthLoading(false)
+        }
+      } else {
+        if (isMounted) {
+          setIsAuthenticated(false)
+          setAuthLoading(false)
+          router.replace("/login")
+        }
+      }
+    }
+
+    checkAuthentication()
+
+    let authSub: any = null
+    if (isSupabaseConfigured && supabase) {
+      const { data } = supabase.auth.onAuthStateChange((event, session) => {
+        if (event === "SIGNED_OUT" || !session?.user) {
+          if (isMounted) {
+            setIsAuthenticated(false)
+            router.replace("/login")
+          }
+        } else if (session?.user) {
+          if (isMounted) {
+            setIsAuthenticated(true)
+            setAuthLoading(false)
+          }
+        }
+      })
+      authSub = data?.subscription
+    }
+
+    return () => {
+      isMounted = false
+      authSub?.unsubscribe?.()
+    }
+  }, [router])
 
   const handleNavigation = useCallback((sectionId: SectionId) => {
     if (sectionId === activeSection) return
@@ -1717,6 +1814,18 @@ export default function FinancialAnalyticsDashboard({ initialSection = "dashboar
   const unreadCount = useMemo(() => notifItems.filter((n) => !n.read).length, [notifItems])
   const ActiveComponent = useMemo(() => sectionComponents[activeSection], [activeSection])
   const activeNav = useMemo(() => NAV_ITEMS.find((n) => n.id === activeSection), [activeSection])
+
+  if (authLoading || !isAuthenticated) {
+    return (
+      <div className="w-full min-h-screen bg-background text-foreground flex items-center justify-center relative">
+        <div className="fixed inset-0 pointer-events-none z-0">
+          <div className="absolute top-0 left-1/4 w-[600px] h-[600px] rounded-full opacity-[0.03] blur-[120px]" style={{ background: C.teal }} />
+          <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] rounded-full opacity-[0.02] blur-[100px]" style={{ background: C.azure }} />
+        </div>
+        <div className="relative z-10 size-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+      </div>
+    )
+  }
 
   return (
     <div className="w-full min-h-screen bg-background text-foreground flex flex-col relative" style={{ boxShadow: CARD_SHADOW }}>
