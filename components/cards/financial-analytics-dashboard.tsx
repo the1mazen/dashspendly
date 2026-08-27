@@ -1247,69 +1247,54 @@ export default function FinancialAnalyticsDashboard() {
         <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] rounded-full opacity-[0.02] blur-[100px] animate-float" style={{ background: C.azure, animationDelay: "3s" }} />
       </div>
 
-      {/* Header */}
-      <header className="border-b border-border/60 bg-card/60 backdrop-blur-xl sticky top-0 z-30 relative">
-        <div className="w-full px-5 lg:px-10 xl:px-14">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
-              <span className="text-base font-extrabold tracking-tight text-foreground font-display">Spendly</span>
-            </div>
+      {/* Floating navigation */}
+      <header className="sticky top-0 z-30 px-2 py-3 sm:px-4 sm:py-4">
+        <div className="mx-auto w-full max-w-7xl rounded-2xl border-2 border-border/40 bg-card/60 px-3 py-3 backdrop-blur-xl sm:px-6 sm:py-4">
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <button onClick={() => handleNavigation("dashboard")} className="cursor-pointer shrink-0" aria-label="Go to Dashboard">
+              <span className="text-lg font-semibold tracking-tight text-foreground font-sans sm:text-xl">Spendly</span>
+            </button>
+
+            <nav aria-label="Primary navigation" className="hidden min-w-0 items-center gap-2 overflow-x-auto md:flex lg:gap-4 scrollbar-none">
+              {NAV_ITEMS.map((item) => {
+                const isActive = item.id === activeSection
+                const Icon = item.icon
+                return (
+                  <button key={item.id} onClick={() => handleNavigation(item.id)}
+                    className={`relative flex items-center gap-2 rounded-xl px-3 py-2 text-[13px] font-semibold whitespace-nowrap transition-all duration-250 font-sans ${
+                      isActive ? "text-foreground bg-accent/40" : "text-muted-foreground hover:text-foreground hover:bg-accent/30"
+                    }`}
+                    aria-current={isActive ? "page" : undefined}
+                  >
+                    <Icon className="size-4" />
+                    <span>{item.label}</span>
+                    {isActive && <motion.div layoutId="nav-indicator" className="absolute bottom-0 left-3 right-3 h-0.5 rounded-full bg-primary" style={{ boxShadow: `0 0 8px 2px rgb(91 77 199 / 0.3)` }} transition={SPRING} />}
+                  </button>
+                )
+              })}
+            </nav>
+
             <div className="flex items-center gap-1.5">
-              <button className="p-2.5 rounded-xl hover:bg-accent/50 transition-all duration-200" aria-label="Search">
+              <button className="rounded-xl p-2.5 transition-all duration-200 hover:bg-accent/50" aria-label="Search">
                 <Search className="size-4 text-muted-foreground" />
               </button>
               <div className="relative">
-                <button
-                  onClick={() => setNotificationsOpen((prev) => !prev)}
-                  className="p-2.5 rounded-xl hover:bg-accent/50 transition-all duration-200 relative"
-                  aria-label="Notifications" aria-expanded={notificationsOpen}
-                >
+                <button onClick={() => setNotificationsOpen((prev) => !prev)} className="relative rounded-xl p-2.5 transition-all duration-200 hover:bg-accent/50" aria-label="Notifications" aria-expanded={notificationsOpen}>
                   <Bell className="size-4 text-muted-foreground" />
-                  {unreadCount > 0 && (
-                    <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={SPRING}
-                      className="absolute -top-0.5 -right-0.5 size-5 rounded-full bg-primary text-primary-foreground text-[9px] font-bold flex items-center justify-center font-mono">
-                      {unreadCount}
-                    </motion.span>
-                  )}
+                  {unreadCount > 0 && <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={SPRING} className="absolute -right-0.5 -top-0.5 flex size-5 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground font-mono">{unreadCount}</motion.span>}
                 </button>
                 <NotificationPanel isOpen={notificationsOpen} onClose={() => setNotificationsOpen(false)} items={notifItems} onMarkRead={handleMarkRead} onMarkAllRead={handleMarkAllRead} />
               </div>
-              <button className="p-2.5 rounded-xl hover:bg-accent/50 transition-all duration-200" aria-label="Settings" onClick={() => handleNavigation("settings")}>
+              <button className="rounded-xl p-2.5 transition-all duration-200 hover:bg-accent/50" aria-label="Settings" onClick={() => handleNavigation("settings")}>
                 <Settings className="size-4 text-muted-foreground" />
               </button>
-              <div className="size-9 rounded-xl bg-primary/12 flex items-center justify-center ml-1.5 glow-teal-sm cursor-pointer hover:bg-primary/18 transition-colors">
+              <div className="ml-1.5 flex size-9 cursor-pointer items-center justify-center rounded-xl bg-primary/12 glow-teal-sm transition-colors hover:bg-primary/18">
                 <span className="text-xs font-bold text-primary font-display">JD</span>
               </div>
             </div>
           </div>
         </div>
       </header>
-
-      {/* Navigation */}
-      <nav className="border-b border-border/40 bg-card/40 backdrop-blur-xl sticky top-16 z-20 relative">
-        <div className="w-full px-5 lg:px-10 xl:px-14">
-          <div className="flex items-center gap-0.5 overflow-x-auto py-1.5 -mb-px scrollbar-none">
-            {NAV_ITEMS.map((item) => {
-              const isActive = item.id === activeSection
-              const Icon = item.icon
-              return (
-                <button key={item.id} onClick={() => handleNavigation(item.id)}
-                  className={`relative flex items-center gap-2 px-4 py-2.5 text-[13px] font-semibold rounded-xl transition-all duration-250 whitespace-nowrap shrink-0 font-sans ${
-                    isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-accent/30"
-                  }`}
-                  aria-current={isActive ? "page" : undefined}
-                >
-                  <Icon className="size-4" />
-                  <span>{item.label}</span>
-                  {isActive && (
-                    <motion.div layoutId="nav-indicator" className="absolute bottom-0 left-4 right-4 h-0.5 rounded-full bg-primary" style={{ boxShadow: `0 0 8px 2px rgb(91 77 199 / 0.3)` }} transition={SPRING} />
-                  )}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      </nav>
 
       {/* Content */}
       <main className="w-full px-5 lg:px-10 xl:px-14 py-6 lg:py-8 flex-1 relative z-10">
