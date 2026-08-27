@@ -184,27 +184,44 @@ export default function AuthPage() {
               if (isSupabaseConfigured && supabase && email && password) {
                 try {
                   if (isSignUp) {
-                    await supabase.auth.signUp({
+                    const cleanUsername = username ? username.replace(/^@/, "").trim() : email.split("@")[0]
+                    const { data: authData, error: signUpError } = await supabase.auth.signUp({
                       email,
                       password,
                       options: {
                         data: {
+                          username: cleanUsername,
                           first_name: firstName,
                           last_name: lastName,
                           full_name: fullName,
-                          username: userHandle,
-                          currency,
+                          default_currency: currency,
+                          currency: currency,
                         },
                       },
                     })
+
+                    if (signUpError) {
+                      setAuthError(signUpError.message)
+                      setLoading(false)
+                      return
+                    }
                   } else {
-                    await supabase.auth.signInWithPassword({
+                    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
                       email,
                       password,
                     })
+
+                    if (signInError) {
+                      setAuthError(signInError.message)
+                      setLoading(false)
+                      return
+                    }
                   }
                 } catch (err: any) {
                   console.warn("Supabase auth error:", err)
+                  setAuthError(err?.message || "Authentication failed. Please try again.")
+                  setLoading(false)
+                  return
                 }
               }
 
