@@ -4,6 +4,7 @@ import React, { useState, useCallback, useMemo, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "motion/react"
 import { useUserProfile } from "@/lib/user-profile"
+import { useFinanceData } from "@/lib/finance-data"
 import {
   BarChart3, TrendingUp, Shield, ArrowLeftRight, Globe, ArrowUpRight, ArrowDownRight,
   ChevronRight, Bell, Search, Settings, Wallet, CircleDot, Eye, FileText, UserCog,
@@ -98,60 +99,6 @@ const sectorExposure = [
   { name: "Healthcare", value: 65, fill: C.azure },
   { name: "Finance", value: 52, fill: C.amber },
   { name: "Energy", value: 38, fill: C.rose },
-]
-
-interface SpendlyTransaction {
-  id: number
-  description: string
-  category: string
-  account: string
-  date: string
-  time?: string
-  amount: number
-  type: "income" | "expense"
-}
-
-const spendlyTransactions: SpendlyTransaction[] = [
-  { id: 1, description: "Salary deposit", category: "Income", account: "QNB", date: "Feb 20, 2026", time: "09:00", amount: 5200, type: "income" },
-  { id: 2, description: "Whole Foods Market", category: "Groceries", account: "Card", date: "Feb 19, 2026", time: "17:42", amount: -86.42, type: "expense" },
-  { id: 3, description: "Freelance UI project", category: "Income", account: "QNB", date: "Feb 18, 2026", time: "14:15", amount: 1250, type: "income" },
-  { id: 4, description: "Monthly rent", category: "Housing", account: "QNB", date: "Feb 17, 2026", time: "10:00", amount: -1850, type: "expense" },
-  { id: 5, description: "Metro transit pass", category: "Transport", account: "Card", date: "Feb 16, 2026", time: "08:24", amount: -95, type: "expense" },
-  { id: 6, description: "Electric bill", category: "Utilities", account: "QNB", date: "Feb 15, 2026", time: "11:30", amount: -124.18, type: "expense" },
-  { id: 7, description: "Blue Bottle Coffee", category: "Dining", account: "Cash", date: "Feb 14, 2026", time: "09:12", amount: -14.50, type: "expense" },
-  { id: 8, description: "Chevron gas station", category: "Transport", account: "Card", date: "Feb 13, 2026", time: "18:50", amount: -58.20, type: "expense" },
-  { id: 9, description: "Equinox gym membership", category: "Health", account: "Card", date: "Feb 12, 2026", time: "06:45", amount: -180.00, type: "expense" },
-  { id: 10, description: "Netflix & Spotify", category: "Entertainment", account: "Card", date: "Feb 11, 2026", time: "12:00", amount: -32.98, type: "expense" },
-  { id: 11, description: "Amazon order", category: "Shopping", account: "Card", date: "Feb 10, 2026", time: "16:20", amount: -142.60, type: "expense" },
-  { id: 12, description: "Dividend payment", category: "Income", account: "QNB", date: "Feb 08, 2026", time: "10:15", amount: 342.50, type: "income" },
-  { id: 13, description: "Trader Joe's groceries", category: "Groceries", account: "Card", date: "Feb 06, 2026", time: "15:30", amount: -112.35, type: "expense" },
-  { id: 14, description: "Uber airport ride", category: "Transport", account: "Card", date: "Feb 05, 2026", time: "22:10", amount: -46.75, type: "expense" },
-  { id: 15, description: "Consulting bonus", category: "Income", account: "QNB", date: "Feb 03, 2026", time: "13:00", amount: 800.00, type: "income" },
-]
-
-const recentTransactions = spendlyTransactions.slice(0, 6)
-
-interface CategoryItem {
-  id: string
-  name: string
-  type: "income" | "expense"
-  total: number
-  budget?: number
-  color: string
-}
-
-const initialCategories: CategoryItem[] = [
-  { id: "housing", name: "Housing", type: "expense", total: 1850.00, budget: 1900.00, color: "#5b4dc7" },
-  { id: "groceries", name: "Groceries", type: "expense", total: 486.42, budget: 600.00, color: "oklch(0.68 0.14 245)" },
-  { id: "transport", name: "Transport", type: "expense", total: 245.50, budget: 300.00, color: "oklch(0.76 0.14 75)" },
-  { id: "health", name: "Health", type: "expense", total: 180.00, budget: 200.00, color: "oklch(0.62 0.22 18)" },
-  { id: "shopping", name: "Shopping", type: "expense", total: 142.60, budget: 250.00, color: "oklch(0.78 0.16 182)" },
-  { id: "utilities", name: "Utilities", type: "expense", total: 124.18, budget: 150.00, color: "oklch(0.50 0.02 260)" },
-  { id: "dining", name: "Dining", type: "expense", total: 84.50, budget: 200.00, color: "oklch(0.70 0.15 30)" },
-  { id: "entertainment", name: "Entertainment", type: "expense", total: 32.98, budget: 80.00, color: "oklch(0.65 0.18 300)" },
-  { id: "salary", name: "Salary", type: "income", total: 5200.00, budget: 5200.00, color: "oklch(0.76 0.16 162)" },
-  { id: "freelance", name: "Freelance", type: "income", total: 2050.00, budget: 1500.00, color: "oklch(0.76 0.16 162)" },
-  { id: "investments", name: "Investments", type: "income", total: 342.50, budget: 300.00, color: "oklch(0.76 0.16 162)" },
 ]
 
 const notifications = [
@@ -413,13 +360,21 @@ function NotificationPanel({ isOpen, onClose, items, onMarkRead, onMarkAllRead }
 
 // ─── Section: Accounts ──────────────────────────────────────────
 
-const accountSummaries = [
-  { name: "QNB", type: "Checking account", balance: "32,450.00", icon: Landmark, tone: "blue" as const },
-  { name: "Cash", type: "Cash wallet", balance: "8,275.00", icon: Wallet, tone: "green" as const },
-  { name: "Card", type: "Credit card", balance: "21,725.00", icon: CreditCard, tone: "red" as const },
-]
+// ─── Section: Accounts ──────────────────────────────────────────
+
+function getAccountIconAndTone(type?: string) {
+  const t = type?.toLowerCase() || ""
+  if (t.includes("cash")) return { icon: Wallet, tone: "green" as const, label: "Cash wallet" }
+  if (t.includes("card") || t.includes("credit")) return { icon: CreditCard, tone: "red" as const, label: "Credit card" }
+  if (t.includes("saving")) return { icon: Landmark, tone: "teal" as const, label: "Savings account" }
+  return { icon: Landmark, tone: "blue" as const, label: "Checking account" }
+}
 
 function NetWorthCard() {
+  const { netWorth, accounts } = useFinanceData()
+  const { profile } = useUserProfile()
+  const currencySymbol = profile.currency === "EUR" ? "€" : profile.currency === "GBP" ? "£" : profile.currency === "EGP" ? "EGP " : profile.currency === "AED" ? "AED " : "$"
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 16, scale: 0.97 }}
@@ -431,10 +386,16 @@ function NetWorthCard() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-[11px] font-semibold tracking-[0.08em] uppercase text-muted-foreground font-sans">Net worth</p>
-          <p className="text-3xl font-bold text-foreground font-mono tracking-tighter mt-2">$62,450.00</p>
+          <p className="text-3xl font-bold text-foreground font-mono tracking-tighter mt-2">
+            {currencySymbol}{netWorth.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </p>
           <div className="flex items-center gap-2 mt-2">
-            <span className="text-[10px] font-semibold text-fin-gain bg-fin-gain/10 rounded-md px-2 py-1 font-mono">↗ +6.03%</span>
-            <span className="text-[10px] text-muted-foreground font-sans">vs last month</span>
+            <span className="text-[10px] font-semibold text-fin-gain bg-fin-gain/10 rounded-md px-2 py-1 font-mono">
+              {accounts.length > 0 ? `${accounts.length} ${accounts.length === 1 ? "Active account" : "Active accounts"}` : "0 accounts"}
+            </span>
+            <span className="text-[10px] text-muted-foreground font-sans">
+              across all registered assets
+            </span>
           </div>
         </div>
         <div className="size-10 rounded-xl bg-accent/60 flex items-center justify-center">
@@ -445,41 +406,65 @@ function NetWorthCard() {
   )
 }
 
-function DashboardAccountsSection() {
+function DashboardAccountsSection({ onNavigate }: { onNavigate?: (section: SectionId) => void }) {
+  const { accounts, transactions } = useFinanceData()
+  const { profile } = useUserProfile()
+  const currencySymbol = profile.currency === "EUR" ? "€" : profile.currency === "GBP" ? "£" : profile.currency === "EGP" ? "EGP " : profile.currency === "AED" ? "AED " : "$"
+
+  const recentTx = transactions.slice(0, 6)
+
   return (
     <div className={`flex flex-col gap-5 ${SECTION_MIN_H}`}>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 lg:gap-4">
-        {accountSummaries.map((account, i) => {
-          const Icon = account.icon
-          return (
-            <motion.div
-              key={account.name}
-              initial={{ opacity: 0, y: 16, scale: 0.97 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{ duration: 0.5, delay: i * 0.06, ease: EASE_OUT }}
-              className={`relative overflow-hidden rounded-2xl surface-card p-4 lg:p-5 glow-${account.tone}-sm group hover:scale-[1.01] transition-transform duration-300`}
-              style={{ boxShadow: CARD_SHADOW }}
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="size-10 rounded-xl bg-accent/60 flex items-center justify-center">
-                    <Icon className="size-4 text-primary" />
+      {accounts.length === 0 ? (
+        <div className="rounded-2xl surface-card p-8 border border-dashed border-border/60 text-center flex flex-col items-center justify-center gap-2" style={{ boxShadow: CARD_SHADOW }}>
+          <div className="size-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary mb-1">
+            <Landmark className="size-6" />
+          </div>
+          <p className="text-sm font-bold text-foreground font-display">No accounts added yet</p>
+          <p className="text-xs text-muted-foreground font-sans max-w-sm">Connect or create your bank account, cash wallet, or card to start tracking your finances.</p>
+          <button
+            onClick={() => onNavigate?.("accounts")}
+            className="mt-3 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors font-sans cursor-pointer shadow-md"
+          >
+            + Add Account
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 lg:gap-4">
+          {accounts.map((account, i) => {
+            const { icon: Icon, tone, label } = getAccountIconAndTone(account.type)
+            return (
+              <motion.div
+                key={account.id}
+                initial={{ opacity: 0, y: 16, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ duration: 0.5, delay: i * 0.06, ease: EASE_OUT }}
+                className={`relative overflow-hidden rounded-2xl surface-card p-4 lg:p-5 glow-${tone}-sm group hover:scale-[1.01] transition-transform duration-300`}
+                style={{ boxShadow: CARD_SHADOW }}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="size-10 rounded-xl bg-accent/60 flex items-center justify-center">
+                      <Icon className="size-4 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-foreground font-display">{account.name}</p>
+                      <p className="text-[11px] text-muted-foreground mt-0.5 font-sans">{label}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-bold text-foreground font-display">{account.name}</p>
-                    <p className="text-[11px] text-muted-foreground mt-0.5 font-sans">{account.type}</p>
-                  </div>
+                  <button onClick={() => onNavigate?.("accounts")} className="text-xs font-semibold text-primary hover:underline font-sans cursor-pointer">Manage</button>
                 </div>
-                <button className="text-xs font-semibold text-primary hover:underline font-sans">Manage</button>
-              </div>
-              <div className="mt-6">
-                <p className="text-[11px] font-semibold tracking-[0.08em] uppercase text-muted-foreground font-sans">Available balance</p>
-                <p className="text-2xl font-bold text-foreground font-mono tracking-tighter mt-1">${account.balance}</p>
-              </div>
-            </motion.div>
-          )
-        })}
-      </div>
+                <div className="mt-6">
+                  <p className="text-[11px] font-semibold tracking-[0.08em] uppercase text-muted-foreground font-sans">Available balance</p>
+                  <p className="text-2xl font-bold text-foreground font-mono tracking-tighter mt-1">
+                    {currencySymbol}{(account.balance || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                </div>
+              </motion.div>
+            )
+          })}
+        </div>
+      )}
 
       <SectionPanel className="!p-0 overflow-hidden">
         <div className="p-5 lg:p-6 border-b border-border/50 flex items-center justify-between">
@@ -487,7 +472,7 @@ function DashboardAccountsSection() {
             <h3 className="text-sm font-bold text-foreground tracking-tight font-display">All recent transactions</h3>
             <p className="text-[11px] text-muted-foreground mt-0.5 font-sans">Your latest income and expenses</p>
           </div>
-          <button className="text-xs font-semibold text-primary hover:underline font-sans">View all</button>
+          <button onClick={() => onNavigate?.("transactions")} className="text-xs font-semibold text-primary hover:underline font-sans cursor-pointer">View all</button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -500,29 +485,37 @@ function DashboardAccountsSection() {
               </tr>
             </thead>
             <tbody>
-              {recentTransactions.map((transaction, i) => (
-                <motion.tr
-                  key={i}
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.35, delay: 0.15 + i * 0.04 }}
-                  className="border-b border-border/30 hover:bg-accent/20 transition-all duration-200"
-                >
-                  <td className="p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="size-8 rounded-lg bg-accent/40 flex items-center justify-center shrink-0">
-                        <div className={`size-2 rounded-full ${transaction.type === 'income' ? 'bg-fin-gain' : 'bg-fin-loss'}`} />
+              {recentTx.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="p-8 text-center text-xs text-muted-foreground font-sans">
+                    No transactions recorded yet.
+                  </td>
+                </tr>
+              ) : (
+                recentTx.map((transaction, i) => (
+                  <motion.tr
+                    key={transaction.id}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.35, delay: 0.15 + i * 0.04 }}
+                    className="border-b border-border/30 hover:bg-accent/20 transition-all duration-200"
+                  >
+                    <td className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div className="size-8 rounded-lg bg-accent/40 flex items-center justify-center shrink-0">
+                          <div className={`size-2 rounded-full ${transaction.type === 'income' ? 'bg-fin-gain' : 'bg-fin-loss'}`} />
+                        </div>
+                        <span className="text-[13px] font-semibold text-foreground font-sans">{transaction.description}</span>
                       </div>
-                      <span className="text-[13px] font-semibold text-foreground font-sans">{transaction.description}</span>
-                    </div>
-                  </td>
-                  <td className="p-4 text-xs text-muted-foreground font-sans">{transaction.category}</td>
-                  <td className="p-4 text-xs font-mono text-muted-foreground">{transaction.date}</td>
-                  <td className={`p-4 text-right font-mono font-bold ${transaction.type === 'income' ? 'text-fin-gain' : 'text-fin-loss'}`}>
-                    {transaction.type === 'income' ? '+' : '-'}${Math.abs(transaction.amount).toFixed(2)}
-                  </td>
-                </motion.tr>
-              ))}
+                    </td>
+                    <td className="p-4 text-xs text-muted-foreground font-sans">{transaction.category_name || "General"}</td>
+                    <td className="p-4 text-xs font-mono text-muted-foreground">{transaction.date}</td>
+                    <td className={`p-4 text-right font-mono font-bold ${transaction.type === 'income' ? 'text-fin-gain' : 'text-fin-loss'}`}>
+                      {transaction.type === 'income' ? '+' : '-'}{currencySymbol}{Math.abs(transaction.amount).toFixed(2)}
+                    </td>
+                  </motion.tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -531,116 +524,302 @@ function DashboardAccountsSection() {
   )
 }
 
-const accountDetails = {
-  QNB: { type: "Checking account", currency: "USD", balance: 32450, icon: Landmark, tone: "blue" },
-  Cash: { type: "Cash wallet", currency: "USD", balance: 8275, icon: Wallet, tone: "green" },
-  Card: { type: "Credit card", currency: "USD", balance: 21725, icon: CreditCard, tone: "red" },
-} as const
-
-const accountTransactions = [
-  { account: "QNB", description: "Salary deposit", category: "Income", date: "Feb 20, 2026", amount: 5200, type: "income" as const },
-  { account: "QNB", description: "Monthly rent", category: "Housing", date: "Feb 17, 2026", amount: -1850, type: "expense" as const },
-  { account: "Cash", description: "Freelance project", category: "Income", date: "Feb 18, 2026", amount: 1250, type: "income" as const },
-  { account: "Cash", description: "Metro transit pass", category: "Transport", date: "Feb 16, 2026", amount: -95, type: "expense" as const },
-  { account: "Card", description: "Whole Foods Market", category: "Groceries", date: "Feb 19, 2026", amount: -86.42, type: "expense" as const },
-  { account: "Card", description: "Electric bill", category: "Utilities", date: "Feb 15, 2026", amount: -124.18, type: "expense" as const },
-]
-
-const accountTrend = [
-  { day: "1", balance: 29600 }, { day: "6", balance: 30120 }, { day: "11", balance: 30950 },
-  { day: "16", balance: 31680 }, { day: "21", balance: 32100 }, { day: "26", balance: 32450 },
-  { day: "30", balance: 32450 },
-]
-
 function AccountsSection() {
-  const [selectedAccount, setSelectedAccount] = useState<keyof typeof accountDetails>("QNB")
+  const { accounts, transactions, createAccount, deleteAccount } = useFinanceData()
+  const { profile } = useUserProfile()
+  const [selectedAccountId, setSelectedAccountId] = useState<string>("")
   const [query, setQuery] = useState("")
   const [minAmount, setMinAmount] = useState("")
   const [maxAmount, setMaxAmount] = useState("")
-  const account = accountDetails[selectedAccount]
-  const Icon = account.icon
-  const filteredTransactions = accountTransactions.filter((transaction) => {
-    const matchesQuery = transaction.description.toLowerCase().includes(query.toLowerCase())
-    const matchesMin = !minAmount || Math.abs(transaction.amount) >= Number(minAmount)
-    const matchesMax = !maxAmount || Math.abs(transaction.amount) <= Number(maxAmount)
-    return transaction.account === selectedAccount && matchesQuery && matchesMin && matchesMax
-  })
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [newAccName, setNewAccName] = useState("")
+  const [newAccType, setNewAccType] = useState("bank")
+  const [newAccBalance, setNewAccBalance] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const activeAccountId = selectedAccountId || accounts[0]?.id || ""
+  const selectedAccount = accounts.find((a) => a.id === activeAccountId) || accounts[0]
+  const currencySymbol = profile.currency === "EUR" ? "€" : profile.currency === "GBP" ? "£" : profile.currency === "EGP" ? "EGP " : profile.currency === "AED" ? "AED " : "$"
+
+  const filteredTransactions = useMemo(() => {
+    if (!selectedAccount) return []
+    return transactions.filter((t) => {
+      const matchesAcc = t.account_id === selectedAccount.id || t.account_name === selectedAccount.name
+      const matchesQuery = t.description.toLowerCase().includes(query.toLowerCase())
+      const matchesMin = !minAmount || Math.abs(t.amount) >= Number(minAmount)
+      const matchesMax = !maxAmount || Math.abs(t.amount) <= Number(maxAmount)
+      return matchesAcc && matchesQuery && matchesMin && matchesMax
+    })
+  }, [transactions, selectedAccount, query, minAmount, maxAmount])
+
+  const accountTrendData = useMemo(() => {
+    if (!selectedAccount) return []
+    const bal = selectedAccount.balance || 0
+    return [
+      { day: "Day 1", balance: bal },
+      { day: "Day 5", balance: bal },
+      { day: "Day 10", balance: bal },
+      { day: "Day 15", balance: bal },
+      { day: "Day 20", balance: bal },
+      { day: "Day 25", balance: bal },
+      { day: "Today", balance: bal },
+    ]
+  }, [selectedAccount])
+
+  const handleAddAccount = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newAccName.trim()) return
+    setIsSubmitting(true)
+
+    const created = await createAccount({
+      name: newAccName.trim(),
+      type: newAccType,
+      starting_balance: parseFloat(newAccBalance) || 0,
+      currency: profile.currency || "USD",
+    })
+
+    setSelectedAccountId(created.id)
+    setNewAccName("")
+    setNewAccBalance("")
+    setIsSubmitting(false)
+    setShowAddModal(false)
+  }
+
+  const handleDeleteCurrentAccount = async () => {
+    if (!selectedAccount) return
+    if (confirm(`Are you sure you want to remove account "${selectedAccount.name}"?`)) {
+      await deleteAccount(selectedAccount.id)
+      setSelectedAccountId("")
+    }
+  }
+
+  const { icon: Icon, tone, label: typeLabel } = getAccountIconAndTone(selectedAccount?.type)
 
   return (
     <div className={`flex flex-col gap-5 ${SECTION_MIN_H}`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><h2 className="text-lg font-bold text-foreground font-display tracking-tight">Accounts</h2><p className="text-xs text-muted-foreground font-sans">Manage balances and account activity</p></div>
-        <div className="flex items-center gap-1 rounded-xl border border-border/40 bg-card/60 p-1">
-          {(Object.keys(accountDetails) as Array<keyof typeof accountDetails>).map((name) => (
-            <button key={name} onClick={() => setSelectedAccount(name)} className={`rounded-lg px-4 py-2 text-xs font-semibold font-sans transition-colors ${selectedAccount === name ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground cursor-pointer"}`}>{name}</button>
-          ))}
+        <div>
+          <h2 className="text-lg font-bold text-foreground font-display tracking-tight">Accounts</h2>
+          <p className="text-xs text-muted-foreground font-sans">Manage your active accounts and balances</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {accounts.length > 0 && (
+            <div className="flex items-center gap-1 rounded-xl border border-border/40 bg-card/60 p-1">
+              {accounts.map((acc) => (
+                <button
+                  key={acc.id}
+                  onClick={() => setSelectedAccountId(acc.id)}
+                  className={`rounded-lg px-3.5 py-1.5 text-xs font-semibold font-sans transition-colors cursor-pointer ${
+                    activeAccountId === acc.id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {acc.name}
+                </button>
+              ))}
+            </div>
+          )}
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors font-sans cursor-pointer shadow-sm shrink-0"
+          >
+            <Plus className="size-3.5" />
+            <span>Add Account</span>
+          </button>
         </div>
       </div>
-      <motion.div initial={{ opacity: 0, y: 16, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.5, ease: EASE_OUT }} className={`relative overflow-hidden rounded-2xl surface-card p-5 lg:p-6 glow-${account.tone}-sm group hover:scale-[1.01] transition-transform duration-300`} style={{ boxShadow: CARD_SHADOW }}>
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex items-start gap-3">
-            <div className="size-10 rounded-xl bg-accent/60 flex items-center justify-center"><Icon className="size-4 text-primary" /></div>
-            <div>
-              <p className="text-lg font-bold text-foreground font-display">{selectedAccount}</p>
-              <p className="text-xs text-muted-foreground font-sans">{account.type} · {account.currency}</p>
-              <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Available balance</p>
-              <p className="mt-1 text-3xl font-bold tracking-tighter text-foreground font-mono">${account.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
+
+      {/* Add Account Modal */}
+      <AnimatePresence>
+        {showAddModal && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.25 }}
+            className="overflow-hidden"
+          >
+            <form onSubmit={handleAddAccount} className="p-5 rounded-2xl bg-muted/30 border border-primary/30 flex flex-col gap-4 glow-teal-sm">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-bold text-foreground font-display">Add New Account</h4>
+                <button type="button" onClick={() => setShowAddModal(false)} className="text-muted-foreground hover:text-foreground transition-colors p-1 cursor-pointer">
+                  <X className="size-4" />
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1 font-sans">Account Name</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Chase, QNB, Cash"
+                    value={newAccName}
+                    onChange={(e) => setNewAccName(e.target.value)}
+                    className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary font-sans"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1 font-sans">Account Type</label>
+                  <select
+                    value={newAccType}
+                    onChange={(e) => setNewAccType(e.target.value)}
+                    className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary font-sans appearance-none cursor-pointer"
+                  >
+                    <option value="bank">Bank / Checking</option>
+                    <option value="cash">Cash wallet</option>
+                    <option value="card">Credit card</option>
+                    <option value="savings">Savings account</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1 font-sans">Starting Balance</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    placeholder="0.00"
+                    value={newAccBalance}
+                    onChange={(e) => setNewAccBalance(e.target.value)}
+                    className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary font-mono"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button type="button" onClick={() => setShowAddModal(false)} className="px-4 py-2 rounded-xl text-xs font-semibold text-muted-foreground hover:bg-accent/40 transition-colors font-sans cursor-pointer">Cancel</button>
+                <button type="submit" disabled={isSubmitting} className="px-4 py-2 rounded-xl text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-sans shadow-md cursor-pointer">
+                  {isSubmitting ? "Creating..." : "Save Account"}
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {!selectedAccount ? (
+        <div className="rounded-2xl surface-card p-10 text-center flex flex-col items-center justify-center gap-3" style={{ boxShadow: CARD_SHADOW }}>
+          <Landmark className="size-10 text-muted-foreground/60" />
+          <p className="text-base font-bold text-foreground font-display">No accounts configured</p>
+          <p className="text-xs text-muted-foreground font-sans max-w-sm">Create an account to start logging and tracking transactions.</p>
+          <button onClick={() => setShowAddModal(true)} className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold font-sans cursor-pointer shadow-md">
+            + Add First Account
+          </button>
+        </div>
+      ) : (
+        <>
+          <motion.div
+            initial={{ opacity: 0, y: 16, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.5, ease: EASE_OUT }}
+            className={`relative overflow-hidden rounded-2xl surface-card p-5 lg:p-6 glow-${tone}-sm group hover:scale-[1.01] transition-transform duration-300`}
+            style={{ boxShadow: CARD_SHADOW }}
+          >
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="size-10 rounded-xl bg-accent/60 flex items-center justify-center">
+                  <Icon className="size-4 text-primary" />
+                </div>
+                <div>
+                  <p className="text-lg font-bold text-foreground font-display">{selectedAccount.name}</p>
+                  <p className="text-xs text-muted-foreground font-sans">{typeLabel} · {selectedAccount.currency || profile.currency || "USD"}</p>
+                  <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Available balance</p>
+                  <p className="mt-1 text-3xl font-bold tracking-tighter text-foreground font-mono">
+                    {currencySymbol}{(selectedAccount.balance || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                </div>
+              </div>
+              <div className="h-32 w-full max-w-md">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={accountTrendData}>
+                    <Line type="monotone" dataKey="balance" stroke={C.teal} strokeWidth={2.5} dot={false} animationDuration={700} />
+                    <XAxis dataKey="day" hide />
+                    <YAxis hide domain={["dataMin - 100", "dataMax + 100"]} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex flex-row gap-3 lg:flex-col lg:items-end">
+                <button onClick={handleDeleteCurrentAccount} className="text-xs font-semibold text-fin-loss/80 hover:text-fin-loss font-sans cursor-pointer">
+                  Delete Account
+                </button>
+              </div>
             </div>
-          </div>
-          <div className="h-32 w-full max-w-md">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={accountTrend}>
-                <Line type="monotone" dataKey="balance" stroke={C.teal} strokeWidth={2.5} dot={false} animationDuration={700} />
-                <XAxis dataKey="day" hide />
-                <YAxis hide domain={["dataMin - 1000", "dataMax + 1000"]} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-          <div className="flex flex-row gap-3 lg:flex-col lg:items-end">
-            <span className="text-xs font-semibold text-primary">Manage</span>
-            <button className="text-xs font-semibold text-muted-foreground hover:text-foreground font-sans cursor-pointer">Edit</button>
-            <button className="text-xs font-semibold text-fin-loss/80 hover:text-fin-loss font-sans cursor-pointer">Delete / Close</button>
-          </div>
-        </div>
-      </motion.div>
-      <SectionPanel className="!p-0 overflow-hidden">
-        <div className="border-b border-border/50 p-5 lg:p-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div><h3 className="text-sm font-bold text-foreground font-display">Recent transactions</h3><p className="mt-0.5 text-[11px] text-muted-foreground font-sans">Activity for {selectedAccount}</p></div>
-            <button className="text-xs font-semibold text-primary hover:underline font-sans cursor-pointer">View all</button>
-          </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <div className="flex min-w-48 flex-1 items-center gap-2 rounded-lg border border-border/40 bg-muted/20 px-3 py-2">
-              <Search className="size-3.5 text-muted-foreground" />
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search description" className="w-full bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground font-sans" />
+          </motion.div>
+
+          <SectionPanel className="!p-0 overflow-hidden">
+            <div className="border-b border-border/50 p-5 lg:p-6">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-bold text-foreground font-display">Recent transactions</h3>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground font-sans">Activity for {selectedAccount.name}</p>
+                </div>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <div className="flex min-w-48 flex-1 items-center gap-2 rounded-lg border border-border/40 bg-muted/20 px-3 py-2">
+                  <Search className="size-3.5 text-muted-foreground" />
+                  <input
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="Search description"
+                    className="w-full bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground font-sans"
+                  />
+                </div>
+                <input
+                  value={minAmount}
+                  onChange={(event) => setMinAmount(event.target.value)}
+                  type="number"
+                  min="0"
+                  placeholder="Min amount"
+                  className="w-28 rounded-lg border border-border/40 bg-muted/20 px-3 py-2 text-xs text-foreground outline-none placeholder:text-muted-foreground font-mono"
+                />
+                <input
+                  value={maxAmount}
+                  onChange={(event) => setMaxAmount(event.target.value)}
+                  type="number"
+                  min="0"
+                  placeholder="Max amount"
+                  className="w-28 rounded-lg border border-border/40 bg-muted/20 px-3 py-2 text-xs text-foreground outline-none placeholder:text-muted-foreground font-mono"
+                />
+              </div>
             </div>
-            <input value={minAmount} onChange={(event) => setMinAmount(event.target.value)} type="number" min="0" placeholder="Min amount" className="w-28 rounded-lg border border-border/40 bg-muted/20 px-3 py-2 text-xs text-foreground outline-none placeholder:text-muted-foreground font-mono" />
-            <input value={maxAmount} onChange={(event) => setMaxAmount(event.target.value)} type="number" min="0" placeholder="Max amount" className="w-28 rounded-lg border border-border/40 bg-muted/20 px-3 py-2 text-xs text-foreground outline-none placeholder:text-muted-foreground font-mono" />
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border/50">
-                <th className="p-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Description</th>
-                <th className="p-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Category</th>
-                <th className="p-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Date</th>
-                <th className="p-4 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredTransactions.map((transaction, i) => (
-                <motion.tr key={`${selectedAccount}-${transaction.description}`} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.35, delay: i * 0.04 }} className="border-b border-border/30 hover:bg-accent/20 transition-all duration-200">
-                  <td className="p-4 text-[13px] font-semibold text-foreground font-sans">{transaction.description}</td>
-                  <td className="p-4 text-xs text-muted-foreground font-sans">{transaction.category}</td>
-                  <td className="p-4 text-xs text-muted-foreground font-mono">{transaction.date}</td>
-                  <td className={`p-4 text-right font-bold font-mono ${transaction.type === "income" ? "text-fin-gain" : "text-fin-loss"}`}>{transaction.amount >= 0 ? "+" : "-"}${Math.abs(transaction.amount).toFixed(2)}</td>
-                </motion.tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </SectionPanel>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border/50">
+                    <th className="p-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Description</th>
+                    <th className="p-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Category</th>
+                    <th className="p-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Date</th>
+                    <th className="p-4 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredTransactions.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="p-8 text-center text-xs text-muted-foreground font-sans">
+                        No transactions recorded for {selectedAccount.name}.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredTransactions.map((transaction, i) => (
+                      <motion.tr
+                        key={transaction.id}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.35, delay: i * 0.04 }}
+                        className="border-b border-border/30 hover:bg-accent/20 transition-all duration-200"
+                      >
+                        <td className="p-4 text-[13px] font-semibold text-foreground font-sans">{transaction.description}</td>
+                        <td className="p-4 text-xs text-muted-foreground font-sans">{transaction.category_name || "General"}</td>
+                        <td className="p-4 text-xs text-muted-foreground font-mono">{transaction.date}</td>
+                        <td className={`p-4 text-right font-bold font-mono ${transaction.type === "income" ? "text-fin-gain" : "text-fin-loss"}`}>
+                          {transaction.type === "income" ? "+" : "-"}{currencySymbol}{Math.abs(transaction.amount).toFixed(2)}
+                        </td>
+                      </motion.tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </SectionPanel>
+        </>
+      )}
     </div>
   )
 }
@@ -648,64 +827,85 @@ function AccountsSection() {
 // ─── Section: Transactions ──────────────────────────────────────
 
 function TransactionsSection() {
+  const { transactions, accounts, categories, createTransaction, totalIncome, totalExpense } = useFinanceData()
+  const { profile } = useUserProfile()
   const [searchQuery, setSearchQuery] = useState("")
   const [typeFilter, setTypeFilter] = useState<"all" | "income" | "expense">("all")
   const [categoryFilter, setCategoryFilter] = useState<string>("all")
   const [accountFilter, setAccountFilter] = useState<string>("all")
+  const [showAddModal, setShowAddModal] = useState(false)
+
+  const [newDesc, setNewDesc] = useState("")
+  const [newAmount, setNewAmount] = useState("")
+  const [newType, setNewType] = useState<"expense" | "income">("expense")
+  const [newAccountId, setNewAccountId] = useState(accounts[0]?.id || "")
+  const [newCategoryId, setNewCategoryId] = useState("")
+  const [newDate, setNewDate] = useState(new Date().toISOString().split("T")[0])
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const currencySymbol = profile.currency === "EUR" ? "€" : profile.currency === "GBP" ? "£" : profile.currency === "EGP" ? "EGP " : profile.currency === "AED" ? "AED " : "$"
 
   const filteredTransactions = useMemo(() => {
-    return spendlyTransactions.filter((tx) => {
+    return transactions.filter((tx) => {
       const matchesSearch =
-        tx.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        tx.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        tx.account.toLowerCase().includes(searchQuery.toLowerCase())
+        (tx.description || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (tx.category_name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (tx.account_name || "").toLowerCase().includes(searchQuery.toLowerCase())
 
       const matchesType = typeFilter === "all" || tx.type === typeFilter
-      const matchesCategory = categoryFilter === "all" || tx.category.toLowerCase() === categoryFilter.toLowerCase()
-      const matchesAccount = accountFilter === "all" || tx.account.toLowerCase() === accountFilter.toLowerCase()
+      const matchesCategory = categoryFilter === "all" || tx.category_id === categoryFilter || tx.category_name?.toLowerCase() === categoryFilter.toLowerCase()
+      const matchesAccount = accountFilter === "all" || tx.account_id === accountFilter || tx.account_name?.toLowerCase() === accountFilter.toLowerCase()
 
       return matchesSearch && matchesType && matchesCategory && matchesAccount
     })
-  }, [searchQuery, typeFilter, categoryFilter, accountFilter])
-
-  const totalIncome = useMemo(() => {
-    return spendlyTransactions
-      .filter((t) => t.type === "income")
-      .reduce((sum, t) => sum + t.amount, 0)
-  }, [])
-
-  const totalExpense = useMemo(() => {
-    return spendlyTransactions
-      .filter((t) => t.type === "expense")
-      .reduce((sum, t) => sum + Math.abs(t.amount), 0)
-  }, [])
+  }, [transactions, searchQuery, typeFilter, categoryFilter, accountFilter])
 
   const netSavings = totalIncome - totalExpense
 
-  const categories = useMemo(() => {
-    const set = new Set(spendlyTransactions.map((t) => t.category))
-    return Array.from(set)
-  }, [])
+  const handleAddTransaction = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newDesc.trim() || !newAmount) return
+    const accId = newAccountId || accounts[0]?.id
+    if (!accId) {
+      alert("Please create an account first before adding transactions.")
+      return
+    }
+    setIsSubmitting(true)
+
+    await createTransaction({
+      account_id: accId,
+      category_id: newCategoryId || undefined,
+      amount: parseFloat(newAmount) || 0,
+      type: newType,
+      description: newDesc.trim(),
+      date: newDate,
+    })
+
+    setNewDesc("")
+    setNewAmount("")
+    setIsSubmitting(false)
+    setShowAddModal(false)
+  }
 
   return (
     <div className={`flex flex-col gap-5 ${SECTION_MIN_H}`}>
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
-        <KpiCard label="Total Income" value={totalIncome.toLocaleString("en-US", { minimumFractionDigits: 2 })} prefix="$" delay={0} icon={TrendingUp} change={12.4} />
-        <KpiCard label="Total Expenses" value={totalExpense.toLocaleString("en-US", { minimumFractionDigits: 2 })} prefix="$" delay={0.06} icon={ArrowDownRight} change={-4.2} />
-        <KpiCard label="Net Balance" value={netSavings.toLocaleString("en-US", { minimumFractionDigits: 2 })} prefix="$" delay={0.12} icon={Wallet} />
-        <KpiCard label="Total Transactions" value={String(spendlyTransactions.length)} delay={0.18} icon={ArrowLeftRight} />
+        <KpiCard label="Total Income" value={totalIncome.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} prefix={currencySymbol} delay={0} icon={TrendingUp} />
+        <KpiCard label="Total Expenses" value={totalExpense.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} prefix={currencySymbol} delay={0.06} icon={ArrowDownRight} />
+        <KpiCard label="Net Balance" value={netSavings.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} prefix={currencySymbol} delay={0.12} icon={Wallet} />
+        <KpiCard label="Total Transactions" value={String(transactions.length)} delay={0.18} icon={ArrowLeftRight} />
       </div>
 
       {/* Main Transactions Panel */}
       <SectionPanel className="!p-0 overflow-hidden">
-        {/* Header with Search and Filter Controls */}
+        {/* Header with Search, Add Transaction, and Filter Controls */}
         <div className="p-5 lg:p-6 border-b border-border/50 flex flex-col gap-4">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <h3 className="text-base font-bold text-foreground tracking-tight font-display">All Transactions</h3>
               <p className="text-xs text-muted-foreground mt-0.5 font-sans">
-                Showing {filteredTransactions.length} of {spendlyTransactions.length} transactions
+                Showing {filteredTransactions.length} of {transactions.length} transactions
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -724,8 +924,118 @@ function TransactionsSection() {
                   </button>
                 ))}
               </div>
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors font-sans cursor-pointer shadow-sm shrink-0"
+              >
+                <Plus className="size-3.5" />
+                <span>Add Transaction</span>
+              </button>
             </div>
           </div>
+
+          {/* Add Transaction Modal Form */}
+          <AnimatePresence>
+            {showAddModal && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.25 }}
+                className="overflow-hidden"
+              >
+                <form onSubmit={handleAddTransaction} className="p-5 rounded-2xl bg-muted/30 border border-primary/30 flex flex-col gap-4 glow-teal-sm">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-bold text-foreground font-display">Add New Transaction</h4>
+                    <button type="button" onClick={() => setShowAddModal(false)} className="text-muted-foreground hover:text-foreground transition-colors p-1 cursor-pointer">
+                      <X className="size-4" />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1 font-sans">Description</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Groceries, Freelance"
+                        value={newDesc}
+                        onChange={(e) => setNewDesc(e.target.value)}
+                        className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary font-sans"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1 font-sans">Amount</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        required
+                        placeholder="0.00"
+                        value={newAmount}
+                        onChange={(e) => setNewAmount(e.target.value)}
+                        className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary font-mono"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1 font-sans">Type</label>
+                      <select
+                        value={newType}
+                        onChange={(e) => setNewType(e.target.value as "expense" | "income")}
+                        className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary font-sans appearance-none cursor-pointer"
+                      >
+                        <option value="expense">Expense</option>
+                        <option value="income">Income</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1 font-sans">Account</label>
+                      <select
+                        value={newAccountId}
+                        onChange={(e) => setNewAccountId(e.target.value)}
+                        required
+                        className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary font-sans appearance-none cursor-pointer"
+                      >
+                        {accounts.length === 0 ? (
+                          <option value="">No accounts available</option>
+                        ) : (
+                          accounts.map((acc) => (
+                            <option key={acc.id} value={acc.id}>{acc.name} ({currencySymbol}{acc.balance.toFixed(2)})</option>
+                          ))
+                        )}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1 font-sans">Category</label>
+                      <select
+                        value={newCategoryId}
+                        onChange={(e) => setNewCategoryId(e.target.value)}
+                        className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary font-sans appearance-none cursor-pointer"
+                      >
+                        <option value="">General</option>
+                        {categories.map((cat) => (
+                          <option key={cat.id} value={cat.id}>{cat.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1 font-sans">Date</label>
+                      <input
+                        type="date"
+                        value={newDate}
+                        onChange={(e) => setNewDate(e.target.value)}
+                        className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary font-sans"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-end gap-2 pt-1">
+                    <button type="button" onClick={() => setShowAddModal(false)} className="px-4 py-2 rounded-xl text-xs font-semibold text-muted-foreground hover:bg-accent/40 transition-colors font-sans cursor-pointer">Cancel</button>
+                    <button type="submit" disabled={isSubmitting} className="px-4 py-2 rounded-xl text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-sans shadow-md cursor-pointer">
+                      {isSubmitting ? "Adding..." : "Save Transaction"}
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="relative sm:col-span-1">
@@ -748,7 +1058,7 @@ function TransactionsSection() {
               >
                 <option value="all" className="bg-card text-foreground">All Categories</option>
                 {categories.map((cat) => (
-                  <option key={cat} value={cat} className="bg-card text-foreground">{cat}</option>
+                  <option key={cat.id} value={cat.id} className="bg-card text-foreground">{cat.name}</option>
                 ))}
               </select>
             </div>
@@ -761,15 +1071,15 @@ function TransactionsSection() {
                 className="w-full px-3 py-2 bg-muted/30 border border-border/40 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all font-sans appearance-none cursor-pointer"
               >
                 <option value="all" className="bg-card text-foreground">All Accounts</option>
-                <option value="QNB" className="bg-card text-foreground">QNB Checking</option>
-                <option value="Cash" className="bg-card text-foreground">Cash Wallet</option>
-                <option value="Card" className="bg-card text-foreground">Credit Card</option>
+                {accounts.map((acc) => (
+                  <option key={acc.id} value={acc.id} className="bg-card text-foreground">{acc.name}</option>
+                ))}
               </select>
             </div>
           </div>
         </div>
 
-        {/* Transactions Table (Matching Recent Transactions style) */}
+        {/* Transactions Table */}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -785,7 +1095,7 @@ function TransactionsSection() {
               {filteredTransactions.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="p-8 text-center text-xs text-muted-foreground font-sans">
-                    No transactions match your search filters.
+                    {transactions.length === 0 ? "No transactions recorded yet. Click '+ Add Transaction' to get started." : "No transactions match your search filters."}
                   </td>
                 </tr>
               ) : (
@@ -804,20 +1114,19 @@ function TransactionsSection() {
                         </div>
                         <div>
                           <span className="text-[13px] font-semibold text-foreground font-sans block">{tx.description}</span>
-                          <span className="text-[10px] text-muted-foreground/70 font-mono sm:hidden">{tx.account}</span>
+                          <span className="text-[10px] text-muted-foreground/70 font-mono sm:hidden">{tx.account_name}</span>
                         </div>
                       </div>
                     </td>
-                    <td className="p-4 text-xs text-muted-foreground font-sans">{tx.category}</td>
+                    <td className="p-4 text-xs text-muted-foreground font-sans">{tx.category_name || "General"}</td>
                     <td className="p-4 text-xs font-mono text-muted-foreground hidden sm:table-cell">
-                      <span className="px-2 py-0.5 rounded-md bg-accent/40 text-[11px]">{tx.account}</span>
+                      <span className="px-2 py-0.5 rounded-md bg-accent/40 text-[11px]">{tx.account_name}</span>
                     </td>
                     <td className="p-4 text-xs font-mono text-muted-foreground">
                       <span>{tx.date}</span>
-                      {tx.time && <span className="text-muted-foreground/50 ml-1.5 hidden md:inline">{tx.time}</span>}
                     </td>
                     <td className={`p-4 text-right font-mono font-bold ${tx.type === "income" ? "text-fin-gain" : "text-fin-loss"}`}>
-                      {tx.type === "income" ? "+" : "-"}${Math.abs(tx.amount).toFixed(2)}
+                      {tx.type === "income" ? "+" : "-"}{currencySymbol}{Math.abs(tx.amount).toFixed(2)}
                     </td>
                   </motion.tr>
                 ))
@@ -833,54 +1142,41 @@ function TransactionsSection() {
 // ─── Section: Categories ────────────────────────────────────────
 
 function CategoriesSection() {
-  const [categoriesList, setCategoriesList] = useState<CategoryItem[]>(initialCategories)
+  const { categories, transactions, createCategory, totalExpense, totalIncome } = useFinanceData()
+  const { profile } = useUserProfile()
   const [searchQuery, setSearchQuery] = useState("")
   const [typeFilter, setTypeFilter] = useState<"all" | "expense" | "income">("all")
   const [showAddModal, setShowAddModal] = useState(false)
   const [newCatName, setNewCatName] = useState("")
   const [newCatType, setNewCatType] = useState<"expense" | "income">("expense")
-  const [newCatBudget, setNewCatBudget] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const currencySymbol = profile.currency === "EUR" ? "€" : profile.currency === "GBP" ? "£" : profile.currency === "EGP" ? "EGP " : profile.currency === "AED" ? "AED " : "$"
 
   const filteredCategories = useMemo(() => {
-    return categoriesList.filter((cat) => {
+    return categories.filter((cat) => {
       const matchesSearch = cat.name.toLowerCase().includes(searchQuery.toLowerCase())
       const matchesType = typeFilter === "all" || cat.type === typeFilter
       return matchesSearch && matchesType
     })
-  }, [categoriesList, searchQuery, typeFilter])
+  }, [categories, searchQuery, typeFilter])
 
-  const totalExpense = useMemo(() => {
-    return categoriesList
-      .filter((c) => c.type === "expense")
-      .reduce((sum, c) => sum + c.total, 0)
-  }, [categoriesList])
+  const expenseCount = useMemo(() => categories.filter((c) => c.type === "expense").length, [categories])
+  const incomeCount = useMemo(() => categories.filter((c) => c.type === "income").length, [categories])
 
-  const totalIncome = useMemo(() => {
-    return categoriesList
-      .filter((c) => c.type === "income")
-      .reduce((sum, c) => sum + c.total, 0)
-  }, [categoriesList])
-
-  const expenseCount = useMemo(() => categoriesList.filter((c) => c.type === "expense").length, [categoriesList])
-  const incomeCount = useMemo(() => categoriesList.filter((c) => c.type === "income").length, [categoriesList])
-
-  const handleAddCategory = (e: React.FormEvent) => {
+  const handleAddCategory = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newCatName.trim()) return
+    setIsSubmitting(true)
 
-    const budgetVal = parseFloat(newCatBudget) || 0
-    const newCategory: CategoryItem = {
-      id: newCatName.toLowerCase().replace(/\s+/g, "-"),
+    await createCategory({
       name: newCatName.trim(),
       type: newCatType,
-      total: 0,
-      budget: budgetVal > 0 ? budgetVal : undefined,
-      color: newCatType === "income" ? "oklch(0.76 0.16 162)" : "#5b4dc7",
-    }
+      currency: profile.currency || "USD",
+    })
 
-    setCategoriesList((prev) => [newCategory, ...prev])
     setNewCatName("")
-    setNewCatBudget("")
+    setIsSubmitting(false)
     setShowAddModal(false)
   }
 
@@ -888,10 +1184,10 @@ function CategoriesSection() {
     <div className={`flex flex-col gap-5 ${SECTION_MIN_H}`}>
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
-        <KpiCard label="Total Categories" value={String(categoriesList.length)} delay={0} icon={CircleDot} />
+        <KpiCard label="Total Categories" value={String(categories.length)} delay={0} icon={CircleDot} />
         <KpiCard label="Expense Categories" value={String(expenseCount)} delay={0.06} icon={ArrowDownRight} />
         <KpiCard label="Income Categories" value={String(incomeCount)} delay={0.12} icon={TrendingUp} />
-        <KpiCard label="Monthly Spent" value={totalExpense.toLocaleString("en-US", { minimumFractionDigits: 2 })} prefix="$" delay={0.18} icon={DollarSign} />
+        <KpiCard label="Monthly Spent" value={totalExpense.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} prefix={currencySymbol} delay={0.18} icon={DollarSign} />
       </div>
 
       {/* Main Panel */}
@@ -960,7 +1256,7 @@ function CategoriesSection() {
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5 font-sans">
                       Category Name
@@ -968,7 +1264,7 @@ function CategoriesSection() {
                     <input
                       type="text"
                       required
-                      placeholder="e.g. Subscriptions, Gifts"
+                      placeholder="e.g. Groceries, Subscriptions, Salary"
                       value={newCatName}
                       onChange={(e) => setNewCatName(e.target.value)}
                       className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary font-sans"
@@ -988,19 +1284,6 @@ function CategoriesSection() {
                       <option value="income">Income</option>
                     </select>
                   </div>
-
-                  <div>
-                    <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5 font-sans">
-                      Monthly Budget (Optional)
-                    </label>
-                    <input
-                      type="number"
-                      placeholder="e.g. 500"
-                      value={newCatBudget}
-                      onChange={(e) => setNewCatBudget(e.target.value)}
-                      className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary font-sans"
-                    />
-                  </div>
                 </div>
 
                 <div className="flex items-center justify-end gap-2 pt-2">
@@ -1013,9 +1296,10 @@ function CategoriesSection() {
                   </button>
                   <button
                     type="submit"
+                    disabled={isSubmitting}
                     className="px-4 py-2 rounded-xl text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-sans shadow-md cursor-pointer"
                   >
-                    Save Category
+                    {isSubmitting ? "Saving..." : "Save Category"}
                   </button>
                 </div>
               </form>
@@ -1024,68 +1308,75 @@ function CategoriesSection() {
         </AnimatePresence>
 
         {/* Categories Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredCategories.map((cat, i) => {
-            const isIncome = cat.type === "income"
-            const maxVal = isIncome ? totalIncome : totalExpense
-            const percent = maxVal > 0 ? Math.min(100, Math.round((cat.total / maxVal) * 100)) : 0
-            const budgetPercent = cat.budget && cat.budget > 0 ? Math.min(100, Math.round((cat.total / cat.budget) * 100)) : null
+        {filteredCategories.length === 0 ? (
+          <div className="p-8 text-center text-xs text-muted-foreground font-sans">
+            No categories found. Click "+ Add Category" to create one.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredCategories.map((cat, i) => {
+              const isIncome = cat.type === "income"
+              const totalVal = cat.total_spent ?? 0
+              const maxVal = isIncome ? totalIncome : totalExpense
+              const percent = maxVal > 0 ? Math.min(100, Math.round((totalVal / maxVal) * 100)) : 0
+              const catColor = isIncome ? "oklch(0.76 0.16 162)" : "#5b4dc7"
 
-            return (
-              <motion.div
-                key={cat.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: i * 0.03 }}
-                className="surface-card rounded-2xl p-5 flex flex-col justify-between hover:scale-[1.01] transition-transform duration-200 group border border-border/40"
-                style={{ boxShadow: CARD_SHADOW }}
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2.5">
-                      <div className="size-8 rounded-lg bg-accent/50 flex items-center justify-center">
-                        <CircleDot className="size-4 text-foreground" style={{ color: cat.color }} />
+              return (
+                <motion.div
+                  key={cat.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: i * 0.03 }}
+                  className="surface-card rounded-2xl p-5 flex flex-col justify-between hover:scale-[1.01] transition-transform duration-200 group border border-border/40"
+                  style={{ boxShadow: CARD_SHADOW }}
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="size-8 rounded-lg bg-accent/50 flex items-center justify-center">
+                          <CircleDot className="size-4 text-foreground" style={{ color: catColor }} />
+                        </div>
+                        <span className="font-bold text-sm text-foreground font-display">{cat.name}</span>
                       </div>
-                      <span className="font-bold text-sm text-foreground font-display">{cat.name}</span>
+                      <span
+                        className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${
+                          isIncome ? "bg-fin-gain/10 text-fin-gain" : "bg-fin-loss/10 text-fin-loss"
+                        }`}
+                      >
+                        {cat.type}
+                      </span>
                     </div>
-                    <span
-                      className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${
-                        isIncome ? "bg-fin-gain/10 text-fin-gain" : "bg-fin-loss/10 text-fin-loss"
-                      }`}
-                    >
-                      {cat.type}
-                    </span>
+
+                    <div className="my-2">
+                      <p className={`text-2xl font-bold font-mono tracking-tight ${isIncome ? "text-fin-gain" : "text-foreground"}`}>
+                        {isIncome ? "+" : ""}{currencySymbol}{totalVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground font-sans mt-0.5">
+                        {percent}% of total {cat.type}s
+                      </p>
+                    </div>
                   </div>
 
-                  <div className="my-2">
-                    <p className={`text-2xl font-bold font-mono tracking-tight ${isIncome ? "text-fin-gain" : "text-foreground"}`}>
-                      {isIncome ? "+" : ""}${cat.total.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground font-sans mt-0.5">
-                      {cat.budget ? `Budget: $${cat.budget.toLocaleString("en-US", { minimumFractionDigits: 2 })} (${budgetPercent}% used)` : `${percent}% of monthly ${cat.type}s`}
-                    </p>
+                  <div className="mt-4 pt-3 border-t border-border/30">
+                    <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-1.5 font-sans">
+                      <span>Monthly Share</span>
+                      <span className="font-mono font-semibold text-foreground">{percent}%</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-muted/60 overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${percent}%` }}
+                        transition={{ duration: 0.8, delay: 0.1 + i * 0.02, ease: EASE_OUT }}
+                        className="h-full rounded-full"
+                        style={{ background: catColor }}
+                      />
+                    </div>
                   </div>
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-border/30">
-                  <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-1.5 font-sans">
-                    <span>Monthly Share</span>
-                    <span className="font-mono font-semibold text-foreground">{percent}%</span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-muted/60 overflow-hidden">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${percent}%` }}
-                      transition={{ duration: 0.8, delay: 0.1 + i * 0.02, ease: EASE_OUT }}
-                      className="h-full rounded-full"
-                      style={{ background: cat.color }}
-                    />
-                  </div>
-                </div>
-              </motion.div>
-            )
-          })}
-        </div>
+                </motion.div>
+              )
+            })}
+          </div>
+        )}
       </SectionPanel>
     </div>
   )
@@ -1386,18 +1677,16 @@ function SettingsSection() {
   )
 }
 
-// ─── Main Dashboard ─────────────────────────────────────────────
-
-function DashboardSection() {
+function DashboardSection({ onNavigate }: { onNavigate?: (section: SectionId) => void }) {
   return (
     <div className={`flex flex-col gap-5 ${SECTION_MIN_H}`}>
       <NetWorthCard />
-      <DashboardAccountsSection />
+      <DashboardAccountsSection onNavigate={onNavigate} />
     </div>
   )
 }
 
-const sectionComponents: Record<SectionId, React.FC> = {
+const sectionComponents: Record<SectionId, React.FC<{ onNavigate?: (section: SectionId) => void }>> = {
   dashboard: DashboardSection,
   transactions: TransactionsSection,
   accounts: AccountsSection,
@@ -1495,7 +1784,7 @@ export default function FinancialAnalyticsDashboard({ initialSection = "dashboar
             exit={{ opacity: 0, y: -12 }}
             transition={{ duration: 0.35, ease: EASE_OUT }}
           >
-            <ActiveComponent />
+            <ActiveComponent onNavigate={handleNavigation} />
           </motion.div>
         </AnimatePresence>
       </main>

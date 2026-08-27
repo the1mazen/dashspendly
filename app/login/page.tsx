@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Eye, EyeOff, Plus, Trash2, ArrowRight } from "lucide-react"
 import { saveLocalUserProfile } from "@/lib/user-profile"
+import { saveLocalAccounts, Account } from "@/lib/finance-data"
 import { supabase, isSupabaseConfigured } from "@/lib/supabase"
 
 export default function AuthPage() {
@@ -15,7 +16,9 @@ export default function AuthPage() {
   const [mounted, setMounted] = useState(false)
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [setupStep, setSetupStep] = useState<"auth" | "account" | "dashboard">("auth")
-  const [accountCount, setAccountCount] = useState(1)
+  const [accountsList, setAccountsList] = useState<Array<{ name: string; type: string; balance: string }>>([
+    { name: "", type: "bank", balance: "" },
+  ])
 
   const [firstName, setFirstName] = useState("")
   const [lastName, setLastName] = useState("")
@@ -40,71 +43,157 @@ export default function AuthPage() {
     }, 150)
   }
 
-  if (setupStep === "account") {
-    const accountFields = (index: number) => (
-      <div key={index} className="space-y-3 rounded-2xl border border-white/5 p-3 transition-all duration-300">
-        <div className="flex items-center justify-between">
-          <span className="text-white/50 text-xs font-medium">Account {index + 1}</span>
-          {accountCount > 1 && (
-            <button
-              type="button"
-              aria-label={`Remove account ${index + 1}`}
-              onClick={() => setAccountCount((count) => count - 1)}
-              className="text-white/30 hover:text-red-300 transition-colors duration-300"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-        <input
-          type="text"
-          placeholder="Account name"
-          required
-          className="w-full bg-[#1a1a26] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#5b4dc7]/50 focus:ring-1 focus:ring-[#5b4dc7]/20 transition-all duration-300"
-        />
-        <select
-          defaultValue=""
-          required
-          aria-label={`Account ${index + 1} type`}
-          className="w-full bg-[#1a1a26] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#5b4dc7]/50 focus:ring-1 focus:ring-[#5b4dc7]/20 transition-all duration-300 appearance-none"
-        >
-          <option value="" disabled>Account type</option>
-          <option value="cash">Cash</option>
-          <option value="bank">Bank</option>
-          <option value="card">Card</option>
-          <option value="savings">Savings</option>
-        </select>
-        <input
-          type="number"
-          placeholder="Starting balance"
-          required
-          step="0.01"
-          className="w-full bg-[#1a1a26] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#5b4dc7]/50 focus:ring-1 focus:ring-[#5b4dc7]/20 transition-all duration-300"
-        />
-      </div>
-    )
+  const handleAccountChange = (index: number, field: "name" | "type" | "balance", value: string) => {
+    setAccountsList((prev) => {
+      const updated = [...prev]
+      updated[index] = { ...updated[index], [field]: value }
+      return updated
+    })
+  }
 
+  const handleAddAccountField = () => {
+    setAccountsList((prev) => [...prev, { name: "", type: "bank", balance: "" }])
+  }
+
+  const handleRemoveAccountField = (index: number) => {
+    setAccountsList((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const handleSaveAccounts = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setLoading(true)
+
+    const validAccounts = accountsList.filter((a) => a.name.trim() !== "")
+    const savedAccounts: Account[] = []
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user && validAccounts.length > 0) {
+          for (const acc of validAccounts) {
+            const startCents = Math.round((parseFloat(acc.balance) || 0) * 100)
+            const { data, error } = await supabase
+              .from("accounts")
+              .insert({
+                user_id: user.id,
+                name: acc.name.trim(),
+                type: acc.type || "bank",
+                starting_balance_cents: startCents,
+                currency: currency || "USD",
+              })
+              .select()
+              .single()
+
+            if (!error && data) {
+              savedAccounts.push({
+                id: String(data.id),
+                user_id: data.user_id,
+                name: data.name,
+                type: data.type,
+                starting_balance_cents: data.starting_balance_cents,
+                balance: (data.starting_balance_cents || 0) / 100,
+                currency: data.currency,
+                created_at: data.created_at,
+              })
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Error saving accounts to Supabase:", err)
+      }
+    }
+
+    if (savedAccounts.length === 0 && validAccounts.length > 0) {
+      validAccounts.forEach((acc, i) => {
+        const bal = parseFloat(acc.balance) || 0
+        savedAccounts.push({
+          id: `acc_local_${Date.now()}_${i}`,
+          name: acc.name.trim(),
+          type: acc.type || "bank",
+          starting_balance_cents: Math.round(bal * 100),
+          balance: bal,
+          currency: currency || "USD",
+          created_at: new Date().toISOString(),
+        })
+      })
+    }
+
+    if (savedAccounts.length > 0) {
+      saveLocalAccounts(savedAccounts)
+    }
+
+    setLoading(false)
+    setSetupStep("dashboard")
+  }
+
+  if (setupStep === "account") {
     return (
       <div className="min-h-screen bg-[#00042e] flex items-center justify-center p-4">
         <div className="w-full max-w-md bg-[#12121a] rounded-3xl overflow-hidden shadow-2xl shadow-black/50">
           <div className="p-6 lg:p-8">
             <h1 className="font-serif text-white text-2xl lg:text-3xl font-bold mb-1 tracking-tight">Add your first account</h1>
             <p className="text-white/40 text-sm mb-6">Set up one or more accounts to start tracking your finances.</p>
-            <form className="space-y-3" onSubmit={(event) => { event.preventDefault(); setSetupStep("dashboard") }}>
-              {Array.from({ length: accountCount }, (_, index) => accountFields(index))}
+            <form className="space-y-4" onSubmit={handleSaveAccounts}>
+              {accountsList.map((acc, index) => (
+                <div key={index} className="space-y-3 rounded-2xl border border-white/5 p-3 transition-all duration-300">
+                  <div className="flex items-center justify-between">
+                    <span className="text-white/50 text-xs font-medium">Account {index + 1}</span>
+                    {accountsList.length > 1 && (
+                      <button
+                        type="button"
+                        aria-label={`Remove account ${index + 1}`}
+                        onClick={() => handleRemoveAccountField(index)}
+                        className="text-white/30 hover:text-red-300 transition-colors duration-300 cursor-pointer"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Account name (e.g. QNB, Cash, Card)"
+                    required
+                    value={acc.name}
+                    onChange={(e) => handleAccountChange(index, "name", e.target.value)}
+                    className="w-full bg-[#1a1a26] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#5b4dc7]/50 focus:ring-1 focus:ring-[#5b4dc7]/20 transition-all duration-300 font-sans"
+                  />
+                  <select
+                    value={acc.type}
+                    onChange={(e) => handleAccountChange(index, "type", e.target.value)}
+                    required
+                    aria-label={`Account ${index + 1} type`}
+                    className="w-full bg-[#1a1a26] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-[#5b4dc7]/50 focus:ring-1 focus:ring-[#5b4dc7]/20 transition-all duration-300 appearance-none cursor-pointer font-sans"
+                  >
+                    <option value="bank">Bank / Checking</option>
+                    <option value="cash">Cash wallet</option>
+                    <option value="card">Credit card</option>
+                    <option value="savings">Savings account</option>
+                  </select>
+                  <input
+                    type="number"
+                    placeholder="Starting balance (e.g. 1000)"
+                    required
+                    step="0.01"
+                    value={acc.balance}
+                    onChange={(e) => handleAccountChange(index, "balance", e.target.value)}
+                    className="w-full bg-[#1a1a26] border border-white/5 rounded-xl px-4 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-[#5b4dc7]/50 focus:ring-1 focus:ring-[#5b4dc7]/20 transition-all duration-300 font-mono"
+                  />
+                </div>
+              ))}
               <button
                 type="button"
-                onClick={() => setAccountCount((count) => count + 1)}
-                className="w-full flex items-center justify-center gap-2 border border-dashed border-[#5b4dc7]/50 text-[#5b4dc7] hover:bg-[#5b4dc7]/10 py-2.5 rounded-xl transition-all duration-300 text-sm font-medium"
+                onClick={handleAddAccountField}
+                className="w-full flex items-center justify-center gap-2 border border-dashed border-[#5b4dc7]/50 text-[#5b4dc7] hover:bg-[#5b4dc7]/10 py-2.5 rounded-xl transition-all duration-300 text-sm font-medium cursor-pointer font-sans"
               >
                 <Plus className="h-4 w-4" />
                 Add another account
               </button>
               <button
                 type="submit"
-                className="w-full bg-[#5b4dc7] hover:bg-[#5b4dc7]/90 text-white font-medium py-2.5 rounded-xl transition-all duration-300 text-sm shadow-lg shadow-[#5b4dc7]/25 hover:shadow-[#5b4dc7]/40 hover:-translate-y-0.5 active:translate-y-0 active:shadow-[#5b4dc7]/20"
+                disabled={loading}
+                className="w-full bg-[#5b4dc7] hover:bg-[#5b4dc7]/90 text-white font-medium py-2.5 rounded-xl transition-all duration-300 text-sm shadow-lg shadow-[#5b4dc7]/25 hover:shadow-[#5b4dc7]/40 hover:-translate-y-0.5 active:translate-y-0 active:shadow-[#5b4dc7]/20 cursor-pointer font-sans"
               >
-                Continue
+                {loading ? "Saving accounts..." : "Continue"}
               </button>
             </form>
           </div>
