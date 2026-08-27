@@ -7,7 +7,7 @@ import {
   ChevronRight, Bell, Search, Settings, Wallet, CircleDot, Eye, FileText, UserCog,
   X, Check, AlertTriangle, Info, DollarSign, Clock, Star, Plus, Download, Filter,
   Calendar, Mail, Lock, Palette, Monitor, BellRing, CreditCard, Languages, HelpCircle,
-  LogOut, ChevronDown, Activity, Zap,
+  LogOut, ChevronDown, Activity, Zap, Landmark,
 } from "lucide-react"
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, LineChart, Line,
@@ -183,25 +183,34 @@ function GlowOrb({ className }: { className?: string }) {
 }
 
 function KpiCard({
-  label, value, change, prefix = "", suffix = "", delay = 0, icon: Icon,
+  label, value, change, prefix = "", suffix = "", delay = 0, icon: Icon, glowColor = "teal", accounts,
 }: {
-  label: string; value: string; change?: number; prefix?: string; suffix?: string; delay?: number; icon?: React.ElementType
+  label: string; value: string; change?: number; prefix?: string; suffix?: string; delay?: number; icon?: React.ElementType; glowColor?: "teal" | "blue" | "green" | "red"; accounts?: string[]
 }) {
   const isPositive = (change ?? 0) >= 0
+  const glowMap = {
+    teal: "glow-teal-sm",
+    blue: "glow-blue-sm",
+    green: "glow-green-sm",
+    red: "glow-red-sm",
+  }
   return (
     <motion.div
       initial={{ opacity: 0, y: 16, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.5, delay, ease: EASE_OUT }}
-      className="relative overflow-hidden rounded-2xl surface-card p-4 lg:p-5 group hover:scale-[1.01] transition-transform duration-300"
+      className={`relative overflow-hidden rounded-2xl surface-card p-4 lg:p-5 group hover:scale-[1.01] transition-transform duration-300 ${glowMap[glowColor]}`}
       style={{ boxShadow: CARD_SHADOW }}
     >
       <div className="absolute top-0 right-0 w-24 h-24 opacity-[0.03] pointer-events-none">
         {Icon && <Icon className="size-24 -translate-y-4 translate-x-4" />}
       </div>
-      <p className="text-[11px] font-semibold tracking-[0.08em] uppercase text-muted-foreground mb-2.5 font-sans">
-        {label}
-      </p>
+      <div className="flex items-center justify-between mb-2.5">
+        <p className="text-[11px] font-semibold tracking-[0.08em] uppercase text-muted-foreground font-sans">
+          {label}
+        </p>
+
+      </div>
       <p className="text-2xl lg:text-3xl font-bold text-foreground font-mono tracking-tighter leading-none">
         {prefix}{value}{suffix}
       </p>
@@ -217,6 +226,55 @@ function KpiCard({
         </div>
       )}
     </motion.div>
+  )
+}
+
+function AccountSelector({ accounts }: { accounts: string[] }) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [selectedAccount, setSelectedAccount] = useState(accounts[0] || "")
+  
+  return (
+  <div className="flex justify-center">
+  <div className="relative">
+  <button
+  onClick={() => setIsOpen(!isOpen)}
+  aria-expanded={isOpen}
+  className="text-xs font-semibold text-primary hover:text-primary/80 transition-colors flex items-center gap-1.5 px-3 py-2 rounded-lg border border-primary/20 bg-primary/5 hover:bg-primary/10 font-sans"
+  >
+  {selectedAccount}
+  <ChevronDown className={`size-3.5 transition-transform duration-300 ${isOpen ? "rotate-180" : ""}`} />
+  </button>
+  <AnimatePresence>
+  {isOpen && (
+  <motion.div
+  initial={{ opacity: 0, y: -8, height: 0 }}
+  animate={{ opacity: 1, y: 0, height: "auto" }}
+  exit={{ opacity: 0, y: -8, height: 0 }}
+  transition={{ duration: 0.2 }}
+  className="absolute top-full left-1/2 -translate-x-1/2 mt-1 bg-accent rounded-lg border border-border/30 overflow-hidden z-50 min-w-32"
+  >
+  {accounts.map((account, i) => (
+  <motion.button
+  key={account}
+  initial={{ opacity: 0, x: -10 }}
+  animate={{ opacity: 1, x: 0 }}
+  transition={{ delay: i * 0.05 }}
+  onClick={() => {
+  setSelectedAccount(account)
+  setIsOpen(false)
+  }}
+  className={`w-full text-left px-4 py-2.5 text-xs font-medium transition-colors ${
+  selectedAccount === account ? "text-primary bg-primary/10" : "text-foreground hover:text-primary hover:bg-accent/50"
+  } font-sans`}
+  >
+  {account}
+  </motion.button>
+  ))}
+  </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+    </div>
   )
 }
 
@@ -361,40 +419,179 @@ function NotificationPanel({ isOpen, onClose, items, onMarkRead, onMarkAllRead }
   )
 }
 
-// ─── Section: Personal finance dashboard ────────────────────────
+// ─── Section: Accounts ──────────────────────────────────────────
 
-function DashboardSection() {
+const accountSummaries = [
+  { name: "QNB", type: "Checking account", balance: "32,450.00", icon: Landmark, tone: "blue" as const },
+  { name: "Cash", type: "Cash wallet", balance: "8,275.00", icon: Wallet, tone: "green" as const },
+  { name: "Card", type: "Credit card", balance: "21,725.00", icon: CreditCard, tone: "red" as const },
+]
+
+function NetWorthCard() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16, scale: 0.97 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.5, delay: 0, ease: EASE_OUT }}
+      className="relative overflow-hidden rounded-2xl surface-card p-5 lg:p-6 glow-blue-sm hover:scale-[1.01] transition-transform duration-300"
+      style={{ boxShadow: CARD_SHADOW }}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[11px] font-semibold tracking-[0.08em] uppercase text-muted-foreground font-sans">Net worth</p>
+          <p className="text-3xl font-bold text-foreground font-mono tracking-tighter mt-2">$62,450.00</p>
+          <div className="flex items-center gap-2 mt-2">
+            <span className="text-[10px] font-semibold text-fin-gain bg-fin-gain/10 rounded-md px-2 py-1 font-mono">↗ +6.03%</span>
+            <span className="text-[10px] text-muted-foreground font-sans">vs last month</span>
+          </div>
+        </div>
+        <div className="size-10 rounded-xl bg-accent/60 flex items-center justify-center">
+          <Landmark className="size-5 text-primary" />
+        </div>
+      </div>
+    </motion.div>
+  )
+}
+
+function DashboardAccountsSection() {
   return (
     <div className={`flex flex-col gap-5 ${SECTION_MIN_H}`}>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 lg:gap-4">
-        <KpiCard label="Total Balance" value="62,450" prefix="$" change={6.03} delay={0} icon={DollarSign} />
-        <KpiCard label="Total Income" value="6,450" prefix="+$" change={8.2} delay={0.06} icon={TrendingUp} />
-        <KpiCard label="Total Expenses" value="2,155" prefix="-$" change={3.4} delay={0.12} icon={ArrowDownRight} />
+        {accountSummaries.map((account, i) => {
+          const Icon = account.icon
+          return (
+            <motion.div
+              key={account.name}
+              initial={{ opacity: 0, y: 16, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0.5, delay: i * 0.06, ease: EASE_OUT }}
+              className={`relative overflow-hidden rounded-2xl surface-card p-4 lg:p-5 glow-${account.tone}-sm group hover:scale-[1.01] transition-transform duration-300`}
+              style={{ boxShadow: CARD_SHADOW }}
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="size-10 rounded-xl bg-accent/60 flex items-center justify-center">
+                    <Icon className="size-4 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-foreground font-display">{account.name}</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5 font-sans">{account.type}</p>
+                  </div>
+                </div>
+                <button className="text-xs font-semibold text-primary hover:underline font-sans">Manage</button>
+              </div>
+              <div className="mt-6">
+                <p className="text-[11px] font-semibold tracking-[0.08em] uppercase text-muted-foreground font-sans">Available balance</p>
+                <p className="text-2xl font-bold text-foreground font-mono tracking-tighter mt-1">${account.balance}</p>
+              </div>
+            </motion.div>
+          )
+        })}
       </div>
 
-      <SectionPanel className="relative overflow-hidden">
-        <GlowOrb className="w-64 h-64 -top-32 -right-32 bg-primary/10" />
-        <SectionHeader title="Recent Transactions" subtitle="Your latest income and expenses">
-          <button className="text-xs font-semibold text-primary hover:underline font-sans">View all</button>
-        </SectionHeader>
-        <div className="flex flex-col">
-          <div className="hidden sm:grid grid-cols-[1.5fr_1fr_1fr_auto] gap-4 px-3 pb-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">
-            <span>Description</span><span>Category</span><span>Date</span><span className="text-right">Amount</span>
+      <SectionPanel className="!p-0 overflow-hidden">
+        <div className="p-5 lg:p-6 border-b border-border/50 flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-bold text-foreground tracking-tight font-display">All recent transactions</h3>
+            <p className="text-[11px] text-muted-foreground mt-0.5 font-sans">Your latest income and expenses</p>
           </div>
-          {recentTransactions.map((item, i) => (
-            <motion.div key={item.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }} className="grid grid-cols-[1fr_auto] sm:grid-cols-[1.5fr_1fr_1fr_auto] gap-x-4 gap-y-1 items-center px-3 py-3.5 border-t border-border/30 hover:bg-accent/20 transition-colors">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className={`size-8 rounded-lg flex items-center justify-center shrink-0 ${item.type === "income" ? "bg-fin-gain/12 text-fin-gain" : "bg-fin-loss/12 text-fin-loss"}`}>
-                  {item.type === "income" ? <ArrowDownRight className="size-4 rotate-180" /> : <ArrowUpRight className="size-4 rotate-90" />}
-                </div>
-                <span className="text-sm font-semibold text-foreground truncate font-sans">{item.description}</span>
-              </div>
-              <span className="text-xs text-muted-foreground font-sans">{item.category}</span>
-              <span className="text-xs text-muted-foreground font-mono">{item.date}</span>
-              <span className={`text-sm font-bold font-mono text-right ${item.type === "income" ? "text-fin-gain" : "text-fin-loss"}`}>{item.amount >= 0 ? "+" : "−"}${Math.abs(item.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
-            </motion.div>
-          ))}
+          <button className="text-xs font-semibold text-primary hover:underline font-sans">View all</button>
         </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border/50">
+                <th className="text-left p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans">Description</th>
+                <th className="text-left p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans">Category</th>
+                <th className="text-left p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans">Date</th>
+                <th className="text-right p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recentTransactions.map((transaction, i) => (
+                <motion.tr
+                  key={i}
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.35, delay: 0.15 + i * 0.04 }}
+                  className="border-b border-border/30 hover:bg-accent/20 transition-all duration-200"
+                >
+                  <td className="p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="size-8 rounded-lg bg-accent/40 flex items-center justify-center shrink-0">
+                        <div className={`size-2 rounded-full ${transaction.type === 'income' ? 'bg-fin-gain' : 'bg-fin-loss'}`} />
+                      </div>
+                      <span className="text-[13px] font-semibold text-foreground font-sans">{transaction.description}</span>
+                    </div>
+                  </td>
+                  <td className="p-4 text-xs text-muted-foreground font-sans">{transaction.category}</td>
+                  <td className="p-4 text-xs font-mono text-muted-foreground">{transaction.date}</td>
+                  <td className={`p-4 text-right font-mono font-bold ${transaction.type === 'income' ? 'text-fin-gain' : 'text-fin-loss'}`}>
+                    {transaction.type === 'income' ? '+' : '-'}${Math.abs(transaction.amount).toFixed(2)}
+                  </td>
+                </motion.tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </SectionPanel>
+    </div>
+  )
+}
+
+const accountDetails = {
+  QNB: { type: "Checking account", currency: "USD", balance: 32450, icon: Landmark, tone: "blue" },
+  Cash: { type: "Cash wallet", currency: "USD", balance: 8275, icon: Wallet, tone: "green" },
+  Card: { type: "Credit card", currency: "USD", balance: 21725, icon: CreditCard, tone: "red" },
+} as const
+
+const accountTransactions = [
+  { account: "QNB", description: "Salary deposit", category: "Income", date: "Feb 20, 2026", amount: 5200, type: "income" as const },
+  { account: "QNB", description: "Monthly rent", category: "Housing", date: "Feb 17, 2026", amount: -1850, type: "expense" as const },
+  { account: "Cash", description: "Freelance project", category: "Income", date: "Feb 18, 2026", amount: 1250, type: "income" as const },
+  { account: "Cash", description: "Metro transit pass", category: "Transport", date: "Feb 16, 2026", amount: -95, type: "expense" as const },
+  { account: "Card", description: "Whole Foods Market", category: "Groceries", date: "Feb 19, 2026", amount: -86.42, type: "expense" as const },
+  { account: "Card", description: "Electric bill", category: "Utilities", date: "Feb 15, 2026", amount: -124.18, type: "expense" as const },
+]
+
+const accountTrend = [
+  { day: "1", balance: 29600 }, { day: "6", balance: 30120 }, { day: "11", balance: 30950 },
+  { day: "16", balance: 31680 }, { day: "21", balance: 32100 }, { day: "26", balance: 32450 },
+  { day: "30", balance: 32450 },
+]
+
+function AccountsSection() {
+  const [selectedAccount, setSelectedAccount] = useState<keyof typeof accountDetails>("QNB")
+  const [query, setQuery] = useState("")
+  const [minAmount, setMinAmount] = useState("")
+  const [maxAmount, setMaxAmount] = useState("")
+  const account = accountDetails[selectedAccount]
+  const Icon = account.icon
+  const filteredTransactions = accountTransactions.filter((transaction) => {
+    const matchesQuery = transaction.description.toLowerCase().includes(query.toLowerCase())
+    const matchesMin = !minAmount || Math.abs(transaction.amount) >= Number(minAmount)
+    const matchesMax = !maxAmount || Math.abs(transaction.amount) <= Number(maxAmount)
+    return transaction.account === selectedAccount && matchesQuery && matchesMin && matchesMax
+  })
+
+  return (
+    <div className={`flex flex-col gap-5 ${SECTION_MIN_H}`}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div><h2 className="text-lg font-bold text-foreground font-display tracking-tight">Accounts</h2><p className="text-xs text-muted-foreground font-sans">Manage balances and account activity</p></div>
+        <div className="flex items-center gap-1 rounded-xl border border-border/40 bg-card/60 p-1">
+          {(Object.keys(accountDetails) as Array<keyof typeof accountDetails>).map((name) => <button key={name} onClick={() => setSelectedAccount(name)} className={`rounded-lg px-4 py-2 text-xs font-semibold font-sans transition-colors ${selectedAccount === name ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>{name}</button>)}
+        </div>
+      </div>
+      <motion.div initial={{ opacity: 0, y: 16, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.5, ease: EASE_OUT }} className={`relative overflow-hidden rounded-2xl surface-card p-5 lg:p-6 glow-${account.tone}-sm group hover:scale-[1.01] transition-transform duration-300`} style={{ boxShadow: CARD_SHADOW }}>
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex items-start gap-3"><div className="size-10 rounded-xl bg-accent/60 flex items-center justify-center"><Icon className="size-4 text-primary" /></div><div><p className="text-lg font-bold text-foreground font-display">{selectedAccount}</p><p className="text-xs text-muted-foreground font-sans">{account.type} · {account.currency}</p><p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Available balance</p><p className="mt-1 text-3xl font-bold tracking-tighter text-foreground font-mono">${account.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p></div></div>
+          <div className="h-32 w-full max-w-md"><ResponsiveContainer width="100%" height="100%"><LineChart data={accountTrend}><Line type="monotone" dataKey="balance" stroke={C.teal} strokeWidth={2.5} dot={false} animationDuration={700} /><XAxis dataKey="day" hide /><YAxis hide domain={["dataMin - 1000", "dataMax + 1000"]} /></LineChart></ResponsiveContainer></div>
+          <div className="flex flex-row gap-3 lg:flex-col lg:items-end"><span className="text-xs font-semibold text-primary">Manage</span><button className="text-xs font-semibold text-muted-foreground hover:text-foreground font-sans">Edit</button><button className="text-xs font-semibold text-fin-loss/80 hover:text-fin-loss font-sans">Delete / Close</button></div>
+        </div>
+      </motion.div>
+      <SectionPanel className="!p-0 overflow-hidden">
+        <div className="border-b border-border/50 p-5 lg:p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-sm font-bold text-foreground font-display">Recent transactions</h3><p className="mt-0.5 text-[11px] text-muted-foreground font-sans">Activity for {selectedAccount}</p></div><button className="text-xs font-semibold text-primary hover:underline font-sans">View all</button></div><div className="mt-4 flex flex-wrap gap-2"><div className="flex min-w-48 flex-1 items-center gap-2 rounded-lg border border-border/40 bg-muted/20 px-3 py-2"><Search className="size-3.5 text-muted-foreground" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search description" className="w-full bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground font-sans" /></div><input value={minAmount} onChange={(event) => setMinAmount(event.target.value)} type="number" min="0" placeholder="Min amount" className="w-28 rounded-lg border border-border/40 bg-muted/20 px-3 py-2 text-xs text-foreground outline-none placeholder:text-muted-foreground font-mono" /><input value={maxAmount} onChange={(event) => setMaxAmount(event.target.value)} type="number" min="0" placeholder="Max amount" className="w-28 rounded-lg border border-border/40 bg-muted/20 px-3 py-2 text-xs text-foreground outline-none placeholder:text-muted-foreground font-mono" /></div></div>
+        <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b border-border/50"><th className="p-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Description</th><th className="p-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Category</th><th className="p-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Date</th><th className="p-4 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Amount</th></tr></thead><tbody>{filteredTransactions.map((transaction, i) => <motion.tr key={`${selectedAccount}-${transaction.description}`} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.35, delay: i * 0.04 }} className="border-b border-border/30 hover:bg-accent/20 transition-all duration-200"><td className="p-4 text-[13px] font-semibold text-foreground font-sans">{transaction.description}</td><td className="p-4 text-xs text-muted-foreground font-sans">{transaction.category}</td><td className="p-4 text-xs text-muted-foreground font-mono">{transaction.date}</td><td className={`p-4 text-right font-bold font-mono ${transaction.type === "income" ? "text-fin-gain" : "text-fin-loss"}`}>{transaction.amount >= 0 ? "+" : "-"}${Math.abs(transaction.amount).toFixed(2)}</td></motion.tr>)}</tbody></table></div>
       </SectionPanel>
     </div>
   )
@@ -634,9 +831,9 @@ function MarketSection() {
         {marketIndices.map((idx, i) => (
           <motion.div
             key={idx.name}
-            initial={{ opacity: 0, y: 16, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.5, delay: i * 0.06, ease: EASE_OUT }}
+initial={{ scale: 0.97 }}
+              animate={{ scale: [0.97, 0.97, 1] }}
+              transition={{ duration: 0.65, delay: i * 0.06, times: [0, 0.77, 1], ease: EASE_OUT }}
             className="rounded-2xl surface-card p-4 lg:p-5 hover:scale-[1.01] transition-transform duration-300"
             style={{ boxShadow: CARD_SHADOW }}
           >
@@ -1064,10 +1261,19 @@ function SettingsSection() {
 
 // ─── Main Dashboard ─────────────────────────────────────────────
 
+function DashboardSection() {
+  return (
+    <div className={`flex flex-col gap-5 ${SECTION_MIN_H}`}>
+      <NetWorthCard />
+      <DashboardAccountsSection />
+    </div>
+  )
+}
+
 const sectionComponents: Record<SectionId, React.FC> = {
   dashboard: DashboardSection,
   transactions: TransactionsSection,
-  accounts: TransactionsSection,
+  accounts: AccountsSection,
   categories: TransactionsSection,
   settings: SettingsSection,
 }
@@ -1099,74 +1305,54 @@ export default function FinancialAnalyticsDashboard() {
         <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] rounded-full opacity-[0.02] blur-[100px] animate-float" style={{ background: C.azure, animationDelay: "3s" }} />
       </div>
 
-      {/* Header */}
-      <header className="border-b border-border/60 bg-card/60 backdrop-blur-xl sticky top-0 z-30 relative">
-        <div className="w-full px-5 lg:px-10 xl:px-14">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2.5">
-                <div className="size-8 rounded-xl bg-primary/12 flex items-center justify-center glow-teal-sm">
-                  <BarChart3 className="size-4 text-primary" />
-                </div>
-                <span className="text-base font-extrabold tracking-tight text-foreground font-display">Spendly</span>
-              </div>
-            </div>
+      {/* Floating navigation */}
+      <header className="sticky top-0 z-30 px-2 py-3 sm:px-4 sm:py-4">
+        <div className="mx-auto w-full rounded-2xl border-2 border-border/40 bg-card/60 px-3 py-3 backdrop-blur-xl sm:px-6 sm:py-4">
+          <div className="flex min-w-0 items-center justify-between gap-3">
+            <button onClick={() => handleNavigation("dashboard")} className="cursor-pointer shrink-0" aria-label="Go to Dashboard">
+              <span className="text-lg font-semibold tracking-tight text-foreground font-sans sm:text-xl">Spendly</span>
+            </button>
+
+            <nav aria-label="Primary navigation" className="hidden min-w-0 items-center gap-2 overflow-x-auto md:flex lg:gap-4 scrollbar-none">
+              {NAV_ITEMS.map((item) => {
+                const isActive = item.id === activeSection
+                const Icon = item.icon
+                return (
+                  <button key={item.id} onClick={() => handleNavigation(item.id)}
+                    className={`relative flex items-center gap-2 rounded-xl px-3 py-2 text-[13px] font-semibold whitespace-nowrap transition-all duration-250 font-sans ${
+                      isActive ? "text-foreground bg-accent/40" : "text-muted-foreground hover:text-foreground hover:bg-accent/30"
+                    }`}
+                    aria-current={isActive ? "page" : undefined}
+                  >
+                    <Icon className="size-4" />
+                    <span>{item.label}</span>
+                    {isActive && <motion.div layoutId="nav-indicator" className="absolute bottom-0 left-3 right-3 h-0.5 rounded-full bg-primary" style={{ boxShadow: `0 0 8px 2px rgb(91 77 199 / 0.3)` }} transition={SPRING} />}
+                  </button>
+                )
+              })}
+            </nav>
+
             <div className="flex items-center gap-1.5">
-              <button className="p-2.5 rounded-xl hover:bg-accent/50 transition-all duration-200" aria-label="Search">
+              <button className="rounded-xl p-2.5 transition-all duration-200 hover:bg-accent/50" aria-label="Search">
                 <Search className="size-4 text-muted-foreground" />
               </button>
               <div className="relative">
-                <button
-                  onClick={() => setNotificationsOpen((prev) => !prev)}
-                  className="p-2.5 rounded-xl hover:bg-accent/50 transition-all duration-200 relative"
-                  aria-label="Notifications" aria-expanded={notificationsOpen}
-                >
+                <button onClick={() => setNotificationsOpen((prev) => !prev)} className="relative rounded-xl p-2.5 transition-all duration-200 hover:bg-accent/50" aria-label="Notifications" aria-expanded={notificationsOpen}>
                   <Bell className="size-4 text-muted-foreground" />
-                  {unreadCount > 0 && (
-                    <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={SPRING}
-                      className="absolute -top-0.5 -right-0.5 size-5 rounded-full bg-primary text-primary-foreground text-[9px] font-bold flex items-center justify-center font-mono">
-                      {unreadCount}
-                    </motion.span>
-                  )}
+                  {unreadCount > 0 && <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={SPRING} className="absolute -right-0.5 -top-0.5 flex size-5 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground font-mono">{unreadCount}</motion.span>}
                 </button>
                 <NotificationPanel isOpen={notificationsOpen} onClose={() => setNotificationsOpen(false)} items={notifItems} onMarkRead={handleMarkRead} onMarkAllRead={handleMarkAllRead} />
               </div>
-              <button className="p-2.5 rounded-xl hover:bg-accent/50 transition-all duration-200" aria-label="Settings" onClick={() => handleNavigation("settings")}>
+              <button className="rounded-xl p-2.5 transition-all duration-200 hover:bg-accent/50" aria-label="Settings" onClick={() => handleNavigation("settings")}>
                 <Settings className="size-4 text-muted-foreground" />
               </button>
-              <div className="size-9 rounded-xl bg-primary/12 flex items-center justify-center ml-1.5 glow-teal-sm cursor-pointer hover:bg-primary/18 transition-colors">
+              <div className="ml-1.5 flex size-9 cursor-pointer items-center justify-center rounded-xl bg-primary/12 glow-teal-sm transition-colors hover:bg-primary/18">
                 <span className="text-xs font-bold text-primary font-display">JD</span>
               </div>
             </div>
           </div>
         </div>
       </header>
-
-      {/* Navigation */}
-      <nav className="border-b border-border/40 bg-card/40 backdrop-blur-xl sticky top-16 z-20 relative">
-        <div className="w-full px-5 lg:px-10 xl:px-14">
-          <div className="flex items-center gap-0.5 overflow-x-auto py-1.5 -mb-px scrollbar-none">
-            {NAV_ITEMS.map((item) => {
-              const isActive = item.id === activeSection
-              const Icon = item.icon
-              return (
-                <button key={item.id} onClick={() => handleNavigation(item.id)}
-                  className={`relative flex items-center gap-2 px-4 py-2.5 text-[13px] font-semibold rounded-xl transition-all duration-250 whitespace-nowrap shrink-0 font-sans ${
-                    isActive ? "text-foreground" : "text-muted-foreground hover:text-foreground hover:bg-accent/30"
-                  }`}
-                  aria-current={isActive ? "page" : undefined}
-                >
-                  <Icon className="size-4" />
-                  <span>{item.label}</span>
-                  {isActive && (
-                    <motion.div layoutId="nav-indicator" className="absolute bottom-0 left-4 right-4 h-0.5 rounded-full bg-primary" style={{ boxShadow: `0 0 8px 2px rgb(91 77 199 / 0.3)` }} transition={SPRING} />
-                  )}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-      </nav>
 
       {/* Content */}
       <main className="w-full px-5 lg:px-10 xl:px-14 py-6 lg:py-8 flex-1 relative z-10">
