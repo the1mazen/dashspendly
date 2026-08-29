@@ -3771,6 +3771,155 @@ function AccountsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
   )
 }
 
+// ─── Modal: Edit Category ──────────────────────────────────────────
+
+function EditCategoryModal({
+  category,
+  isOpen,
+  onClose,
+}: {
+  category: Category | null
+  isOpen: boolean
+  onClose: () => void
+}) {
+  const { updateCategory } = useFinanceData()
+  const { profile } = useUserProfile()
+  const { tokens } = useDashboardTheme()
+  const currencySymbol = getCurrencySymbol(profile.currency)
+
+  const [name, setName] = useState(category?.name || "")
+  const [type, setType] = useState<"expense" | "income">(category?.type || "expense")
+  const [budget, setBudget] = useState(category?.budget !== undefined && category?.budget !== null && category?.budget > 0 ? String(category.budget) : "")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (category) {
+      setName(category.name)
+      setType(category.type)
+      setBudget(category.budget !== undefined && category.budget !== null && category.budget > 0 ? String(category.budget) : "")
+      setErrorMsg(null)
+    }
+  }, [category])
+
+  if (!isOpen || !category) return null
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!name.trim()) return
+    setIsSubmitting(true)
+    setErrorMsg(null)
+    try {
+      const budgetNum = budget.trim() !== "" ? parseFloat(budget) : 0
+      await updateCategory(category.id, {
+        name: name.trim(),
+        type,
+        budget: isNaN(budgetNum) ? 0 : budgetNum,
+      })
+      onClose()
+    } catch (err: any) {
+      setErrorMsg(err?.message || "Failed to update category.")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="w-full max-w-md rounded-3xl p-6 border shadow-2xl backdrop-blur-2xl"
+        style={{
+          background: tokens.cardGradient,
+          borderColor: tokens.border,
+          boxShadow: tokens.cardShadow,
+        }}
+      >
+        <div className="flex items-center justify-between pb-4 border-b" style={{ borderColor: tokens.border }}>
+          <div>
+            <h3 className="text-base font-bold font-display text-white">Edit Category</h3>
+            <p className="text-xs text-white/70">Modify category details, type, and monthly budget</p>
+          </div>
+          <button onClick={onClose} className="text-white/60 hover:text-white cursor-pointer">✕</button>
+        </div>
+
+        {errorMsg && (
+          <div className="mt-3 p-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-200 text-xs">
+            {errorMsg}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+              Category Name
+            </label>
+            <input
+              type="text"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
+              style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+                Type
+              </label>
+              <select
+                value={type}
+                onChange={(e) => setType(e.target.value as "expense" | "income")}
+                className="w-full px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
+                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+              >
+                <option value="expense" className="bg-[#1E0C38] text-white">Expense Category</option>
+                <option value="income" className="bg-[#1E0C38] text-white">Income Category</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+                Monthly Budget ({currencySymbol.trim()})
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                value={budget}
+                onChange={(e) => setBudget(e.target.value)}
+                className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-mono text-white focus:outline-none"
+                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-4 border-t" style={{ borderColor: tokens.border }}>
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2.5 rounded-xl text-xs font-semibold text-white/80 hover:text-white cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-5 py-2.5 rounded-xl text-xs font-bold text-[#120824] shadow-lg cursor-pointer transition-opacity disabled:opacity-50"
+              style={{ background: tokens.dashboardActivePill }}
+            >
+              {isSubmitting ? "Saving..." : "Save Changes"}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </div>
+  )
+}
+
 function CategoriesSection({ onNavigate }: { onNavigate: (s: SectionId) => void }) {
   const { categories, createCategory, deleteCategory } = useFinanceData()
   const { profile } = useUserProfile()
@@ -3783,6 +3932,7 @@ function CategoriesSection({ onNavigate }: { onNavigate: (s: SectionId) => void 
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null)
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -3893,27 +4043,49 @@ function CategoriesSection({ onNavigate }: { onNavigate: (s: SectionId) => void 
               <div>
                 <div className="flex items-center gap-2">
                   <h4 className="text-sm font-bold text-white font-sans">{c.name}</h4>
-                  <span className="px-2 py-0.5 rounded text-[9.5px] font-mono uppercase bg-white/10 text-white/70">
+                  <span className={`px-2 py-0.5 rounded text-[9.5px] font-mono uppercase ${
+                    c.type === "income" ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "bg-white/10 text-white/70"
+                  }`}>
                     {c.type}
                   </span>
                 </div>
                 <p className="text-xs text-white/60 font-mono mt-1">
                   Spent: <span className="text-white font-semibold">{currencySymbol}{(c.total_spent || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
-                  {c.budget != null ? ` / Budget: ${currencySymbol}${c.budget.toLocaleString("en-US", { minimumFractionDigits: 2 })}` : ""}
+                  {c.budget != null && c.budget > 0 ? ` / Budget: ${currencySymbol}${c.budget.toLocaleString("en-US", { minimumFractionDigits: 2 })}` : ""}
                 </p>
               </div>
 
-              <button
-                onClick={() => deleteCategory(c.id)}
-                className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-500/20 text-white/40 hover:text-red-400 cursor-pointer transition-all"
-                title="Delete category"
-              >
-                <Trash2 className="size-4" />
-              </button>
+              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                <button
+                  onClick={() => setEditingCategory(c)}
+                  className="p-1.5 rounded-lg hover:bg-white/10 text-white/60 hover:text-white cursor-pointer transition-all"
+                  title="Edit category"
+                >
+                  <Edit3 className="size-4" />
+                </button>
+                <button
+                  onClick={() => {
+                    if (confirm(`Delete category "${c.name}"?`)) {
+                      deleteCategory(c.id)
+                    }
+                  }}
+                  className="p-1.5 rounded-lg hover:bg-red-500/20 text-white/40 hover:text-red-400 cursor-pointer transition-all"
+                  title="Delete category"
+                >
+                  <Trash2 className="size-4" />
+                </button>
+              </div>
             </motion.div>
           ))
         )}
       </div>
+
+      {/* Edit Category Modal */}
+      <EditCategoryModal
+        category={editingCategory}
+        isOpen={Boolean(editingCategory)}
+        onClose={() => setEditingCategory(null)}
+      />
     </div>
   )
 }

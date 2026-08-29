@@ -622,6 +622,72 @@ function useFinanceDataInternal() {
     return newCat
   }, [fetchData])
 
+  const updateCategory = useCallback(async (
+    categoryId: string,
+    updates: {
+      name?: string
+      type?: "income" | "expense"
+      budget?: number
+    }
+  ) => {
+    if (isSupabaseConfigured && supabase) {
+      const userId = await resolveCurrentUserId()
+      if (!userId) {
+        throw new Error("No active Supabase user session found.")
+      }
+
+      const updatePayload: any = {}
+      if (updates.name !== undefined) updatePayload.name = updates.name.trim()
+      if (updates.type !== undefined) updatePayload.type = updates.type
+      if (updates.budget !== undefined) {
+        updatePayload.budget_cents = updates.budget && updates.budget > 0 ? Math.round(updates.budget * 100) : 0
+      }
+
+      if (isValidUUID(categoryId)) {
+        let { error } = await supabase
+          .from("categories")
+          .update(updatePayload)
+          .eq("id", categoryId)
+          .eq("user_id", userId)
+
+        // Fallback if budget_cents column is missing
+        if (error && (error.message?.includes("budget_cents") || error.code === "PGRST204" || error.code === "42703")) {
+          const fallbackPayload = { ...updatePayload }
+          delete fallbackPayload.budget_cents
+          const retry = await supabase
+            .from("categories")
+            .update(fallbackPayload)
+            .eq("id", categoryId)
+            .eq("user_id", userId)
+          error = retry.error
+        }
+
+        if (error) {
+          console.error("Supabase category update error:", error)
+          throw new Error(`Failed to update category in Supabase: ${error.message}`)
+        }
+      }
+
+      await fetchData()
+    } else {
+      setCategories((prev) => {
+        const updated = prev.map((c) => {
+          if (c.id === categoryId) {
+            return {
+              ...c,
+              ...(updates.name !== undefined ? { name: updates.name.trim() } : {}),
+              ...(updates.type !== undefined ? { type: updates.type } : {}),
+              ...(updates.budget !== undefined ? { budget: updates.budget } : {}),
+            }
+          }
+          return c
+        })
+        saveLocal(STORAGE_CATEGORIES_KEY, updated)
+        return updated
+      })
+    }
+  }, [fetchData])
+
   const deleteCategory = useCallback(async (categoryId: string) => {
     if (isSupabaseConfigured && supabase) {
       try {
@@ -1788,6 +1854,7 @@ function useFinanceDataInternal() {
     createAccount,
     deleteAccount,
     createCategory,
+    updateCategory,
     deleteCategory,
     createTransaction,
     updateTransaction,
