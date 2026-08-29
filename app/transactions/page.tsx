@@ -1,5 +1,5 @@
-import { FinancialAnalyticsDashboard } from "@/components/cards"
+import { redirect } from "next/navigation"
 
 export default function TransactionsPage() {
-  return <FinancialAnalyticsDashboard initialSection="transactions" />
+  redirect("/bills")
 }

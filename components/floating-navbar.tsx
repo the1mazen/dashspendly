@@ -1,8 +1,23 @@
 "use client"
 import Link from "next/link"
+import { useState, useEffect } from "react"
+import { useTheme } from "next-themes"
+import { Sun, Moon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
 export function FloatingNavbar() {
+  const { theme, setTheme, resolvedTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  const isDarkMode = mounted ? (resolvedTheme !== "light" && theme !== "light") : true
+
+  const toggleTheme = () => {
+    setTheme(isDarkMode ? "light" : "dark")
+  }
+
   const scrollToSection = (sectionId: string) => {
     const section = document.getElementById(sectionId)
     if (section) {
@@ -49,14 +64,30 @@ export function FloatingNavbar() {
             </button>
           </div>
 
-          {/* CTA Button */}
-          <Button
-            asChild
-            size="sm"
-            className="shrink-0 bg-white px-3 text-xs text-black hover:bg-gray-100 [text-shadow:_0_1px_2px_rgb(0_0_0_/_10%)] font-open-sans-custom sm:px-4 sm:text-sm"
-          >
-            <Link href="/login">Get Started</Link>
-          </Button>
+          {/* Actions */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={toggleTheme}
+              className="rounded-xl p-2 text-white/80 hover:text-white hover:bg-white/10 transition-all cursor-pointer border border-white/10 flex items-center justify-center group"
+              aria-label="Toggle Light / Dark mode"
+              title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+            >
+              {isDarkMode ? (
+                <Sun className="size-4 text-[#D4A934] group-hover:rotate-45 transition-transform duration-300" />
+              ) : (
+                <Moon className="size-4 text-[#9C7A1E] group-hover:-rotate-12 transition-transform duration-300" />
+              )}
+            </button>
+
+            {/* CTA Button */}
+            <Button
+              asChild
+              size="sm"
+              className="shrink-0 bg-white px-3 text-xs text-black hover:bg-gray-100 [text-shadow:_0_1px_2px_rgb(0_0_0_/_10%)] font-open-sans-custom sm:px-4 sm:text-sm"
+            >
+              <Link href="/login">Get Started</Link>
+            </Button>
+          </div>
         </div>
       </div>
     </nav>

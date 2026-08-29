@@ -1,411 +1,489 @@
 "use client"
 
-import React, { useState, useCallback, useMemo, useRef, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import React, { useState, useEffect, useRef, useMemo, useCallback, createContext, useContext } from "react"
 import { motion, AnimatePresence } from "motion/react"
-import { useUserProfile } from "@/lib/user-profile"
-import { useFinanceData, FinanceDataProvider } from "@/lib/finance-data"
-import { supabase, isSupabaseConfigured } from "@/lib/supabase"
 import {
-  BarChart3, TrendingUp, Shield, ArrowLeftRight, Globe, ArrowUpRight, ArrowDownRight,
-  ChevronRight, Bell, Search, Settings, Wallet, CircleDot, Eye, FileText, UserCog,
-  X, Check, AlertTriangle, Info, DollarSign, Clock, Star, Plus, Download, Filter,
-  Calendar, Mail, Lock, Palette, Monitor, BellRing, CreditCard, Languages, HelpCircle,
-  LogOut, ChevronDown, Activity, Zap, Landmark,
+  TrendingUp, ArrowDownLeft, ArrowUpRight, Plus, Landmark,
+  Sparkles, CheckCircle2, ChevronRight,
+  Sun, Moon, Film, VideoOff,
+  Bell, Check, Trash2, Edit3, Settings, ShieldCheck, DollarSign, Wallet,
+  CreditCard, ArrowLeftRight, PiggyBank, Search, BarChart3,
+  LogOut, CircleDot, AlertCircle, Calendar, Receipt, ChevronDown, Clock, RefreshCw, UserCheck
 } from "lucide-react"
 import {
-  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, LineChart, Line,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadialBarChart, RadialBar,
+  AreaChart, Area, LineChart, Line,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts"
+import {
+  useFinanceData,
+  FinanceDataProvider,
+  Transaction,
+  Account,
+  Category,
+  HeldFund,
+  HeldFundHistory,
+  Bill
+} from "@/lib/finance-data"
+import { useUserProfile } from "@/lib/user-profile"
+import { supabase, isSupabaseConfigured, resolveCurrentUserId } from "@/lib/supabase"
 
-// ─── Design tokens ─────────────────────────────────────────────
+// ─── Design Tokens: Exact Reproduction of 2.jpeg ──────────────────
 
-const CARD_SHADOW =
-  "rgba(14, 63, 126, 0.04) 0px 0px 0px 1px, rgba(42, 51, 69, 0.04) 0px 1px 1px -0.5px, rgba(42, 51, 70, 0.04) 0px 3px 3px -1.5px, rgba(42, 51, 70, 0.04) 0px 6px 6px -3px, rgba(14, 63, 126, 0.04) 0px 12px 12px -6px, rgba(14, 63, 126, 0.04) 0px 24px 24px -12px"
-
-const SECTION_MIN_H = "min-h-[calc(100vh-10.5rem)]"
-
-// Colors as constants for recharts
-const C = {
-  teal: "#5b4dc7",
-  tealMuted: "rgb(91 77 199 / 0.3)",
-  azure: "oklch(0.68 0.14 245)",
-  amber: "oklch(0.76 0.14 75)",
-  rose: "oklch(0.62 0.22 18)",
-  slate: "oklch(0.50 0.02 260)",
-  gain: "oklch(0.76 0.16 162)",
-  loss: "oklch(0.62 0.22 18)",
-  grid: "oklch(0.24 0.01 260)",
-  tick: "oklch(0.50 0.015 260)",
-  surface: "oklch(0.175 0.01 260)",
+const TOKENS = {
+  dark: {
+    // Surface Mesh: Translucent 0.75 opacity showing video background faintly through each card
+    cardGradient: "linear-gradient(135deg, rgba(45, 15, 85, 0.75) 0%, rgba(30, 94, 69, 0.65) 45%, rgba(145, 168, 38, 0.62) 100%)",
+    cardGradientHover: "linear-gradient(135deg, rgba(55, 20, 100, 0.82) 0%, rgba(36, 110, 80, 0.72) 45%, rgba(160, 185, 45, 0.70) 100%)",
+    
+    // Wells & Translucent Cutouts
+    nestedSurface: "rgba(16, 8, 36, 0.40)",
+    incomeWell: "rgba(20, 50, 35, 0.50)",
+    expenseWell: "rgba(55, 18, 35, 0.50)",
+    savingsWell: "rgba(45, 52, 22, 0.50)",
+    
+    // Borders
+    border: "rgba(255, 255, 255, 0.14)",
+    borderNested: "rgba(255, 255, 255, 0.10)",
+    borderIncome: "rgba(52, 211, 153, 0.25)",
+    borderExpense: "rgba(251, 113, 133, 0.25)",
+    borderSavings: "rgba(254, 240, 138, 0.25)",
+    
+    // Typography
+    textPrimary: "#FFFFFF",
+    textSecondary: "rgba(255, 255, 255, 0.75)",
+    textTertiary: "rgba(255, 255, 255, 0.55)",
+    
+    // Status Colors
+    gain: "#4ADE80", // Vibrant Neon Green
+    loss: "#FB7185", // Neon Coral / Rose
+    savingsRate: "#FEF08A", // Soft Chartreuse Yellow
+    
+    // Active Pill Gradients
+    dashboardActivePill: "linear-gradient(90deg, #5EEAD4 0%, #A7F3D0 40%, #FEF08A 100%)",
+    dashboardActiveText: "#120824",
+    filterActivePill: "#EDE9FE",
+    filterActiveText: "#1E0C38",
+    
+    // Progress Bar Gradient
+    budgetProgressGradient: "linear-gradient(90deg, #06B6D4 0%, #22C55E 45%, #EAB308 80%, #FEF08A 100%)",
+    
+    // Header & Bars
+    headerBg: "rgba(20, 8, 42, 0.75)",
+    headerBorder: "rgba(255, 255, 255, 0.12)",
+    
+    // Chart
+    chartStroke: "#FFFFFF",
+    chartGrid: "rgba(255, 255, 255, 0.08)",
+    
+    cardShadow: "0 12px 40px 0 rgba(0, 0, 0, 0.45), inset 0 1px 0 0 rgba(255, 255, 255, 0.18)",
+  },
+  light: {
+    // Exact same Deep Violet -> Emerald/Forest -> Chartreuse/Lime-Yellow gradient in subtle, low-opacity translucent glass
+    cardGradient: "linear-gradient(135deg, rgba(45, 15, 85, 0.38) 0%, rgba(30, 94, 69, 0.30) 45%, rgba(145, 168, 38, 0.28) 100%)",
+    cardGradientHover: "linear-gradient(135deg, rgba(55, 20, 100, 0.48) 0%, rgba(36, 110, 80, 0.38) 45%, rgba(160, 185, 45, 0.35) 100%)",
+    
+    // Translucent Cutouts & Wells
+    nestedSurface: "rgba(20, 10, 42, 0.35)",
+    incomeWell: "rgba(20, 50, 35, 0.42)",
+    expenseWell: "rgba(55, 18, 35, 0.42)",
+    savingsWell: "rgba(45, 52, 22, 0.42)",
+    
+    // Luminous Frosted Glass Borders
+    border: "rgba(255, 255, 255, 0.25)",
+    borderNested: "rgba(255, 255, 255, 0.14)",
+    borderIncome: "rgba(52, 211, 153, 0.28)",
+    borderExpense: "rgba(251, 113, 133, 0.28)",
+    borderSavings: "rgba(254, 240, 138, 0.28)",
+    
+    // Typography
+    textPrimary: "#FFFFFF",
+    textSecondary: "rgba(255, 255, 255, 0.85)",
+    textTertiary: "rgba(255, 255, 255, 0.65)",
+    
+    // Status Colors
+    gain: "#4ADE80",
+    loss: "#FB7185",
+    savingsRate: "#FEF08A",
+    
+    // Active Pill Gradients
+    dashboardActivePill: "linear-gradient(90deg, #5EEAD4 0%, #A7F3D0 40%, #FEF08A 100%)",
+    dashboardActiveText: "#120824",
+    filterActivePill: "#EDE9FE",
+    filterActiveText: "#1E0C38",
+    
+    // Progress Bar Gradient
+    budgetProgressGradient: "linear-gradient(90deg, #06B6D4 0%, #22C55E 45%, #EAB308 80%, #FEF08A 100%)",
+    
+    // Header & Bars
+    headerBg: "rgba(28, 12, 54, 0.75)",
+    headerBorder: "rgba(255, 255, 255, 0.18)",
+    
+    // Chart
+    chartStroke: "#FFFFFF",
+    chartGrid: "rgba(255, 255, 255, 0.12)",
+    
+    cardShadow: "0 16px 48px 0 rgba(0, 0, 0, 0.25), inset 0 1px 0 0 rgba(255, 255, 255, 0.30)",
+  },
 }
 
-const SPRING = { type: "spring" as const, stiffness: 400, damping: 32 }
+// ─── Theme Context ────────────────────────────────────────────────
+
+interface DashboardThemeContextType {
+  isDarkMode: boolean
+  isVideoEnabled: boolean
+  tokens: typeof TOKENS.dark
+  toggleTheme: () => void
+  toggleVideo: () => void
+  setThemeMode: (mode: "dark" | "light") => void
+}
+
+const DashboardThemeContext = createContext<DashboardThemeContextType>({
+  isDarkMode: true,
+  isVideoEnabled: true,
+  tokens: TOKENS.dark,
+  toggleTheme: () => {},
+  toggleVideo: () => {},
+  setThemeMode: () => {},
+})
+
+const useDashboardTheme = () => useContext(DashboardThemeContext)
+
 const EASE_OUT = [0.16, 1, 0.3, 1] as const
 
-// ─── Data ──────────────────────────────────────────────────────
+const cardEntrance = (delay = 0) => ({
+  initial: { opacity: 0, y: 16, scale: 0.97 },
+  animate: { opacity: 1, y: 0, scale: 1 },
+  transition: { duration: 0.5, ease: EASE_OUT, delay },
+})
+
+// ─── Navigation Items ─────────────────────────────────────────────
 
 const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: BarChart3 },
-  { id: "transactions", label: "Transactions", icon: ArrowLeftRight },
-  { id: "accounts", label: "Accounts", icon: Wallet },
+  { id: "bills", label: "Bills", icon: Receipt },
+  { id: "accounts", label: "Accounts", icon: Landmark },
   { id: "categories", label: "Categories", icon: CircleDot },
-  { id: "settings", label: "Settings", icon: UserCog },
+  { id: "settings", label: "Settings", icon: Settings },
 ] as const
 
 type SectionId = (typeof NAV_ITEMS)[number]["id"]
 
-const portfolioData = [
-  { month: "Jul", value: 42000 }, { month: "Aug", value: 44500 }, { month: "Sep", value: 43200 },
-  { month: "Oct", value: 47800 }, { month: "Nov", value: 46100 }, { month: "Dec", value: 49300 },
-  { month: "Jan", value: 51200 }, { month: "Feb", value: 53800 }, { month: "Mar", value: 52100 },
-  { month: "Apr", value: 56400 }, { month: "May", value: 58900 }, { month: "Jun", value: 62450 },
-]
+// ─── Atmospheric Background Component: Dual-Slot Cinematic Environment Transition ───
 
-const allocationData = [
-  { name: "Equities", value: 45, color: C.teal },
-  { name: "Fixed Income", value: 25, color: C.azure },
-  { name: "Alternatives", value: 15, color: C.amber },
-  { name: "Cash", value: 10, color: C.slate },
-  { name: "Crypto", value: 5, color: C.rose },
-]
+function AtmosphericBackground() {
+  const { isDarkMode, isVideoEnabled } = useDashboardTheme()
+  const [isDesktop, setIsDesktop] = useState(true)
 
-const performanceMonthly = [
-  { month: "Jan", return: 3.2, benchmark: 2.8 }, { month: "Feb", return: -1.1, benchmark: -0.5 },
-  { month: "Mar", return: 4.5, benchmark: 3.1 }, { month: "Apr", return: 2.8, benchmark: 2.2 },
-  { month: "May", return: -0.3, benchmark: -1.0 }, { month: "Jun", return: 5.1, benchmark: 4.2 },
-  { month: "Jul", return: 1.9, benchmark: 1.5 }, { month: "Aug", return: 3.6, benchmark: 2.9 },
-  { month: "Sep", return: -2.1, benchmark: -2.8 }, { month: "Oct", return: 4.8, benchmark: 3.5 },
-  { month: "Nov", return: 2.4, benchmark: 1.8 }, { month: "Dec", return: 3.9, benchmark: 3.3 },
-]
+  // Track viewport breakpoint
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(min-width: 768px)")
+    setIsDesktop(mediaQuery.matches)
 
-const riskMetrics = [
-  { metric: "Sharpe Ratio", value: 1.84, status: "good" as const, icon: Zap },
-  { metric: "Max Drawdown", value: -8.2, status: "moderate" as const, icon: ArrowDownRight },
-  { metric: "Beta", value: 0.92, status: "good" as const, icon: Activity },
-  { metric: "VaR (95%)", value: -2.4, status: "moderate" as const, icon: Shield },
-]
+    const handleMediaChange = (e: MediaQueryListEvent) => {
+      setIsDesktop(e.matches)
+    }
 
-const volatilityData = [
-  { month: "Jan", portfolio: 12.4, market: 15.2 }, { month: "Feb", portfolio: 14.1, market: 16.8 },
-  { month: "Mar", portfolio: 11.3, market: 14.5 }, { month: "Apr", portfolio: 10.8, market: 13.9 },
-  { month: "May", portfolio: 13.5, market: 17.2 }, { month: "Jun", portfolio: 9.8, market: 12.3 },
-  { month: "Jul", portfolio: 11.2, market: 14.8 }, { month: "Aug", portfolio: 10.5, market: 13.1 },
-  { month: "Sep", portfolio: 15.2, market: 19.4 }, { month: "Oct", portfolio: 12.8, market: 16.1 },
-  { month: "Nov", portfolio: 10.1, market: 12.7 }, { month: "Dec", portfolio: 9.4, market: 11.9 },
-]
+    if (mediaQuery.addEventListener) {
+      mediaQuery.addEventListener("change", handleMediaChange)
+    } else {
+      mediaQuery.addListener(handleMediaChange)
+    }
 
-const sectorExposure = [
-  { name: "Technology", value: 85, fill: C.teal },
-  { name: "Healthcare", value: 65, fill: C.azure },
-  { name: "Finance", value: 52, fill: C.amber },
-  { name: "Energy", value: 38, fill: C.rose },
-]
+    return () => {
+      if (mediaQuery.removeEventListener) {
+        mediaQuery.removeEventListener("change", handleMediaChange)
+      } else {
+        mediaQuery.removeListener(handleMediaChange)
+      }
+    }
+  }, [])
 
-const notifications = [
-  { id: 1, type: "success" as const, title: "Salary Credited", message: "$5,200.00 salary deposit received from employer", time: "2 min ago", read: false },
-  { id: 2, type: "warning" as const, title: "Budget Alert", message: "Groceries spending is at 81% of your monthly limit", time: "18 min ago", read: false },
-  { id: 3, type: "info" as const, title: "Recurring Bill Due", message: "Electric bill ($124.18) due in 3 days", time: "1h ago", read: false },
-  { id: 4, type: "success" as const, title: "Dividend Received", message: "$342.50 quarterly dividend credited to QNB Checking", time: "3h ago", read: true },
-  { id: 5, type: "warning" as const, title: "Expense Alert", message: "Card transaction of $142.60 at Amazon recorded", time: "5h ago", read: true },
-  { id: 6, type: "info" as const, title: "Monthly Report", message: "Your monthly spending summary is ready to view", time: "6h ago", read: true },
-  { id: 7, type: "success" as const, title: "Transfer Complete", message: "$1,250 freelance payment credited to checking", time: "1d ago", read: true },
-]
-
-
-
-// ─── Sub-Components ─────────────────────────────────────────────
-
-function GlowOrb({ className }: { className?: string }) {
-  return (
-    <div className={`absolute rounded-full blur-3xl pointer-events-none ${className}`} />
-  )
-}
-
-function KpiCard({
-  label, value, change, prefix = "", suffix = "", delay = 0, icon: Icon, glowColor = "teal", accounts,
-}: {
-  label: string; value: string; change?: number; prefix?: string; suffix?: string; delay?: number; icon?: React.ElementType; glowColor?: "teal" | "blue" | "green" | "red"; accounts?: string[]
-}) {
-  const isPositive = (change ?? 0) >= 0
-  const glowMap = {
-    teal: "glow-teal-sm",
-    blue: "glow-blue-sm",
-    green: "glow-green-sm",
-    red: "glow-red-sm",
-  }
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 16, scale: 0.97 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.5, delay, ease: EASE_OUT }}
-      className={`relative overflow-hidden rounded-2xl surface-card p-4 lg:p-5 group hover:scale-[1.01] transition-transform duration-300 ${glowMap[glowColor]}`}
-      style={{ boxShadow: CARD_SHADOW }}
-    >
-      <div className="absolute top-0 right-0 w-24 h-24 opacity-[0.03] pointer-events-none">
-        {Icon && <Icon className="size-24 -translate-y-4 translate-x-4" />}
-      </div>
-      <div className="flex items-center justify-between mb-2.5">
-        <p className="text-[11px] font-semibold tracking-[0.08em] uppercase text-muted-foreground font-sans">
-          {label}
-        </p>
-
-      </div>
-      <p className="text-2xl lg:text-3xl font-bold text-foreground font-mono tracking-tighter leading-none">
-        {prefix}{value}{suffix}
-      </p>
-      {change !== undefined && (
-        <div className="flex items-center gap-1.5 mt-3">
-          <div className={`flex items-center gap-0.5 text-xs font-semibold font-mono px-1.5 py-0.5 rounded-md ${
-            isPositive ? "bg-fin-gain/10 text-fin-gain" : "bg-fin-loss/10 text-fin-loss"
-          }`}>
-            {isPositive ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
-            {isPositive ? "+" : ""}{change}%
-          </div>
-          <span className="text-[10px] text-muted-foreground/70 font-sans">vs last month</span>
-        </div>
-      )}
-    </motion.div>
-  )
-}
-
-function AccountSelector({ accounts }: { accounts: string[] }) {
-  const [isOpen, setIsOpen] = useState(false)
-  const [selectedAccount, setSelectedAccount] = useState(accounts[0] || "")
+  const device = isDesktop ? "Desktop" : "Phone"
   
+  // Permanent assets for both themes (always mounted in DOM to prevent unmounting flash)
+  const darkImage = `/backgrounds/${device}_Dark_Mode.png`
+  const darkVideo = `/backgrounds/${device}_Dark_Mode.mp4`
+  const lightImage = `/backgrounds/${device}_Light_Mode.png`
+  const lightVideo = `/backgrounds/${device}_Light_Mode.mp4`
+
+  const [darkVideoAwake, setDarkVideoAwake] = useState(false)
+  const [lightVideoAwake, setLightVideoAwake] = useState(false)
+  const isFirstMountRef = useRef(true)
+  const timerRef = useRef<NodeJS.Timeout | null>(null)
+
+  useEffect(() => {
+    if (timerRef.current) clearTimeout(timerRef.current)
+
+    if (isFirstMountRef.current) {
+      isFirstMountRef.current = false
+      if (isVideoEnabled) {
+        setDarkVideoAwake(false)
+        setLightVideoAwake(false)
+        timerRef.current = setTimeout(() => {
+          if (isDarkMode) setDarkVideoAwake(true)
+          else setLightVideoAwake(true)
+        }, 1000)
+      }
+      return
+    }
+
+    // When theme changes:
+    // 1. Instantly hide video layer so the incoming PNG is held crystal clear
+    setDarkVideoAwake(false)
+    setLightVideoAwake(false)
+
+    // 2. Hold incoming PNG for 1.0 second (1000ms)
+    // 3. After 1.0 second, smoothly fade video in over the PNG
+    if (isVideoEnabled) {
+      timerRef.current = setTimeout(() => {
+        if (isDarkMode) {
+          setDarkVideoAwake(true)
+          setLightVideoAwake(false)
+        } else {
+          setLightVideoAwake(true)
+          setDarkVideoAwake(false)
+        }
+      }, 1000)
+    }
+
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
+  }, [isDarkMode, isVideoEnabled, device])
+
   return (
-  <div className="flex justify-center">
-  <div className="relative">
-  <button
-  onClick={() => setIsOpen(!isOpen)}
-  aria-expanded={isOpen}
-  className="text-xs font-semibold text-primary hover:text-primary/80 transition-colors flex items-center gap-1.5 px-3 py-2 rounded-lg border border-primary/20 bg-primary/5 hover:bg-primary/10 font-sans"
-  >
-  {selectedAccount}
-  <ChevronDown className={`size-3.5 transition-transform duration-300 ${isOpen ? "rotate-180" : ""}`} />
-  </button>
-  <AnimatePresence>
-  {isOpen && (
-  <motion.div
-  initial={{ opacity: 0, y: -8, height: 0 }}
-  animate={{ opacity: 1, y: 0, height: "auto" }}
-  exit={{ opacity: 0, y: -8, height: 0 }}
-  transition={{ duration: 0.2 }}
-  className="absolute top-full left-1/2 -translate-x-1/2 mt-1 bg-accent rounded-lg border border-border/30 overflow-hidden z-50 min-w-32"
-  >
-  {accounts.map((account, i) => (
-  <motion.button
-  key={account}
-  initial={{ opacity: 0, x: -10 }}
-  animate={{ opacity: 1, x: 0 }}
-  transition={{ delay: i * 0.05 }}
-  onClick={() => {
-  setSelectedAccount(account)
-  setIsOpen(false)
-  }}
-  className={`w-full text-left px-4 py-2.5 text-xs font-medium transition-colors ${
-  selectedAccount === account ? "text-primary bg-primary/10" : "text-foreground hover:text-primary hover:bg-accent/50"
-  } font-sans`}
-  >
-  {account}
-  </motion.button>
-  ))}
-  </motion.div>
+    <div
+      className="fixed inset-0 pointer-events-none z-0 overflow-hidden select-none"
+      style={{
+        backgroundColor: isDarkMode ? "#120824" : "#E9D5FF",
+        transition: "background-color 800ms cubic-bezier(0.16, 1, 0.3, 1)",
+      }}
+    >
+      {/* ─── SLOT 1: DARK MODE SCENE ─── */}
+      <div
+        className="absolute inset-0 w-full h-full will-change-transform"
+        style={{
+          opacity: isDarkMode ? 1 : 0,
+          transform: isDarkMode ? "scale(1.0)" : "scale(1.04)",
+          filter: isDarkMode ? "blur(0px)" : "blur(10px)",
+          transition: "opacity 800ms cubic-bezier(0.16, 1, 0.3, 1), transform 800ms cubic-bezier(0.16, 1, 0.3, 1), filter 800ms cubic-bezier(0.16, 1, 0.3, 1)",
+          zIndex: isDarkMode ? 2 : 1,
+        }}
+      >
+        {/* Dark Mode Static PNG */}
+        <img
+          src={darkImage}
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none"
+        />
+
+        {/* Dark Mode Video (Awakens after 1s hold) */}
+        {isVideoEnabled && (
+          <video
+            key={darkVideo}
+            src={darkVideo}
+            poster={darkImage}
+            autoPlay
+            muted
+            loop
+            playsInline
+            disablePictureInPicture
+            disableRemotePlayback
+            className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none"
+            style={{
+              opacity: darkVideoAwake ? 1 : 0,
+              transition: "opacity 800ms cubic-bezier(0.4, 0, 0.2, 1)",
+              pointerEvents: "none",
+            }}
+          />
         )}
-      </AnimatePresence>
-    </div>
+      </div>
+
+      {/* ─── SLOT 2: LIGHT MODE SCENE ─── */}
+      <div
+        className="absolute inset-0 w-full h-full will-change-transform"
+        style={{
+          opacity: !isDarkMode ? 1 : 0,
+          transform: !isDarkMode ? "scale(1.0)" : "scale(1.04)",
+          filter: !isDarkMode ? "blur(0px)" : "blur(10px)",
+          transition: "opacity 800ms cubic-bezier(0.16, 1, 0.3, 1), transform 800ms cubic-bezier(0.16, 1, 0.3, 1), filter 800ms cubic-bezier(0.16, 1, 0.3, 1)",
+          zIndex: !isDarkMode ? 2 : 1,
+        }}
+      >
+        {/* Light Mode Static PNG */}
+        <img
+          src={lightImage}
+          alt=""
+          aria-hidden="true"
+          className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none"
+        />
+
+        {/* Light Mode Video (Awakens after 1s hold) */}
+        {isVideoEnabled && (
+          <video
+            key={lightVideo}
+            src={lightVideo}
+            poster={lightImage}
+            autoPlay
+            muted
+            loop
+            playsInline
+            disablePictureInPicture
+            disableRemotePlayback
+            className="absolute inset-0 w-full h-full object-cover select-none pointer-events-none"
+            style={{
+              opacity: lightVideoAwake ? 1 : 0,
+              transition: "opacity 800ms cubic-bezier(0.4, 0, 0.2, 1)",
+              pointerEvents: "none",
+            }}
+          />
+        )}
+      </div>
+
+      {/* Atmospheric Glass Overlay */}
+      <div className="absolute inset-0 bg-black/10 backdrop-blur-[0.5px] pointer-events-none z-10" />
     </div>
   )
 }
 
-function MiniSparkline({ data, color, height = 32 }: { data: number[]; color: string; height?: number }) {
-  const max = Math.max(...data)
-  const min = Math.min(...data)
-  const range = max - min || 1
-  const points = data.map((v, i) => `${(i / (data.length - 1)) * 100},${100 - ((v - min) / range) * 80 - 10}`).join(" ")
-  const fillPoints = `0,100 ${points} 100,100`
-  return (
-    <svg viewBox="0 0 100 100" className="w-full" style={{ height }} preserveAspectRatio="none">
-      <defs>
-        <linearGradient id={`spark-fill-${color.replace(/[^a-z0-9]/g, '')}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity={0.2} />
-          <stop offset="100%" stopColor={color} stopOpacity={0} />
-        </linearGradient>
-      </defs>
-      <polygon points={fillPoints} fill={`url(#spark-fill-${color.replace(/[^a-z0-9]/g, '')})`} />
-      <polyline points={points} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-    </svg>
-  )
+// ─── Helpers: Visual Representation ───────────────────────────────
+
+function getAccountVisual(type: string, name: string) {
+  const lowerName = name.toLowerCase()
+  if (lowerName.includes("qnb") || type === "checking") {
+    return { label: "Checking Account", cycle: "30/30", fillRatio: 0.82 }
+  }
+  if (lowerName.includes("sdf") || type === "credit") {
+    return { label: "Credit Card", cycle: "24/38", fillRatio: 0.65 }
+  }
+  if (lowerName.includes("cxv") || type === "savings") {
+    return { label: "Checking Account", cycle: "30/30", fillRatio: 0.40 }
+  }
+  return { label: "Bank Account", cycle: "30/30", fillRatio: 0.70 }
 }
 
-function ChartTooltipContent({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number; name: string; color: string }>; label?: string }) {
-  if (!active || !payload?.length) return null
+function getCurrencySymbol(curr?: string) {
+  if (!curr) return "EGP "
+  const c = curr.toUpperCase()
+  if (c === "EGP") return "EGP "
+  if (c === "USD") return "$"
+  if (c === "EUR") return "€"
+  if (c === "GBP") return "£"
+  if (c === "SAR") return "SAR "
+  if (c === "AED") return "AED "
+  return `${c} `
+}
+
+// ─── Component: Dot Matrix Indicator ──────────────────────────────
+
+function DotMatrixIndicator({ progress, dotsCount = 8 }: { progress: number; dotsCount?: number }) {
+  const activeCount = Math.round(progress * dotsCount)
   return (
-    <div className="rounded-xl surface-elevated p-3 text-xs backdrop-blur-md" style={{ boxShadow: CARD_SHADOW }}>
-      <p className="text-muted-foreground mb-2 font-semibold text-[11px] uppercase tracking-wider font-sans">{label}</p>
-      {payload.map((entry, i) => (
-        <div key={i} className="flex items-center gap-2 py-0.5">
-          <div className="size-2 rounded-full" style={{ backgroundColor: entry.color }} />
-          <span className="text-muted-foreground capitalize font-sans">{entry.name}:</span>
-          <span className="font-mono font-bold text-foreground">{typeof entry.value === "number" ? entry.value.toLocaleString() : entry.value}</span>
-        </div>
+    <div className="flex items-center gap-1">
+      {Array.from({ length: dotsCount }).map((_, i) => (
+        <span
+          key={i}
+          className="size-1.5 rounded-full transition-all duration-300"
+          style={{
+            backgroundColor: i < activeCount ? "#FEF08A" : "rgba(255, 255, 255, 0.2)",
+            boxShadow: i < activeCount ? "0 0 6px rgba(254, 240, 138, 0.8)" : "none",
+          }}
+        />
       ))}
     </div>
   )
 }
 
-function SectionPanel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.6, delay: 0.15, ease: EASE_OUT }}
-      className={`rounded-2xl surface-card p-5 lg:p-6 ${className}`}
-      style={{ boxShadow: CARD_SHADOW }}
-    >
-      {children}
-    </motion.div>
-  )
+// ─── Component: Notification Panel ────────────────────────────────
+
+interface NotificationItem {
+  id: number | string
+  type: "info" | "warning" | "success"
+  title: string
+  message: string
+  time: string
+  read: boolean
 }
 
-function SectionHeader({ title, subtitle, children }: { title: string; subtitle: string; children?: React.ReactNode }) {
+function NotificationPanel({
+  isOpen,
+  onClose,
+  notifications,
+  onMarkAsRead,
+  onClearAll,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  notifications: NotificationItem[]
+  onMarkAsRead: (id: number | string) => void
+  onClearAll: () => void
+}) {
+  const { tokens } = useDashboardTheme()
+
+  if (!isOpen) return null
+
   return (
-    <div className="flex items-center justify-between mb-5">
-      <div>
-        <h3 className="text-sm font-bold text-foreground tracking-tight font-display">{title}</h3>
-        <p className="text-[11px] text-muted-foreground mt-0.5 font-sans">{subtitle}</p>
+    <div className="fixed inset-0 z-50 flex items-start justify-end p-4 pt-20 sm:pr-8 bg-black/40 backdrop-blur-sm">
+      <div
+        className="w-full max-w-sm rounded-3xl p-5 border shadow-2xl backdrop-blur-2xl transition-all"
+        style={{
+          background: tokens.cardGradient,
+          borderColor: tokens.border,
+          boxShadow: tokens.cardShadow,
+        }}
+      >
+        <div className="flex items-center justify-between pb-3 border-b" style={{ borderColor: tokens.borderNested }}>
+          <div className="flex items-center gap-2">
+            <Bell className="size-4 text-white" />
+            <h3 className="text-sm font-bold font-display text-white">Notifications</h3>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onClearAll}
+              className="text-[11px] font-semibold text-white/70 hover:text-white transition-colors cursor-pointer"
+            >
+              Clear all
+            </button>
+            <button
+              onClick={onClose}
+              className="text-xs text-white/60 hover:text-white p-1 cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2.5 mt-3 max-h-[360px] overflow-y-auto pr-1">
+          {notifications.length === 0 ? (
+            <p className="text-xs text-white/50 text-center py-6">No notifications</p>
+          ) : (
+            notifications.map((n) => (
+              <div
+                key={n.id}
+                onClick={() => onMarkAsRead(n.id)}
+                className="p-3 rounded-2xl border transition-all cursor-pointer hover:bg-white/5 relative"
+                style={{
+                  backgroundColor: n.read ? "rgba(16, 8, 36, 0.3)" : tokens.nestedSurface,
+                  borderColor: tokens.borderNested,
+                }}
+              >
+                {!n.read && (
+                  <span className="absolute top-3 right-3 size-2 rounded-full bg-[#FEF08A] shadow-[0_0_8px_#FEF08A]" />
+                )}
+                <p className="text-xs font-bold text-white font-sans">{n.title}</p>
+                <p className="text-[11px] text-white/70 font-sans mt-0.5">{n.message}</p>
+                <p className="text-[9.5px] text-white/40 font-mono mt-1.5">{n.time}</p>
+              </div>
+            ))
+          )}
+        </div>
       </div>
-      {children}
     </div>
   )
 }
 
-function NotificationIcon({ type }: { type: "success" | "warning" | "info" }) {
-  if (type === "success") return <Check className="size-3.5" />
-  if (type === "warning") return <AlertTriangle className="size-3.5" />
-  return <Info className="size-3.5" />
-}
-
-function NotificationPanel({ isOpen, onClose, items, onMarkRead, onMarkAllRead }: {
-  isOpen: boolean; onClose: () => void; items: typeof notifications; onMarkRead: (id: number) => void; onMarkAllRead: () => void
-}) {
-  const panelRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) onClose()
-    }
-    if (isOpen) {
-      document.addEventListener("mousedown", handleClickOutside)
-      return () => document.removeEventListener("mousedown", handleClickOutside)
-    }
-  }, [isOpen, onClose])
-
-  const unreadCount = items.filter((n) => !n.read).length
-  return (
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          ref={panelRef}
-          initial={{ opacity: 0, y: -12, scale: 0.95 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: -12, scale: 0.95 }}
-          transition={{ duration: 0.25, ease: EASE_OUT }}
-          className="absolute top-full right-0 mt-3 w-[420px] max-h-[30rem] rounded-2xl surface-elevated overflow-hidden z-50 glow-teal-sm"
-          style={{ boxShadow: CARD_SHADOW }}
-        >
-          <div className="flex items-center justify-between p-5 border-b border-border/50">
-            <div className="flex items-center gap-2.5">
-              <h3 className="text-sm font-bold text-foreground font-display tracking-tight">Notifications</h3>
-              {unreadCount > 0 && (
-                <span className="text-[10px] font-bold bg-primary text-primary-foreground px-2 py-0.5 rounded-full">{unreadCount}</span>
-              )}
-            </div>
-            <div className="flex items-center gap-1">
-              {unreadCount > 0 && (
-                <button onClick={onMarkAllRead} className="text-[11px] font-semibold text-primary hover:text-primary/80 px-2 py-1 transition-colors">Mark all read</button>
-              )}
-              <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-accent transition-colors" aria-label="Close notifications"><X className="size-4 text-muted-foreground" /></button>
-            </div>
-          </div>
-          <div className="overflow-y-auto max-h-[23rem]">
-            {items.map((notif, i) => (
-              <motion.button
-                key={notif.id}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.25, delay: i * 0.03 }}
-                onClick={() => onMarkRead(notif.id)}
-                className={`w-full flex items-start gap-3.5 p-4 text-left border-b border-border/30 hover:bg-accent/30 transition-all duration-200 ${!notif.read ? "bg-primary/[0.04]" : ""}`}
-              >
-                <div className={`size-8 rounded-xl flex items-center justify-center shrink-0 mt-0.5 ${
-                  notif.type === "success" ? "bg-fin-gain/12 text-fin-gain" : notif.type === "warning" ? "bg-chart-3/12 text-chart-3" : "bg-chart-2/12 text-chart-2"
-                }`}>
-                  <NotificationIcon type={notif.type} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-[13px] font-semibold text-foreground truncate font-sans">{notif.title}</p>
-                    {!notif.read && <div className="size-1.5 rounded-full bg-primary shrink-0 animate-pulse-soft" />}
-                  </div>
-                  <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed font-sans">{notif.message}</p>
-                  <p className="text-[10px] text-muted-foreground/50 mt-1.5 flex items-center gap-1 font-mono"><Clock className="size-2.5" />{notif.time}</p>
-                </div>
-              </motion.button>
-            ))}
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  )
-}
-
-// ─── Section: Accounts ──────────────────────────────────────────
-
-// ─── Section: Accounts ──────────────────────────────────────────
-
-function getAccountIconAndTone(type?: string) {
-  const t = type?.toLowerCase() || ""
-  if (t.includes("cash")) return { icon: Wallet, tone: "green" as const, label: "Cash wallet" }
-  if (t.includes("card") || t.includes("credit")) return { icon: CreditCard, tone: "red" as const, label: "Credit card" }
-  if (t.includes("saving")) return { icon: Landmark, tone: "teal" as const, label: "Savings account" }
-  return { icon: Landmark, tone: "blue" as const, label: "Checking account" }
-}
-
-function NetWorthCard() {
-  const { netWorth, accounts } = useFinanceData()
-  const { profile } = useUserProfile()
-  const currencySymbol = profile.currency === "EUR" ? "€" : profile.currency === "GBP" ? "£" : profile.currency === "EGP" ? "EGP " : profile.currency === "AED" ? "AED " : "$"
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 16, scale: 0.97 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.5, delay: 0, ease: EASE_OUT }}
-      className="relative overflow-hidden rounded-2xl surface-card p-5 lg:p-6 glow-blue-sm hover:scale-[1.01] transition-transform duration-300"
-      style={{ boxShadow: CARD_SHADOW }}
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-[11px] font-semibold tracking-[0.08em] uppercase text-muted-foreground font-sans">Net worth</p>
-          <p className="text-3xl font-bold text-foreground font-mono tracking-tighter mt-2">
-            {currencySymbol}{netWorth.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </p>
-          <div className="flex items-center gap-2 mt-2">
-            <span className="text-[10px] font-semibold text-fin-gain bg-fin-gain/10 rounded-md px-2 py-1 font-mono">
-              {accounts.length > 0 ? `${accounts.length} ${accounts.length === 1 ? "Active account" : "Active accounts"}` : "0 accounts"}
-            </span>
-            <span className="text-[10px] text-muted-foreground font-sans">
-              across all registered assets
-            </span>
-          </div>
-        </div>
-        <div className="size-10 rounded-xl bg-accent/60 flex items-center justify-center">
-          <Landmark className="size-5 text-primary" />
-        </div>
-      </div>
-    </motion.div>
-  )
-}
+// ─── Modal: Add Transaction (with Feature 1 Fee & InstaPay System) ────
 
 function AddTransactionModal({
   isOpen,
@@ -416,967 +494,148 @@ function AddTransactionModal({
 }) {
   const { accounts, categories, createTransaction } = useFinanceData()
   const { profile } = useUserProfile()
+  const { tokens } = useDashboardTheme()
+  const currencySymbol = getCurrencySymbol(profile.currency)
 
-  const [newAmount, setNewAmount] = useState("")
   const [newType, setNewType] = useState<"expense" | "income" | "transfer">("expense")
-  const [newAccountId, setNewAccountId] = useState(accounts[0]?.id || "")
+  const [newAmount, setNewAmount] = useState("")
+  const [newAccountId, setNewAccountId] = useState("")
   const [newDestAccountId, setNewDestAccountId] = useState("")
   const [newCategoryId, setNewCategoryId] = useState("")
   const [newCustomCategory, setNewCustomCategory] = useState("")
   const [newDate, setNewDate] = useState(new Date().toISOString().split("T")[0])
   const [newNote, setNewNote] = useState("")
-  const [txError, setTxError] = useState("")
+  
+  // Feature 1: Optional Fee System & InstaPay Toggle
+  const [feeMode, setFeeMode] = useState<"none" | "manual" | "instapay">("none")
+  const [manualFeeType, setManualFeeType] = useState<"flat" | "percentage">("flat")
+  const [manualFeeValue, setManualFeeValue] = useState("")
+
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
-  const currencySymbol = profile.currency === "EUR" ? "€" : profile.currency === "GBP" ? "£" : profile.currency === "EGP" ? "EGP " : profile.currency === "AED" ? "AED " : "$"
+  useEffect(() => {
+    if (accounts.length > 0 && !newAccountId) {
+      setNewAccountId(accounts[0].id)
+    }
+  }, [accounts, newAccountId])
 
-  const handleAddTransaction = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setTxError("")
+  // Live fee calculation
+  const calculatedFeeAmount = useMemo(() => {
+    const principal = parseFloat(newAmount) || 0
+    if (principal <= 0) return 0
 
-    const amountNum = parseFloat(newAmount)
-    if (isNaN(amountNum) || amountNum <= 0) {
-      setTxError("Please enter a valid amount greater than 0.")
-      return
+    if (feeMode === "instapay") {
+      // Rule: 0.1% of transaction amount, minimum EGP 0.50, maximum EGP 20.00
+      const rawFee = principal * 0.001
+      return Math.min(20.0, Math.max(0.5, rawFee))
     }
 
-    const accId = newAccountId || accounts[0]?.id
-    if (!accId) {
-      setTxError("Please create an account first before adding transactions.")
-      return
-    }
-
-    if (newType === "transfer") {
-      const destId = newDestAccountId || accounts.find((a) => a.id !== accId)?.id
-      if (!destId || destId === accId) {
-        setTxError("Please select two different accounts for the transfer.")
-        return
+    if (feeMode === "manual") {
+      const val = parseFloat(manualFeeValue) || 0
+      if (val <= 0) return 0
+      if (manualFeeType === "percentage") {
+        return (principal * val) / 100
       }
+      return val
     }
 
+    return 0
+  }, [feeMode, manualFeeType, manualFeeValue, newAmount])
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
     setIsSubmitting(true)
+    setErrorMsg(null)
+
     try {
-      const isCustomCat = newCategoryId === "custom" || (!newCategoryId && newCustomCategory.trim() !== "")
-      const catId = !isCustomCat && newCategoryId ? newCategoryId : undefined
-      const catName = isCustomCat && newCustomCategory.trim() ? newCustomCategory.trim() : undefined
+      const amt = parseFloat(newAmount)
+      if (isNaN(amt) || amt <= 0) throw new Error("Please enter a valid amount.")
+      if (!newAccountId) throw new Error("Please select an account.")
 
       await createTransaction({
-        account_id: accId,
-        destination_account_id: newType === "transfer" ? (newDestAccountId || accounts.find((a) => a.id !== accId)?.id) : undefined,
-        category_id: catId,
-        category_name: catName,
-        amount: amountNum,
+        account_id: newAccountId,
+        destination_account_id: newType === "transfer" ? newDestAccountId : undefined,
+        category_id: newCategoryId === "custom" ? undefined : newCategoryId || undefined,
+        category_name: newCategoryId === "custom" ? newCustomCategory : undefined,
+        amount: amt,
         type: newType,
-        note: newNote.trim(),
-        description: newNote.trim() || (newType === "transfer" ? "Transfer" : newType === "income" ? "Income" : "Expense"),
-        date: newDate || new Date().toISOString().split("T")[0],
+        note: newNote,
+        date: newDate,
+        fee_amount: calculatedFeeAmount > 0 ? calculatedFeeAmount : undefined,
+        fee_type: feeMode === "none" ? undefined : (feeMode === "instapay" ? "instapay" : manualFeeType),
       })
 
-      // Reset and close on success
+      // Reset form
       setNewAmount("")
       setNewNote("")
       setNewCustomCategory("")
-      setTxError("")
+      setFeeMode("none")
+      setManualFeeValue("")
       onClose()
     } catch (err: any) {
-      setTxError(err?.message || "Failed to create transaction. Please try again.")
+      setErrorMsg(err.message || "Failed to record transaction.")
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  return (
-    <AnimatePresence>
-      {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            transition={{ duration: 0.2 }}
-            className="w-full max-w-lg bg-[#12121a] border border-white/10 rounded-3xl p-6 shadow-2xl shadow-black/80 overflow-hidden"
-          >
-            <form onSubmit={handleAddTransaction} className="flex flex-col gap-4">
-              <div className="flex items-center justify-between">
-                <h4 className="text-base font-bold text-white font-display">Add New Transaction</h4>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="text-white/40 hover:text-white transition-colors p-1 cursor-pointer"
-                >
-                  <X className="size-5" />
-                </button>
-              </div>
-
-              {txError && (
-                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-sans flex items-center gap-2">
-                  <AlertTriangle className="size-4 shrink-0" />
-                  <span>{txError}</span>
-                </div>
-              )}
-
-              {/* Type Switcher */}
-              <div>
-                <label className="text-[11px] font-semibold text-white/50 uppercase tracking-wide block mb-1.5 font-sans">
-                  Transaction Type
-                </label>
-                <div className="grid grid-cols-3 gap-1.5 p-1 bg-[#1a1a26] border border-white/5 rounded-xl">
-                  {(["expense", "income", "transfer"] as const).map((t) => (
-                    <button
-                      key={t}
-                      type="button"
-                      onClick={() => setNewType(t)}
-                      className={`py-2 rounded-lg text-xs font-semibold capitalize transition-all font-sans cursor-pointer ${
-                        newType === t
-                          ? "bg-[#5b4dc7] text-white shadow-sm"
-                          : "text-white/50 hover:text-white hover:bg-white/5"
-                      }`}
-                    >
-                      {t === "expense" ? "Expense" : t === "income" ? "Income" : "Transfer"}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* Amount */}
-                <div>
-                  <label className="text-[11px] font-semibold text-white/50 uppercase tracking-wide block mb-1 font-sans">
-                    Amount ({currencySymbol.trim()})
-                  </label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    placeholder="0.00"
-                    value={newAmount}
-                    onChange={(e) => setNewAmount(e.target.value)}
-                    className="w-full px-3.5 py-2 bg-[#1a1a26] border border-white/5 rounded-xl text-sm text-white focus:outline-none focus:border-[#5b4dc7]/50 focus:ring-1 focus:ring-[#5b4dc7]/20 font-mono"
-                  />
-                </div>
-
-                {/* Date */}
-                <div>
-                  <label className="text-[11px] font-semibold text-white/50 uppercase tracking-wide block mb-1 font-sans">
-                    Date
-                  </label>
-                  <input
-                    type="date"
-                    value={newDate}
-                    onChange={(e) => setNewDate(e.target.value)}
-                    className="w-full px-3.5 py-2 bg-[#1a1a26] border border-white/5 rounded-xl text-sm text-white focus:outline-none focus:border-[#5b4dc7]/50 focus:ring-1 focus:ring-[#5b4dc7]/20 font-sans"
-                  />
-                </div>
-
-                {/* Source Account */}
-                <div>
-                  <label className="text-[11px] font-semibold text-white/50 uppercase tracking-wide block mb-1 font-sans">
-                    {newType === "transfer" ? "From Account" : "Account"}
-                  </label>
-                  <select
-                    value={newAccountId || accounts[0]?.id}
-                    onChange={(e) => setNewAccountId(e.target.value)}
-                    required
-                    className="w-full px-3.5 py-2 bg-[#1a1a26] border border-white/5 rounded-xl text-sm text-white focus:outline-none focus:border-[#5b4dc7]/50 font-sans appearance-none cursor-pointer"
-                  >
-                    {accounts.length === 0 ? (
-                      <option value="">No accounts available</option>
-                    ) : (
-                      accounts.map((acc) => (
-                        <option key={acc.id} value={acc.id}>
-                          {acc.name} ({currencySymbol}{Number(acc.balance || 0).toFixed(2)})
-                        </option>
-                      ))
-                    )}
-                  </select>
-                </div>
-
-                {/* Destination Account (Only for Transfer) */}
-                {newType === "transfer" ? (
-                  <div>
-                    <label className="text-[11px] font-semibold text-white/50 uppercase tracking-wide block mb-1 font-sans">
-                      To Account
-                    </label>
-                    <select
-                      value={newDestAccountId || accounts.find((a) => a.id !== (newAccountId || accounts[0]?.id))?.id || ""}
-                      onChange={(e) => setNewDestAccountId(e.target.value)}
-                      required
-                      className="w-full px-3.5 py-2 bg-[#1a1a26] border border-white/5 rounded-xl text-sm text-white focus:outline-none focus:border-[#5b4dc7]/50 font-sans appearance-none cursor-pointer"
-                    >
-                      {accounts
-                        .filter((a) => a.id !== (newAccountId || accounts[0]?.id))
-                        .map((acc) => (
-                          <option key={acc.id} value={acc.id}>
-                            {acc.name} ({currencySymbol}{Number(acc.balance || 0).toFixed(2)})
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                ) : (
-                  /* Category */
-                  <div>
-                    <label className="text-[11px] font-semibold text-white/50 uppercase tracking-wide block mb-1 font-sans">
-                      Category
-                    </label>
-                    <select
-                      value={newCategoryId}
-                      onChange={(e) => setNewCategoryId(e.target.value)}
-                      className="w-full px-3.5 py-2 bg-[#1a1a26] border border-white/5 rounded-xl text-sm text-white focus:outline-none focus:border-[#5b4dc7]/50 font-sans appearance-none cursor-pointer"
-                    >
-                      <option value="">General</option>
-                      {categories.map((cat) => (
-                        <option key={cat.id} value={cat.id}>
-                          {cat.name}
-                        </option>
-                      ))}
-                      <option value="custom">+ Add / Enter custom category...</option>
-                    </select>
-                  </div>
-                )}
-
-                {/* Custom Category Input */}
-                {newType !== "transfer" && (newCategoryId === "custom" || categories.length === 0) && (
-                  <div className="sm:col-span-2">
-                    <label className="text-[11px] font-semibold text-white/50 uppercase tracking-wide block mb-1 font-sans">
-                      Custom Category Name
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Groceries, Rent, Freelance"
-                      value={newCustomCategory}
-                      onChange={(e) => setNewCustomCategory(e.target.value)}
-                      className="w-full px-3.5 py-2 bg-[#1a1a26] border border-white/5 rounded-xl text-sm text-white focus:outline-none focus:border-[#5b4dc7]/50 font-sans"
-                    />
-                  </div>
-                )}
-
-                {/* Note */}
-                <div className="sm:col-span-2">
-                  <label className="text-[11px] font-semibold text-white/50 uppercase tracking-wide block mb-1 font-sans">
-                    Note (Optional)
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Coffee, Monthly subscription, Freelance payment"
-                    value={newNote}
-                    onChange={(e) => setNewNote(e.target.value)}
-                    className="w-full px-3.5 py-2 bg-[#1a1a26] border border-white/5 rounded-xl text-sm text-white focus:outline-none focus:border-[#5b4dc7]/50 font-sans"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-white/5">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-white/60 hover:text-white hover:bg-white/5 transition-colors font-sans cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="px-5 py-2 rounded-xl text-xs font-semibold bg-[#5b4dc7] text-white hover:bg-[#5b4dc7]/90 transition-all font-sans shadow-lg shadow-[#5b4dc7]/25 cursor-pointer disabled:opacity-50"
-                >
-                  {isSubmitting ? "Saving..." : "Save Transaction"}
-                </button>
-              </div>
-            </form>
-          </motion.div>
-        </div>
-      )}
-    </AnimatePresence>
-  )
-}
-
-function DashboardAccountsSection({ onNavigate }: { onNavigate?: (section: SectionId) => void }) {
-  const { accounts, transactions } = useFinanceData()
-  const { profile } = useUserProfile()
-  const [showAddTxModal, setShowAddTxModal] = useState(false)
-  const currencySymbol = profile.currency === "EUR" ? "€" : profile.currency === "GBP" ? "£" : profile.currency === "EGP" ? "EGP " : profile.currency === "AED" ? "AED " : "$"
-
-  const recentTx = transactions.slice(0, 6)
+  if (!isOpen) return null
 
   return (
-    <div className={`flex flex-col gap-5 ${SECTION_MIN_H}`}>
-      <AddTransactionModal isOpen={showAddTxModal} onClose={() => setShowAddTxModal(false)} />
-
-      {accounts.length === 0 ? (
-        <div className="rounded-2xl surface-card p-8 border border-dashed border-border/60 text-center flex flex-col items-center justify-center gap-2" style={{ boxShadow: CARD_SHADOW }}>
-          <div className="size-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary mb-1">
-            <Landmark className="size-6" />
-          </div>
-          <p className="text-sm font-bold text-foreground font-display">No accounts added yet</p>
-          <p className="text-xs text-muted-foreground font-sans max-w-sm">Connect or create your bank account, cash wallet, or card to start tracking your finances.</p>
-          <button
-            onClick={() => onNavigate?.("accounts")}
-            className="mt-3 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors font-sans cursor-pointer shadow-md"
-          >
-            + Add Account
-          </button>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 lg:gap-4">
-          {accounts.map((account, i) => {
-            const { icon: Icon, tone, label } = getAccountIconAndTone(account.type)
-            return (
-              <motion.div
-                key={account.id}
-                initial={{ opacity: 0, y: 16, scale: 0.97 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ duration: 0.5, delay: i * 0.06, ease: EASE_OUT }}
-                className={`relative overflow-hidden rounded-2xl surface-card p-4 lg:p-5 glow-${tone}-sm group hover:scale-[1.01] transition-transform duration-300`}
-                style={{ boxShadow: CARD_SHADOW }}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="size-10 rounded-xl bg-accent/60 flex items-center justify-center">
-                      <Icon className="size-4 text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-foreground font-display">{account.name}</p>
-                      <p className="text-[11px] text-muted-foreground mt-0.5 font-sans">{label}</p>
-                    </div>
-                  </div>
-                  <button onClick={() => onNavigate?.("accounts")} className="text-xs font-semibold text-primary hover:underline font-sans cursor-pointer">Manage</button>
-                </div>
-                <div className="mt-6">
-                  <p className="text-[11px] font-semibold tracking-[0.08em] uppercase text-muted-foreground font-sans">Available balance</p>
-                  <p className="text-2xl font-bold text-foreground font-mono tracking-tighter mt-1">
-                    {currencySymbol}{(account.balance || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </p>
-                </div>
-              </motion.div>
-            )
-          })}
-        </div>
-      )}
-
-      <SectionPanel className="!p-0 overflow-hidden">
-        <div className="p-5 lg:p-6 border-b border-border/50 flex items-center justify-between">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="w-full max-w-lg rounded-3xl p-6 sm:p-7 border shadow-2xl backdrop-blur-2xl relative overflow-hidden max-h-[90vh] overflow-y-auto"
+        style={{
+          background: tokens.cardGradient,
+          borderColor: tokens.border,
+          boxShadow: tokens.cardShadow,
+        }}
+      >
+        <div className="flex items-center justify-between pb-4 border-b" style={{ borderColor: tokens.border }}>
           <div>
-            <h3 className="text-sm font-bold text-foreground tracking-tight font-display">All recent transactions</h3>
-            <p className="text-[11px] text-muted-foreground mt-0.5 font-sans">Your latest income and expenses</p>
+            <h3 className="text-lg font-bold font-display text-white">Record Transaction</h3>
+            <p className="text-xs font-sans text-white/70 mt-0.5">Post an expense, deposit, or account transfer</p>
           </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setShowAddTxModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors font-sans cursor-pointer shadow-sm"
-            >
-              <Plus className="size-3.5" />
-              <span>Add Transaction</span>
-            </button>
-            <button onClick={() => onNavigate?.("transactions")} className="text-xs font-semibold text-muted-foreground hover:text-foreground hover:underline font-sans cursor-pointer">View all</button>
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border/50">
-                <th className="text-left p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans">Description</th>
-                <th className="text-left p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans">Category</th>
-                <th className="text-left p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans">Date</th>
-                <th className="text-right p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentTx.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="p-8 text-center text-xs text-muted-foreground font-sans">
-                    No transactions recorded yet.
-                  </td>
-                </tr>
-              ) : (
-                recentTx.map((transaction, i) => (
-                  <motion.tr
-                    key={transaction.id}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.35, delay: 0.15 + i * 0.04 }}
-                    className="border-b border-border/30 hover:bg-accent/20 transition-all duration-200"
-                  >
-                    <td className="p-4">
-                      <div className="flex items-center gap-3">
-                        <div className="size-8 rounded-lg bg-accent/40 flex items-center justify-center shrink-0">
-                          <div className={`size-2 rounded-full ${transaction.type === 'income' ? 'bg-fin-gain' : 'bg-fin-loss'}`} />
-                        </div>
-                        <span className="text-[13px] font-semibold text-foreground font-sans">{transaction.description}</span>
-                      </div>
-                    </td>
-                    <td className="p-4 text-xs text-muted-foreground font-sans">{transaction.category_name || "General"}</td>
-                    <td className="p-4 text-xs font-mono text-muted-foreground">{transaction.date}</td>
-                    <td className={`p-4 text-right font-mono font-bold ${transaction.type === 'income' ? 'text-fin-gain' : 'text-fin-loss'}`}>
-                      {transaction.type === 'income' ? '+' : '-'}{currencySymbol}{Math.abs(transaction.amount).toFixed(2)}
-                    </td>
-                  </motion.tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </SectionPanel>
-    </div>
-  )
-}
-
-function AccountsSection() {
-  const { accounts, transactions, createAccount, deleteAccount } = useFinanceData()
-  const { profile } = useUserProfile()
-  const [selectedAccountId, setSelectedAccountId] = useState<string>("")
-  const [query, setQuery] = useState("")
-  const [minAmount, setMinAmount] = useState("")
-  const [maxAmount, setMaxAmount] = useState("")
-  const [showAddModal, setShowAddModal] = useState(false)
-  const [newAccName, setNewAccName] = useState("")
-  const [newAccType, setNewAccType] = useState("bank")
-  const [newAccBalance, setNewAccBalance] = useState("")
-  const [isSubmitting, setIsSubmitting] = useState(false)
-
-  const activeAccountId = selectedAccountId || accounts[0]?.id || ""
-  const selectedAccount = accounts.find((a) => a.id === activeAccountId) || accounts[0]
-  const currencySymbol = profile.currency === "EUR" ? "€" : profile.currency === "GBP" ? "£" : profile.currency === "EGP" ? "EGP " : profile.currency === "AED" ? "AED " : "$"
-
-  const filteredTransactions = useMemo(() => {
-    if (!selectedAccount) return []
-    return transactions.filter((t) => {
-      const matchesAcc = t.account_id === selectedAccount.id || t.account_name === selectedAccount.name
-      const matchesQuery = t.description.toLowerCase().includes(query.toLowerCase())
-      const matchesMin = !minAmount || Math.abs(t.amount) >= Number(minAmount)
-      const matchesMax = !maxAmount || Math.abs(t.amount) <= Number(maxAmount)
-      return matchesAcc && matchesQuery && matchesMin && matchesMax
-    })
-  }, [transactions, selectedAccount, query, minAmount, maxAmount])
-
-  const accountTrendData = useMemo(() => {
-    if (!selectedAccount) return []
-    const bal = selectedAccount.balance || 0
-    return [
-      { day: "Day 1", balance: bal },
-      { day: "Day 5", balance: bal },
-      { day: "Day 10", balance: bal },
-      { day: "Day 15", balance: bal },
-      { day: "Day 20", balance: bal },
-      { day: "Day 25", balance: bal },
-      { day: "Today", balance: bal },
-    ]
-  }, [selectedAccount])
-
-  const handleAddAccount = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newAccName.trim()) return
-    setIsSubmitting(true)
-
-    const created = await createAccount({
-      name: newAccName.trim(),
-      type: newAccType,
-      starting_balance: parseFloat(newAccBalance) || 0,
-      currency: profile.currency || "USD",
-    })
-
-    setSelectedAccountId(created.id)
-    setNewAccName("")
-    setNewAccBalance("")
-    setIsSubmitting(false)
-    setShowAddModal(false)
-  }
-
-  const handleDeleteCurrentAccount = async () => {
-    if (!selectedAccount) return
-    if (confirm(`Are you sure you want to remove account "${selectedAccount.name}"?`)) {
-      await deleteAccount(selectedAccount.id)
-      setSelectedAccountId("")
-    }
-  }
-
-  const { icon: Icon, tone, label: typeLabel } = getAccountIconAndTone(selectedAccount?.type)
-
-  return (
-    <div className={`flex flex-col gap-5 ${SECTION_MIN_H}`}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-bold text-foreground font-display tracking-tight">Accounts</h2>
-          <p className="text-xs text-muted-foreground font-sans">Manage your active accounts and balances</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {accounts.length > 0 && (
-            <div className="flex items-center gap-1 rounded-xl border border-border/40 bg-card/60 p-1">
-              {accounts.map((acc) => (
-                <button
-                  key={acc.id}
-                  onClick={() => setSelectedAccountId(acc.id)}
-                  className={`rounded-lg px-3.5 py-1.5 text-xs font-semibold font-sans transition-colors cursor-pointer ${
-                    activeAccountId === acc.id ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {acc.name}
-                </button>
-              ))}
-            </div>
-          )}
           <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors font-sans cursor-pointer shadow-sm shrink-0"
+            onClick={onClose}
+            className="size-8 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
           >
-            <Plus className="size-3.5" />
-            <span>Add Account</span>
+            ✕
           </button>
         </div>
-      </div>
 
-      {/* Add Account Modal */}
-      <AnimatePresence>
-        {showAddModal && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.25 }}
-            className="overflow-hidden"
-          >
-            <form onSubmit={handleAddAccount} className="p-5 rounded-2xl bg-muted/30 border border-primary/30 flex flex-col gap-4 glow-teal-sm">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-bold text-foreground font-display">Add New Account</h4>
-                <button type="button" onClick={() => setShowAddModal(false)} className="text-muted-foreground hover:text-foreground transition-colors p-1 cursor-pointer">
-                  <X className="size-4" />
-                </button>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1 font-sans">Account Name</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Chase, QNB, Cash"
-                    value={newAccName}
-                    onChange={(e) => setNewAccName(e.target.value)}
-                    className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary font-sans"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1 font-sans">Account Type</label>
-                  <select
-                    value={newAccType}
-                    onChange={(e) => setNewAccType(e.target.value)}
-                    className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary font-sans appearance-none cursor-pointer"
-                  >
-                    <option value="bank">Bank / Checking</option>
-                    <option value="cash">Cash wallet</option>
-                    <option value="card">Credit card</option>
-                    <option value="savings">Savings account</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1 font-sans">Starting Balance</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    required
-                    placeholder="0.00"
-                    value={newAccBalance}
-                    onChange={(e) => setNewAccBalance(e.target.value)}
-                    className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary font-mono"
-                  />
-                </div>
-              </div>
-              <div className="flex items-center justify-end gap-2 pt-1">
-                <button type="button" onClick={() => setShowAddModal(false)} className="px-4 py-2 rounded-xl text-xs font-semibold text-muted-foreground hover:bg-accent/40 transition-colors font-sans cursor-pointer">Cancel</button>
-                <button type="submit" disabled={isSubmitting} className="px-4 py-2 rounded-xl text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-sans shadow-md cursor-pointer">
-                  {isSubmitting ? "Creating..." : "Save Account"}
-                </button>
-              </div>
-            </form>
-          </motion.div>
+        {errorMsg && (
+          <div className="mt-4 p-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-200 text-xs flex items-center gap-2">
+            <AlertCircle className="size-4 shrink-0 text-red-400" />
+            <span>{errorMsg}</span>
+          </div>
         )}
-      </AnimatePresence>
 
-      {!selectedAccount ? (
-        <div className="rounded-2xl surface-card p-10 text-center flex flex-col items-center justify-center gap-3" style={{ boxShadow: CARD_SHADOW }}>
-          <Landmark className="size-10 text-muted-foreground/60" />
-          <p className="text-base font-bold text-foreground font-display">No accounts configured</p>
-          <p className="text-xs text-muted-foreground font-sans max-w-sm">Create an account to start logging and tracking transactions.</p>
-          <button onClick={() => setShowAddModal(true)} className="px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold font-sans cursor-pointer shadow-md">
-            + Add First Account
-          </button>
-        </div>
-      ) : (
-        <>
-          <motion.div
-            initial={{ opacity: 0, y: 16, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.5, ease: EASE_OUT }}
-            className={`relative overflow-hidden rounded-2xl surface-card p-5 lg:p-6 glow-${tone}-sm group hover:scale-[1.01] transition-transform duration-300`}
-            style={{ boxShadow: CARD_SHADOW }}
-          >
-            <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex items-start gap-3">
-                <div className="size-10 rounded-xl bg-accent/60 flex items-center justify-center">
-                  <Icon className="size-4 text-primary" />
-                </div>
-                <div>
-                  <p className="text-lg font-bold text-foreground font-display">{selectedAccount.name}</p>
-                  <p className="text-xs text-muted-foreground font-sans">{typeLabel} · {selectedAccount.currency || profile.currency || "USD"}</p>
-                  <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Available balance</p>
-                  <p className="mt-1 text-3xl font-bold tracking-tighter text-foreground font-mono">
-                    {currencySymbol}{(selectedAccount.balance || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </p>
-                </div>
-              </div>
-              <div className="h-32 w-full max-w-md">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={accountTrendData}>
-                    <Line type="monotone" dataKey="balance" stroke={C.teal} strokeWidth={2.5} dot={false} animationDuration={700} />
-                    <XAxis dataKey="day" hide />
-                    <YAxis hide domain={["dataMin - 100", "dataMax + 100"]} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="flex flex-row gap-3 lg:flex-col lg:items-end">
-                <button onClick={handleDeleteCurrentAccount} className="text-xs font-semibold text-fin-loss/80 hover:text-fin-loss font-sans cursor-pointer">
-                  Delete Account
-                </button>
-              </div>
-            </div>
-          </motion.div>
-
-          <SectionPanel className="!p-0 overflow-hidden">
-            <div className="border-b border-border/50 p-5 lg:p-6">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-bold text-foreground font-display">Recent transactions</h3>
-                  <p className="mt-0.5 text-[11px] text-muted-foreground font-sans">Activity for {selectedAccount.name}</p>
-                </div>
-              </div>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <div className="flex min-w-48 flex-1 items-center gap-2 rounded-lg border border-border/40 bg-muted/20 px-3 py-2">
-                  <Search className="size-3.5 text-muted-foreground" />
-                  <input
-                    value={query}
-                    onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Search description"
-                    className="w-full bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground font-sans"
-                  />
-                </div>
-                <input
-                  value={minAmount}
-                  onChange={(event) => setMinAmount(event.target.value)}
-                  type="number"
-                  min="0"
-                  placeholder="Min amount"
-                  className="w-28 rounded-lg border border-border/40 bg-muted/20 px-3 py-2 text-xs text-foreground outline-none placeholder:text-muted-foreground font-mono"
-                />
-                <input
-                  value={maxAmount}
-                  onChange={(event) => setMaxAmount(event.target.value)}
-                  type="number"
-                  min="0"
-                  placeholder="Max amount"
-                  className="w-28 rounded-lg border border-border/40 bg-muted/20 px-3 py-2 text-xs text-foreground outline-none placeholder:text-muted-foreground font-mono"
-                />
-              </div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border/50">
-                    <th className="p-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Description</th>
-                    <th className="p-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Category</th>
-                    <th className="p-4 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Date</th>
-                    <th className="p-4 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground font-sans">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredTransactions.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="p-8 text-center text-xs text-muted-foreground font-sans">
-                        No transactions recorded for {selectedAccount.name}.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredTransactions.map((transaction, i) => (
-                      <motion.tr
-                        key={transaction.id}
-                        initial={{ opacity: 0, x: -10 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.35, delay: i * 0.04 }}
-                        className="border-b border-border/30 hover:bg-accent/20 transition-all duration-200"
-                      >
-                        <td className="p-4 text-[13px] font-semibold text-foreground font-sans">{transaction.description}</td>
-                        <td className="p-4 text-xs text-muted-foreground font-sans">{transaction.category_name || "General"}</td>
-                        <td className="p-4 text-xs text-muted-foreground font-mono">{transaction.date}</td>
-                        <td className={`p-4 text-right font-bold font-mono ${transaction.type === "income" ? "text-fin-gain" : "text-fin-loss"}`}>
-                          {transaction.type === "income" ? "+" : "-"}{currencySymbol}{Math.abs(transaction.amount).toFixed(2)}
-                        </td>
-                      </motion.tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </SectionPanel>
-        </>
-      )}
-    </div>
-  )
-}
-
-// ─── Section: Transactions ──────────────────────────────────────
-
-function TransactionsSection() {
-  const { transactions, accounts, categories, totalIncome, totalExpense } = useFinanceData()
-  const { profile } = useUserProfile()
-  const [searchQuery, setSearchQuery] = useState("")
-  const [typeFilter, setTypeFilter] = useState<"all" | "income" | "expense">("all")
-  const [categoryFilter, setCategoryFilter] = useState<string>("all")
-  const [accountFilter, setAccountFilter] = useState<string>("all")
-  const [showAddModal, setShowAddModal] = useState(false)
-
-  const currencySymbol = profile.currency === "EUR" ? "€" : profile.currency === "GBP" ? "£" : profile.currency === "EGP" ? "EGP " : profile.currency === "AED" ? "AED " : "$"
-
-  const filteredTransactions = useMemo(() => {
-    return (transactions || []).filter((tx) => {
-      const matchesSearch =
-        (tx.description || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (tx.category_name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (tx.account_name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (tx.note || "").toLowerCase().includes(searchQuery.toLowerCase())
-
-      const matchesType = typeFilter === "all" || tx.type === typeFilter
-      const matchesCategory = categoryFilter === "all" || tx.category_id === categoryFilter || tx.category_name?.toLowerCase() === categoryFilter.toLowerCase()
-      const matchesAccount = accountFilter === "all" || tx.account_id === accountFilter || tx.account_name?.toLowerCase() === accountFilter.toLowerCase()
-
-      return matchesSearch && matchesType && matchesCategory && matchesAccount
-    })
-  }, [transactions, searchQuery, typeFilter, categoryFilter, accountFilter])
-
-  const netSavings = totalIncome - totalExpense
-
-  return (
-    <div className={`flex flex-col gap-5 ${SECTION_MIN_H}`}>
-      <AddTransactionModal isOpen={showAddModal} onClose={() => setShowAddModal(false)} />
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
-        <KpiCard label="Total Income" value={totalIncome.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} prefix={currencySymbol} delay={0} icon={TrendingUp} />
-        <KpiCard label="Total Expenses" value={totalExpense.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} prefix={currencySymbol} delay={0.06} icon={ArrowDownRight} />
-        <KpiCard label="Net Balance" value={netSavings.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} prefix={currencySymbol} delay={0.12} icon={Wallet} />
-        <KpiCard label="Total Transactions" value={String((transactions || []).length)} delay={0.18} icon={ArrowLeftRight} />
-      </div>
-
-      {/* Main Transactions Panel */}
-      <SectionPanel className="!p-0 overflow-hidden">
-        {/* Header with Search, Add Transaction, and Filter Controls */}
-        <div className="p-5 lg:p-6 border-b border-border/50 flex flex-col gap-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            <div>
-              <h3 className="text-base font-bold text-foreground tracking-tight font-display">All Transactions</h3>
-              <p className="text-xs text-muted-foreground mt-0.5 font-sans">
-                Showing {filteredTransactions.length} of {(transactions || []).length} transactions
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="flex items-center rounded-xl bg-muted/40 p-1 border border-border/30">
-                {(["all", "expense", "income"] as const).map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => setTypeFilter(t)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all font-sans cursor-pointer ${
-                      typeFilter === t
-                        ? "bg-primary text-primary-foreground shadow-xs"
-                        : "text-muted-foreground hover:text-foreground hover:bg-accent/30"
-                    }`}
-                  >
-                    {t === "all" ? "All" : t === "expense" ? "Expenses" : "Income"}
-                  </button>
-                ))}
-              </div>
-              <button
-                onClick={() => setShowAddModal(true)}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors font-sans cursor-pointer shadow-sm shrink-0"
-              >
-                <Plus className="size-3.5" />
-                <span>Add Transaction</span>
-              </button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="relative sm:col-span-1">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-              <input
-                type="text"
-                placeholder="Search description, category, account..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-muted/30 border border-border/40 rounded-xl text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all font-sans"
-              />
-            </div>
-
-            <div>
-              <select
-                aria-label="Filter by category"
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="w-full px-3 py-2 bg-muted/30 border border-border/40 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all font-sans appearance-none cursor-pointer"
-              >
-                <option value="all" className="bg-card text-foreground">All Categories</option>
-                {(categories || []).map((cat) => (
-                  <option key={cat.id} value={cat.id} className="bg-card text-foreground">{cat.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <select
-                aria-label="Filter by account"
-                value={accountFilter}
-                onChange={(e) => setAccountFilter(e.target.value)}
-                className="w-full px-3 py-2 bg-muted/30 border border-border/40 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all font-sans appearance-none cursor-pointer"
-              >
-                <option value="all" className="bg-card text-foreground">All Accounts</option>
-                {(accounts || []).map((acc) => (
-                  <option key={acc.id} value={acc.id} className="bg-card text-foreground">{acc.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Transactions Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border/50">
-                <th className="text-left p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans">Description</th>
-                <th className="text-left p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans">Category</th>
-                <th className="text-left p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans hidden sm:table-cell">Account</th>
-                <th className="text-left p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans">Date</th>
-                <th className="text-right p-4 text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.08em] font-sans">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredTransactions.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="p-8 text-center text-xs text-muted-foreground font-sans">
-                    {transactions.length === 0 ? "No transactions recorded yet. Click '+ Add Transaction' to get started." : "No transactions match your search filters."}
-                  </td>
-                </tr>
-              ) : (
-                filteredTransactions.map((tx, i) => (
-                  <motion.tr
-                    key={tx.id}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.3, delay: Math.min(i * 0.03, 0.3) }}
-                    className="border-b border-border/30 hover:bg-accent/20 transition-all duration-200"
-                  >
-                    <td className="p-4">
-                      <div className="flex items-center gap-3">
-                        <div className="size-8 rounded-lg bg-accent/40 flex items-center justify-center shrink-0">
-                          <div className={`size-2 rounded-full ${tx.type === "income" ? "bg-fin-gain" : "bg-fin-loss"}`} />
-                        </div>
-                        <div>
-                          <span className="text-[13px] font-semibold text-foreground font-sans block">{tx.description}</span>
-                          <span className="text-[10px] text-muted-foreground/70 font-mono sm:hidden">{tx.account_name}</span>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="p-4 text-xs text-muted-foreground font-sans">{tx.category_name || "General"}</td>
-                    <td className="p-4 text-xs font-mono text-muted-foreground hidden sm:table-cell">
-                      <span className="px-2 py-0.5 rounded-md bg-accent/40 text-[11px]">{tx.account_name}</span>
-                    </td>
-                    <td className="p-4 text-xs font-mono text-muted-foreground">
-                      <span>{tx.date}</span>
-                    </td>
-                    <td className={`p-4 text-right font-mono font-bold ${tx.type === "income" ? "text-fin-gain" : "text-fin-loss"}`}>
-                      {tx.type === "income" ? "+" : "-"}{currencySymbol}{Math.abs(tx.amount).toFixed(2)}
-                    </td>
-                  </motion.tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </SectionPanel>
-    </div>
-  )
-}
-
-// ─── Section: Categories ────────────────────────────────────────
-
-function CategoriesSection() {
-  const { categories, transactions, createCategory, totalExpense, totalIncome } = useFinanceData()
-  const { profile } = useUserProfile()
-  const [searchQuery, setSearchQuery] = useState("")
-  const [typeFilter, setTypeFilter] = useState<"all" | "expense" | "income">("all")
-  const [showAddModal, setShowAddModal] = useState(false)
-  const [newCatName, setNewCatName] = useState("")
-  const [newCatType, setNewCatType] = useState<"expense" | "income">("expense")
-  const [isSubmitting, setIsSubmitting] = useState(false)
-
-  const currencySymbol = profile.currency === "EUR" ? "€" : profile.currency === "GBP" ? "£" : profile.currency === "EGP" ? "EGP " : profile.currency === "AED" ? "AED " : "$"
-
-  const filteredCategories = useMemo(() => {
-    return categories.filter((cat) => {
-      const matchesSearch = cat.name.toLowerCase().includes(searchQuery.toLowerCase())
-      const matchesType = typeFilter === "all" || cat.type === typeFilter
-      return matchesSearch && matchesType
-    })
-  }, [categories, searchQuery, typeFilter])
-
-  const expenseCount = useMemo(() => categories.filter((c) => c.type === "expense").length, [categories])
-  const incomeCount = useMemo(() => categories.filter((c) => c.type === "income").length, [categories])
-
-  const handleAddCategory = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newCatName.trim()) return
-    setIsSubmitting(true)
-
-    await createCategory({
-      name: newCatName.trim(),
-      type: newCatType,
-      currency: profile.currency || "USD",
-    })
-
-    setNewCatName("")
-    setIsSubmitting(false)
-    setShowAddModal(false)
-  }
-
-  return (
-    <div className={`flex flex-col gap-5 ${SECTION_MIN_H}`}>
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4">
-        <KpiCard label="Total Categories" value={String(categories.length)} delay={0} icon={CircleDot} />
-        <KpiCard label="Expense Categories" value={String(expenseCount)} delay={0.06} icon={ArrowDownRight} />
-        <KpiCard label="Income Categories" value={String(incomeCount)} delay={0.12} icon={TrendingUp} />
-        <KpiCard label="Monthly Spent" value={totalExpense.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} prefix={currencySymbol} delay={0.18} icon={DollarSign} />
-      </div>
-
-      {/* Main Panel */}
-      <SectionPanel className="flex flex-col gap-5">
-        {/* Controls Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-border/50 pb-5">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative w-full sm:w-64">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-              <input
-                type="text"
-                placeholder="Search categories..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 bg-muted/30 border border-border/40 rounded-xl text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-all font-sans"
-              />
-            </div>
-            <div className="flex items-center rounded-xl bg-muted/40 p-1 border border-border/30">
-              {(["all", "expense", "income"] as const).map((t) => (
+        <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+          {/* Type Selector */}
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1.5 font-sans text-white/75">
+              Type
+            </label>
+            <div className="grid grid-cols-3 gap-1.5 p-1 border rounded-xl" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+              {(["expense", "income", "transfer"] as const).map((t) => (
                 <button
                   key={t}
-                  onClick={() => setTypeFilter(t)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all font-sans cursor-pointer ${
-                    typeFilter === t
-                      ? "bg-primary text-primary-foreground shadow-xs"
-                      : "text-muted-foreground hover:text-foreground hover:bg-accent/30"
-                  }`}
+                  type="button"
+                  onClick={() => {
+                    setNewType(t)
+                    if (t === "income") setFeeMode("none")
+                  }}
+                  className="py-2 rounded-lg text-xs font-semibold capitalize transition-all font-sans cursor-pointer"
+                  style={{
+                    background: newType === t ? tokens.dashboardActivePill : "transparent",
+                    color: newType === t ? "#120824" : "rgba(255, 255, 255, 0.75)",
+                    fontWeight: newType === t ? "bold" : "normal",
+                  }}
                 >
                   {t}
                 </button>
@@ -1384,560 +643,3011 @@ function CategoriesSection() {
             </div>
           </div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Amount */}
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
+                Amount ({currencySymbol.trim()})
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                required
+                placeholder="0.00"
+                value={newAmount}
+                onChange={(e) => setNewAmount(e.target.value)}
+                className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-mono text-white focus:outline-none transition-colors"
+                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+              />
+            </div>
+
+            {/* Date */}
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
+                Date
+              </label>
+              <input
+                type="date"
+                value={newDate}
+                onChange={(e) => setNewDate(e.target.value)}
+                className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none transition-colors"
+                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+              />
+            </div>
+
+            {/* Source Account */}
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
+                {newType === "transfer" ? "From Account" : "Account"}
+              </label>
+              <select
+                value={newAccountId}
+                onChange={(e) => setNewAccountId(e.target.value)}
+                required
+                className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none cursor-pointer"
+                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+              >
+                {accounts.map((acc) => (
+                  <option key={acc.id} value={acc.id} className="bg-[#1E0C38] text-white">
+                    {acc.name} ({currencySymbol}{Number(acc.balance || 0).toFixed(2)})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Destination Account or Category */}
+            {newType === "transfer" ? (
+              <div>
+                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
+                  To Account
+                </label>
+                <select
+                  value={newDestAccountId}
+                  onChange={(e) => setNewDestAccountId(e.target.value)}
+                  required
+                  className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none cursor-pointer"
+                  style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+                >
+                  <option value="" className="bg-[#1E0C38] text-white">Select Destination</option>
+                  {accounts.map((acc) => (
+                    <option key={acc.id} value={acc.id} className="bg-[#1E0C38] text-white">
+                      {acc.name} ({currencySymbol}{Number(acc.balance || 0).toFixed(2)})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div>
+                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
+                  Category
+                </label>
+                <select
+                  value={newCategoryId}
+                  onChange={(e) => setNewCategoryId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none cursor-pointer"
+                  style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+                >
+                  <option value="" className="bg-[#1E0C38] text-white">General / Uncategorized</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id} className="bg-[#1E0C38] text-white">
+                      {c.name}
+                    </option>
+                  ))}
+                  <option value="custom" className="bg-[#1E0C38] text-[#A7F3D0]">+ Custom Category</option>
+                </select>
+              </div>
+            )}
+          </div>
+
+          {newCategoryId === "custom" && newType !== "transfer" && (
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
+                Custom Category Name
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Subscriptions, Groceries"
+                value={newCustomCategory}
+                onChange={(e) => setNewCustomCategory(e.target.value)}
+                className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none"
+                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+              />
+            </div>
+          )}
+
+          {/* Note / Description */}
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
+              Description / Note
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. Monthly cloud server, Dinner with friends"
+              value={newNote}
+              onChange={(e) => setNewNote(e.target.value)}
+              className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none"
+              style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+            />
+          </div>
+
+          {/* FEATURE 1: OPTIONAL FEE SYSTEM & INSTAPAY TOGGLE */}
+          {(newType === "expense" || newType === "transfer") && (
+            <div className="p-3.5 rounded-2xl border" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Receipt className="size-3.5 text-[#FEF08A]" />
+                  Transaction Fee (Optional)
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setFeeMode("none")}
+                    className="px-2 py-1 text-[10px] font-semibold rounded-md transition-all cursor-pointer"
+                    style={{
+                      backgroundColor: feeMode === "none" ? "rgba(255, 255, 255, 0.15)" : "transparent",
+                      color: feeMode === "none" ? "#FFFFFF" : "rgba(255, 255, 255, 0.6)",
+                    }}
+                  >
+                    No Fee
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFeeMode("manual")}
+                    className="px-2 py-1 text-[10px] font-semibold rounded-md transition-all cursor-pointer"
+                    style={{
+                      backgroundColor: feeMode === "manual" ? "rgba(255, 255, 255, 0.15)" : "transparent",
+                      color: feeMode === "manual" ? "#FFFFFF" : "rgba(255, 255, 255, 0.6)",
+                    }}
+                  >
+                    Manual Fee
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFeeMode("instapay")}
+                    className="px-2 py-1 text-[10px] font-semibold rounded-md transition-all cursor-pointer"
+                    style={{
+                      background: feeMode === "instapay" ? tokens.dashboardActivePill : "transparent",
+                      color: feeMode === "instapay" ? "#120824" : "rgba(255, 255, 255, 0.6)",
+                      fontWeight: feeMode === "instapay" ? "bold" : "normal",
+                    }}
+                  >
+                    ⚡ InstaPay
+                  </button>
+                </div>
+              </div>
+
+              {feeMode === "manual" && (
+                <div className="mt-2.5 pt-2.5 border-t border-white/10 flex flex-wrap items-center gap-2">
+                  <div className="flex items-center rounded-lg border border-white/15 p-0.5 bg-black/20">
+                    <button
+                      type="button"
+                      onClick={() => setManualFeeType("flat")}
+                      className="px-2 py-1 text-[10px] font-semibold rounded-md cursor-pointer"
+                      style={{
+                        backgroundColor: manualFeeType === "flat" ? "rgba(255, 255, 255, 0.2)" : "transparent",
+                        color: "#FFFFFF",
+                      }}
+                    >
+                      Flat ({currencySymbol.trim()})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setManualFeeType("percentage")}
+                      className="px-2 py-1 text-[10px] font-semibold rounded-md cursor-pointer"
+                      style={{
+                        backgroundColor: manualFeeType === "percentage" ? "rgba(255, 255, 255, 0.2)" : "transparent",
+                        color: "#FFFFFF",
+                      }}
+                    >
+                      % Percent
+                    </button>
+                  </div>
+
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder={manualFeeType === "flat" ? "e.g. 5.00" : "e.g. 1.5"}
+                    value={manualFeeValue}
+                    onChange={(e) => setManualFeeValue(e.target.value)}
+                    className="w-28 px-2.5 py-1.5 border rounded-lg text-xs font-mono text-white bg-black/20 focus:outline-none border-white/15"
+                  />
+
+                  {calculatedFeeAmount > 0 && (
+                    <span className="text-xs font-mono font-bold text-[#FEF08A] ml-auto">
+                      Fee: {currencySymbol}{calculatedFeeAmount.toFixed(2)}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {feeMode === "instapay" && (
+                <div className="mt-2.5 pt-2.5 border-t border-white/10 flex items-center justify-between">
+                  <div>
+                    <p className="text-[11px] font-semibold text-[#A7F3D0]">This is an InstaPay transaction</p>
+                    <p className="text-[9.5px] text-white/60">0.1% rate • Min EGP 0.50 • Max EGP 20.00</p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xs font-mono font-bold text-[#FEF08A]">
+                      +{currencySymbol}{calculatedFeeAmount.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex items-center justify-end gap-3 pt-3 border-t" style={{ borderColor: tokens.border }}>
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2.5 rounded-xl text-xs font-semibold text-white/70 hover:text-white transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-6 py-2.5 rounded-xl text-xs font-bold transition-all font-sans shadow-lg cursor-pointer hover:scale-[1.02] text-[#120824] disabled:opacity-50"
+              style={{ background: tokens.dashboardActivePill }}
+            >
+              {isSubmitting ? "Recording..." : "Save Transaction"}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </div>
+  )
+}
+
+// ─── Modal: Edit Transaction (Feature 4) ──────────────────────────
+
+function EditTransactionModal({
+  transaction,
+  isOpen,
+  onClose,
+}: {
+  transaction: Transaction | null
+  isOpen: boolean
+  onClose: () => void
+}) {
+  const { accounts, categories, updateTransaction, transactions } = useFinanceData()
+  const { profile } = useUserProfile()
+  const { tokens } = useDashboardTheme()
+  const currencySymbol = getCurrencySymbol(profile.currency)
+
+  const [amount, setAmount] = useState("")
+  const [date, setDate] = useState("")
+  const [accountId, setAccountId] = useState("")
+  const [categoryId, setCategoryId] = useState("")
+  const [note, setNote] = useState("")
+  const [type, setType] = useState<"income" | "expense">("expense")
+  
+  // Linked fee handling
+  const [hasLinkedFee, setHasLinkedFee] = useState(false)
+  const [feeAmount, setFeeAmount] = useState("")
+
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (transaction) {
+      setAmount(String(Math.abs(transaction.amount)))
+      setDate(transaction.date || new Date().toISOString().split("T")[0])
+      setAccountId(transaction.account_id)
+      setCategoryId(transaction.category_id || "")
+      setNote(transaction.note || transaction.description || "")
+      setType(transaction.type)
+
+      // Look for linked fee in transactions list
+      if (transaction.fee_pair_id) {
+        const feeRow = transactions.find(
+          (t) => t.fee_pair_id === transaction.fee_pair_id && t.id !== transaction.id
+        )
+        if (feeRow) {
+          setHasLinkedFee(true)
+          setFeeAmount(String(feeRow.amount))
+        } else {
+          setHasLinkedFee(false)
+          setFeeAmount("")
+        }
+      } else {
+        setHasLinkedFee(false)
+        setFeeAmount("")
+      }
+    }
+  }, [transaction, transactions])
+
+  if (!isOpen || !transaction) return null
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+    setErrorMsg(null)
+
+    try {
+      const amt = parseFloat(amount)
+      if (isNaN(amt) || amt <= 0) throw new Error("Please enter a valid amount.")
+      if (!accountId) throw new Error("Please select an account.")
+
+      await updateTransaction(transaction.id, {
+        account_id: accountId,
+        category_id: categoryId || undefined,
+        amount: amt,
+        type,
+        note,
+        date,
+        linked_fee_amount: hasLinkedFee ? (parseFloat(feeAmount) || 0) : undefined,
+      })
+
+      onClose()
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to update transaction.")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="w-full max-w-lg rounded-3xl p-6 sm:p-7 border shadow-2xl backdrop-blur-2xl relative overflow-hidden"
+        style={{
+          background: tokens.cardGradient,
+          borderColor: tokens.border,
+          boxShadow: tokens.cardShadow,
+        }}
+      >
+        <div className="flex items-center justify-between pb-4 border-b" style={{ borderColor: tokens.border }}>
+          <div className="flex items-center gap-2">
+            <Edit3 className="size-4.5 text-[#FEF08A]" />
+            <h3 className="text-lg font-bold font-display text-white">Edit Transaction</h3>
+          </div>
           <button
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center justify-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl text-xs font-semibold shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-all duration-200 cursor-pointer font-sans shrink-0"
+            onClick={onClose}
+            className="size-8 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 text-white cursor-pointer"
           >
-            <Plus className="size-4" />
-            <span>Add Category</span>
+            ✕
           </button>
         </div>
 
-        {/* Add Category Form Modal */}
-        <AnimatePresence>
-          {showAddModal && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.25 }}
-              className="overflow-hidden"
-            >
-              <form
-                onSubmit={handleAddCategory}
-                className="p-5 rounded-2xl bg-muted/30 border border-primary/30 flex flex-col gap-4 glow-teal-sm"
+        {errorMsg && (
+          <div className="mt-4 p-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-200 text-xs flex items-center gap-2">
+            <AlertCircle className="size-4 shrink-0 text-red-400" />
+            <span>{errorMsg}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSave} className="mt-5 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
+                Amount ({currencySymbol.trim()})
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                required
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-mono text-white focus:outline-none"
+                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+              />
+            </div>
+
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
+                Date
+              </label>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none"
+                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+              />
+            </div>
+
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
+                Account
+              </label>
+              <select
+                value={accountId}
+                onChange={(e) => setAccountId(e.target.value)}
+                className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none"
+                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
               >
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-bold text-foreground font-display">Create New Category</h4>
-                  <button
-                    type="button"
-                    onClick={() => setShowAddModal(false)}
-                    className="text-muted-foreground hover:text-foreground transition-colors p-1 cursor-pointer"
-                  >
-                    <X className="size-4" />
-                  </button>
-                </div>
+                {accounts.map((acc) => (
+                  <option key={acc.id} value={acc.id} className="bg-[#1E0C38] text-white">
+                    {acc.name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5 font-sans">
-                      Category Name
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Groceries, Subscriptions, Salary"
-                      value={newCatName}
-                      onChange={(e) => setNewCatName(e.target.value)}
-                      className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary font-sans"
-                    />
-                  </div>
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
+                Category
+              </label>
+              <select
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+                className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none"
+                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+              >
+                <option value="" className="bg-[#1E0C38] text-white">General / Uncategorized</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id} className="bg-[#1E0C38] text-white">
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
 
-                  <div>
-                    <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5 font-sans">
-                      Type
-                    </label>
-                    <select
-                      value={newCatType}
-                      onChange={(e) => setNewCatType(e.target.value as "expense" | "income")}
-                      className="w-full px-3 py-2 bg-background border border-border/60 rounded-xl text-xs text-foreground focus:outline-none focus:border-primary font-sans appearance-none cursor-pointer"
-                    >
-                      <option value="expense">Expense</option>
-                      <option value="income">Income</option>
-                    </select>
-                  </div>
-                </div>
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
+              Description / Note
+            </label>
+            <input
+              type="text"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none"
+              style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+            />
+          </div>
 
-                <div className="flex items-center justify-end gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowAddModal(false)}
-                    className="px-4 py-2 rounded-xl text-xs font-semibold text-muted-foreground hover:bg-accent/40 transition-colors font-sans cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="px-4 py-2 rounded-xl text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-sans shadow-md cursor-pointer"
-                  >
-                    {isSubmitting ? "Saving..." : "Save Category"}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
+          {/* Linked Fee Editor */}
+          {hasLinkedFee && (
+            <div className="p-3 rounded-2xl border bg-black/20" style={{ borderColor: tokens.borderNested }}>
+              <label className="text-[11px] font-semibold text-[#FEF08A] block mb-1">
+                Linked Fee Amount ({currencySymbol.trim()})
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={feeAmount}
+                onChange={(e) => setFeeAmount(e.target.value)}
+                className="w-full px-3 py-2 border rounded-xl text-sm font-mono text-white bg-black/30 border-white/15 focus:outline-none"
+              />
+            </div>
           )}
-        </AnimatePresence>
 
-        {/* Categories Grid */}
-        {filteredCategories.length === 0 ? (
-          <div className="p-8 text-center text-xs text-muted-foreground font-sans">
-            No categories found. Click "+ Add Category" to create one.
+          <div className="flex items-center justify-end gap-3 pt-3 border-t" style={{ borderColor: tokens.border }}>
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2.5 rounded-xl text-xs font-semibold text-white/70 hover:text-white cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-6 py-2.5 rounded-xl text-xs font-bold transition-all font-sans shadow-lg cursor-pointer text-[#120824]"
+              style={{ background: tokens.dashboardActivePill }}
+            >
+              {isSubmitting ? "Saving..." : "Save Changes"}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </div>
+  )
+}
+
+// ─── Modal: Delete Confirmation Dialog (Feature 4) ────────────────
+
+function DeleteTransactionModal({
+  transaction,
+  isOpen,
+  onClose,
+}: {
+  transaction: Transaction | null
+  isOpen: boolean
+  onClose: () => void
+}) {
+  const { deleteTransaction } = useFinanceData()
+  const { tokens } = useDashboardTheme()
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  if (!isOpen || !transaction) return null
+
+  const handleDelete = async () => {
+    setIsDeleting(true)
+    try {
+      await deleteTransaction(transaction.id)
+      onClose()
+    } catch (err) {
+      console.error("Delete transaction error:", err)
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="w-full max-w-md rounded-3xl p-6 border shadow-2xl backdrop-blur-2xl text-center"
+        style={{
+          background: tokens.cardGradient,
+          borderColor: tokens.border,
+          boxShadow: tokens.cardShadow,
+        }}
+      >
+        <div className="size-12 rounded-2xl bg-red-500/20 border border-red-500/40 text-red-400 flex items-center justify-center mx-auto mb-4">
+          <Trash2 className="size-6" />
+        </div>
+
+        <h3 className="text-base font-bold text-white font-display">Delete Transaction?</h3>
+        <p className="text-xs text-white/70 font-sans mt-2">
+          This transaction will be permanently removed from your ledger.
+          {transaction.fee_pair_id && " This will also delete the linked fee transaction."}
+          {transaction.transfer_pair_id && " This will also delete both sides of the transfer."}
+        </p>
+
+        <div className="flex items-center justify-center gap-3 mt-6">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-5 py-2.5 rounded-xl text-xs font-semibold text-white/75 hover:text-white bg-white/10 cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={isDeleting}
+            className="px-6 py-2.5 rounded-xl text-xs font-bold bg-red-500 hover:bg-red-600 text-white transition-all shadow-lg cursor-pointer"
+          >
+            {isDeleting ? "Deleting..." : "Delete Permanently"}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+// ─── Modal: Add Account ───────────────────────────────────────────
+
+function AddAccountModal({
+  isOpen,
+  onClose,
+}: {
+  isOpen: boolean
+  onClose: () => void
+}) {
+  const { createAccount } = useFinanceData()
+  const { profile } = useUserProfile()
+  const { tokens } = useDashboardTheme()
+  const currencySymbol = getCurrencySymbol(profile.currency)
+
+  const [name, setName] = useState("")
+  const [type, setType] = useState("checking")
+  const [startingBalance, setStartingBalance] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  if (!isOpen) return null
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+    try {
+      await createAccount({
+        name,
+        type,
+        starting_balance: parseFloat(startingBalance) || 0,
+        currency: profile.currency || "EGP",
+      })
+      setName("")
+      setStartingBalance("")
+      onClose()
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="w-full max-w-md rounded-3xl p-6 border shadow-2xl backdrop-blur-2xl"
+        style={{
+          background: tokens.cardGradient,
+          borderColor: tokens.border,
+          boxShadow: tokens.cardShadow,
+        }}
+      >
+        <div className="flex items-center justify-between pb-4 border-b" style={{ borderColor: tokens.border }}>
+          <h3 className="text-base font-bold font-display text-white">Create New Account</h3>
+          <button onClick={onClose} className="text-white/60 hover:text-white cursor-pointer">✕</button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+              Account Name
+            </label>
+            <input
+              type="text"
+              required
+              placeholder="e.g. QNB Vault, CIB Credit Card"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
+              style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+                Type
+              </label>
+              <select
+                value={type}
+                onChange={(e) => setType(e.target.value)}
+                className="w-full px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
+                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+              >
+                <option value="checking" className="bg-[#1E0C38] text-white">Checking</option>
+                <option value="savings" className="bg-[#1E0C38] text-white">Savings</option>
+                <option value="credit" className="bg-[#1E0C38] text-white">Credit Card</option>
+                <option value="cash" className="bg-[#1E0C38] text-white">Cash / Wallet</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+                Starting Balance ({currencySymbol.trim()})
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                value={startingBalance}
+                onChange={(e) => setStartingBalance(e.target.value)}
+                className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-mono text-white focus:outline-none"
+                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-3 border-t" style={{ borderColor: tokens.border }}>
+            <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-semibold text-white/70">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-6 py-2.5 rounded-xl text-xs font-bold text-[#120824]"
+              style={{ background: tokens.dashboardActivePill }}
+            >
+              {isSubmitting ? "Creating..." : "Create Account"}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </div>
+  )
+}
+
+// ─── Modal: Add Held Fund (Feature 2) ──────────────────────────────
+
+function AddHeldFundModal({
+  isOpen,
+  onClose,
+}: {
+  isOpen: boolean
+  onClose: () => void
+}) {
+  const { accounts, createHeldFund } = useFinanceData()
+  const { profile } = useUserProfile()
+  const { tokens } = useDashboardTheme()
+  const currencySymbol = getCurrencySymbol(profile.currency)
+
+  const [name, setName] = useState("")
+  const [type, setType] = useState<"person" | "fund">("fund")
+  const [accountId, setAccountId] = useState("")
+  const [initialBalance, setInitialBalance] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (accounts.length > 0 && !accountId) {
+      setAccountId(accounts[0].id)
+    }
+  }, [accounts, accountId])
+
+  if (!isOpen) return null
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+    setErrorMsg(null)
+    try {
+      await createHeldFund({
+        name,
+        type,
+        account_id: accountId,
+        initial_balance: parseFloat(initialBalance) || 0,
+      })
+      setName("")
+      setInitialBalance("")
+      onClose()
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to create held fund.")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="w-full max-w-md rounded-3xl p-6 border shadow-2xl backdrop-blur-2xl"
+        style={{
+          background: tokens.cardGradient,
+          borderColor: tokens.border,
+          boxShadow: tokens.cardShadow,
+        }}
+      >
+        <div className="flex items-center justify-between pb-4 border-b" style={{ borderColor: tokens.border }}>
+          <div>
+            <h3 className="text-base font-bold font-display text-white">Create Held Fund</h3>
+            <p className="text-xs text-white/70">Reserve a pot of money or track a personal balance</p>
+          </div>
+          <button onClick={onClose} className="text-white/60 hover:text-white cursor-pointer">✕</button>
+        </div>
+
+        {errorMsg && (
+          <div className="mt-3 p-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-200 text-xs">
+            {errorMsg}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+              Type
+            </label>
+            <div className="grid grid-cols-2 gap-2 p-1 border rounded-xl" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+              <button
+                type="button"
+                onClick={() => setType("fund")}
+                className="py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer"
+                style={{
+                  background: type === "fund" ? tokens.dashboardActivePill : "transparent",
+                  color: type === "fund" ? "#120824" : "rgba(255, 255, 255, 0.75)",
+                  fontWeight: type === "fund" ? "bold" : "normal",
+                }}
+              >
+                <PiggyBank className="size-3.5" />
+                <span>Saved Fund Pot</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setType("person")}
+                className="py-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer"
+                style={{
+                  background: type === "person" ? tokens.dashboardActivePill : "transparent",
+                  color: type === "person" ? "#120824" : "rgba(255, 255, 255, 0.75)",
+                  fontWeight: type === "person" ? "bold" : "normal",
+                }}
+              >
+                <UserCheck className="size-3.5" />
+                <span>Person</span>
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+              Name
+            </label>
+            <input
+              type="text"
+              required
+              placeholder={type === "person" ? "e.g. Omar, Ahmed" : "e.g. Vacation Pot, Emergency Buffer"}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
+              style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+                Linked Account
+              </label>
+              <select
+                value={accountId}
+                onChange={(e) => setAccountId(e.target.value)}
+                className="w-full px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
+                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+              >
+                {accounts.map((acc) => (
+                  <option key={acc.id} value={acc.id} className="bg-[#1E0C38] text-white">
+                    {acc.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+                Initial Allocation ({currencySymbol.trim()})
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                value={initialBalance}
+                onChange={(e) => setInitialBalance(e.target.value)}
+                className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-mono text-white focus:outline-none"
+                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-3 border-t" style={{ borderColor: tokens.border }}>
+            <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-semibold text-white/70">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-6 py-2.5 rounded-xl text-xs font-bold text-[#120824]"
+              style={{ background: tokens.dashboardActivePill }}
+            >
+              {isSubmitting ? "Creating..." : "Create Held Fund"}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </div>
+  )
+}
+
+// ─── Modal: Deposit / Withdraw Held Fund (Feature 2) ──────────────
+
+function DepositWithdrawHeldFundModal({
+  heldFund,
+  mode,
+  isOpen,
+  onClose,
+}: {
+  heldFund: HeldFund | null
+  mode: "deposit" | "withdrawal"
+  isOpen: boolean
+  onClose: () => void
+}) {
+  const { depositToHeldFund, withdrawFromHeldFund } = useFinanceData()
+  const { profile } = useUserProfile()
+  const { tokens } = useDashboardTheme()
+  const currencySymbol = getCurrencySymbol(profile.currency)
+
+  const [amount, setAmount] = useState("")
+  const [note, setNote] = useState("")
+  const [date, setDate] = useState(new Date().toISOString().split("T")[0])
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+  if (!isOpen || !heldFund) return null
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+    setErrorMsg(null)
+    try {
+      const amt = parseFloat(amount)
+      if (isNaN(amt) || amt <= 0) throw new Error("Please enter a valid amount.")
+
+      if (mode === "deposit") {
+        await depositToHeldFund(heldFund.id, amt, note, date)
+      } else {
+        await withdrawFromHeldFund(heldFund.id, amt, note, date)
+      }
+      setAmount("")
+      setNote("")
+      onClose()
+    } catch (err: any) {
+      setErrorMsg(err.message || `Failed to process ${mode}.`)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="w-full max-w-md rounded-3xl p-6 border shadow-2xl backdrop-blur-2xl"
+        style={{
+          background: tokens.cardGradient,
+          borderColor: tokens.border,
+          boxShadow: tokens.cardShadow,
+        }}
+      >
+        <div className="flex items-center justify-between pb-4 border-b" style={{ borderColor: tokens.border }}>
+          <div>
+            <h3 className="text-base font-bold font-display text-white">
+              {mode === "deposit" ? "Deposit Into" : "Withdraw From"} {heldFund.name}
+            </h3>
+            <p className="text-xs text-white/70">
+              {mode === "deposit"
+                ? `Transfers funds from ${heldFund.account_name} into this held pot`
+                : `Returns funds back to ${heldFund.account_name}`}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-white/60 hover:text-white cursor-pointer">✕</button>
+        </div>
+
+        {errorMsg && (
+          <div className="mt-3 p-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-200 text-xs">
+            {errorMsg}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+                Amount ({currencySymbol.trim()})
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                required
+                placeholder="0.00"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-mono text-white focus:outline-none"
+                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+              />
+            </div>
+
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+                Date
+              </label>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none"
+                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+              Note (Optional)
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. Set aside salary bonus"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              className="w-full px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
+              style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-3 border-t" style={{ borderColor: tokens.border }}>
+            <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-semibold text-white/70">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-6 py-2.5 rounded-xl text-xs font-bold text-[#120824]"
+              style={{ background: tokens.dashboardActivePill }}
+            >
+              {isSubmitting ? "Processing..." : mode === "deposit" ? "Confirm Deposit" : "Confirm Withdrawal"}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </div>
+  )
+}
+
+// ─── Modal: Add Bill (Feature 3) ──────────────────────────────────
+
+function AddBillModal({
+  isOpen,
+  onClose,
+}: {
+  isOpen: boolean
+  onClose: () => void
+}) {
+  const { accounts, categories, createBill } = useFinanceData()
+  const { profile } = useUserProfile()
+  const { tokens } = useDashboardTheme()
+  const currencySymbol = getCurrencySymbol(profile.currency)
+
+  const [name, setName] = useState("")
+  const [type, setType] = useState<"expense" | "income" | "transfer">("expense")
+  const [accountId, setAccountId] = useState("")
+  const [destAccountId, setDestAccountId] = useState("")
+  const [categoryId, setCategoryId] = useState("")
+  const [amount, setAmount] = useState("")
+  const [dueDate, setDueDate] = useState("")
+  const [recurrence, setRecurrence] = useState<"one-off" | "daily" | "monthly" | "custom">("monthly")
+  const [recurrenceDays, setRecurrenceDays] = useState("30")
+
+  // Fee state
+  const [feeMode, setFeeMode] = useState<"none" | "manual" | "instapay">("none")
+  const [manualFeeType, setManualFeeType] = useState<"flat" | "percentage">("flat")
+  const [manualFeeValue, setManualFeeValue] = useState("")
+
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (accounts.length > 0 && !accountId) {
+      setAccountId(accounts[0].id)
+    }
+  }, [accounts, accountId])
+
+  const calculatedFeeAmount = useMemo(() => {
+    const principal = parseFloat(amount) || 0
+    if (principal <= 0) return 0
+    if (feeMode === "instapay") {
+      return Math.min(20.0, Math.max(0.5, principal * 0.001))
+    }
+    if (feeMode === "manual") {
+      const val = parseFloat(manualFeeValue) || 0
+      if (val <= 0) return 0
+      return manualFeeType === "percentage" ? (principal * val) / 100 : val
+    }
+    return 0
+  }, [feeMode, manualFeeType, manualFeeValue, amount])
+
+  if (!isOpen) return null
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+    setErrorMsg(null)
+
+    try {
+      const amt = parseFloat(amount)
+      if (isNaN(amt) || amt <= 0) throw new Error("Please enter a valid bill amount.")
+      if (!dueDate) throw new Error("Please select a due date.")
+
+      await createBill({
+        name,
+        type,
+        account_id: accountId,
+        destination_account_id: type === "transfer" ? destAccountId : undefined,
+        category_id: categoryId || undefined,
+        amount: amt,
+        fee_amount: calculatedFeeAmount > 0 ? calculatedFeeAmount : undefined,
+        fee_type: feeMode === "none" ? undefined : (feeMode === "instapay" ? "instapay" : manualFeeType),
+        due_date: dueDate,
+        recurrence,
+        recurrence_days: recurrence === "custom" ? (parseInt(recurrenceDays) || 30) : undefined,
+      })
+
+      setName("")
+      setAmount("")
+      setFeeMode("none")
+      onClose()
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to create bill.")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="w-full max-w-lg rounded-3xl p-6 sm:p-7 border shadow-2xl backdrop-blur-2xl max-h-[90vh] overflow-y-auto"
+        style={{
+          background: tokens.cardGradient,
+          borderColor: tokens.border,
+          boxShadow: tokens.cardShadow,
+        }}
+      >
+        <div className="flex items-center justify-between pb-4 border-b" style={{ borderColor: tokens.border }}>
+          <div>
+            <h3 className="text-lg font-bold font-display text-white">Create New Bill</h3>
+            <p className="text-xs text-white/70">Plan upcoming recurring obligations or planned incomes</p>
+          </div>
+          <button onClick={onClose} className="size-8 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 text-white cursor-pointer">
+            ✕
+          </button>
+        </div>
+
+        {errorMsg && (
+          <div className="mt-4 p-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-200 text-xs">
+            {errorMsg}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+              Bill Name
+            </label>
+            <input
+              type="text"
+              required
+              placeholder="e.g. Internet & Cloud, Rent, Gym Membership"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
+              style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+            />
+          </div>
+
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1.5 text-white/75">
+              Type
+            </label>
+            <div className="grid grid-cols-3 gap-1.5 p-1 border rounded-xl" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+              {(["expense", "income", "transfer"] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setType(t)}
+                  className="py-2 rounded-lg text-xs font-semibold capitalize cursor-pointer"
+                  style={{
+                    background: type === t ? tokens.dashboardActivePill : "transparent",
+                    color: type === t ? "#120824" : "rgba(255, 255, 255, 0.75)",
+                    fontWeight: type === t ? "bold" : "normal",
+                  }}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+                Amount ({currencySymbol.trim()})
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                required
+                placeholder="0.00"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-mono text-white focus:outline-none"
+                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+              />
+            </div>
+
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+                Due Date
+              </label>
+              <input
+                type="date"
+                required
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                className="w-full px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
+                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+              />
+            </div>
+
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+                Account
+              </label>
+              <select
+                value={accountId}
+                onChange={(e) => setAccountId(e.target.value)}
+                className="w-full px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
+                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+              >
+                {accounts.map((acc) => (
+                  <option key={acc.id} value={acc.id} className="bg-[#1E0C38] text-white">
+                    {acc.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {type === "transfer" ? (
+              <div>
+                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+                  Destination Account
+                </label>
+                <select
+                  value={destAccountId}
+                  onChange={(e) => setDestAccountId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
+                  style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+                >
+                  <option value="" className="bg-[#1E0C38] text-white">Select Destination</option>
+                  {accounts.map((acc) => (
+                    <option key={acc.id} value={acc.id} className="bg-[#1E0C38] text-white">
+                      {acc.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <div>
+                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+                  Category
+                </label>
+                <select
+                  value={categoryId}
+                  onChange={(e) => setCategoryId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
+                  style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+                >
+                  <option value="" className="bg-[#1E0C38] text-white">General</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id} className="bg-[#1E0C38] text-white">
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+                Recurrence
+              </label>
+              <select
+                value={recurrence}
+                onChange={(e) => setRecurrence(e.target.value as any)}
+                className="w-full px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
+                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+              >
+                <option value="monthly" className="bg-[#1E0C38] text-white">Monthly</option>
+                <option value="one-off" className="bg-[#1E0C38] text-white">One-off</option>
+                <option value="daily" className="bg-[#1E0C38] text-white">Daily</option>
+                <option value="custom" className="bg-[#1E0C38] text-white">Custom Days</option>
+              </select>
+            </div>
+
+            {recurrence === "custom" && (
+              <div>
+                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+                  Every X Days
+                </label>
+                <input
+                  type="number"
+                  placeholder="30"
+                  value={recurrenceDays}
+                  onChange={(e) => setRecurrenceDays(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-mono text-white focus:outline-none"
+                  style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Optional Fee on Bill */}
+          {(type === "expense" || type === "transfer") && (
+            <div className="p-3 rounded-2xl border" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <Receipt className="size-3.5 text-[#FEF08A]" />
+                  Planned Fee
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setFeeMode("none")}
+                    className="px-2 py-0.5 text-[10px] rounded cursor-pointer"
+                    style={{ backgroundColor: feeMode === "none" ? "rgba(255,255,255,0.2)" : "transparent", color: "#FFF" }}
+                  >
+                    None
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFeeMode("manual")}
+                    className="px-2 py-0.5 text-[10px] rounded cursor-pointer"
+                    style={{ backgroundColor: feeMode === "manual" ? "rgba(255,255,255,0.2)" : "transparent", color: "#FFF" }}
+                  >
+                    Manual
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFeeMode("instapay")}
+                    className="px-2 py-0.5 text-[10px] rounded cursor-pointer"
+                    style={{
+                      background: feeMode === "instapay" ? tokens.dashboardActivePill : "transparent",
+                      color: feeMode === "instapay" ? "#120824" : "rgba(255,255,255,0.6)",
+                      fontWeight: feeMode === "instapay" ? "bold" : "normal",
+                    }}
+                  >
+                    InstaPay
+                  </button>
+                </div>
+              </div>
+
+              {feeMode === "manual" && (
+                <div className="flex items-center gap-2 pt-2 border-t border-white/10">
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="Fee amount"
+                    value={manualFeeValue}
+                    onChange={(e) => setManualFeeValue(e.target.value)}
+                    className="w-28 px-2.5 py-1.5 border rounded-lg text-xs font-mono text-white bg-black/20 focus:outline-none border-white/15"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex items-center justify-end gap-3 pt-3 border-t" style={{ borderColor: tokens.border }}>
+            <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-semibold text-white/70">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-6 py-2.5 rounded-xl text-xs font-bold text-[#120824]"
+              style={{ background: tokens.dashboardActivePill }}
+            >
+              {isSubmitting ? "Creating..." : "Save Bill"}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </div>
+  )
+}
+
+// ─── Modal: Mark Bill as Paid (Feature 3) ──────────────────────────
+
+function MarkBillPaidModal({
+  bill,
+  isOpen,
+  onClose,
+}: {
+  bill: Bill | null
+  isOpen: boolean
+  onClose: () => void
+}) {
+  const { markBillAsPaid } = useFinanceData()
+  const { profile } = useUserProfile()
+  const { tokens } = useDashboardTheme()
+  const currencySymbol = getCurrencySymbol(profile.currency)
+
+  const [generateNext, setGenerateNext] = useState(true)
+  const [isProcessing, setIsProcessing] = useState(false)
+
+  if (!isOpen || !bill) return null
+
+  const handleConfirm = async () => {
+    setIsProcessing(true)
+    try {
+      await markBillAsPaid(bill.id, bill.recurrence !== "one-off" && generateNext)
+      onClose()
+    } catch (err) {
+      console.error("Mark bill paid error:", err)
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="w-full max-w-md rounded-3xl p-6 border shadow-2xl backdrop-blur-2xl"
+        style={{
+          background: tokens.cardGradient,
+          borderColor: tokens.border,
+          boxShadow: tokens.cardShadow,
+        }}
+      >
+        <div className="size-12 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center mx-auto mb-3">
+          <CheckCircle2 className="size-6" />
+        </div>
+
+        <h3 className="text-base font-bold text-white text-center font-display">Mark Bill as Paid?</h3>
+        <p className="text-xs text-white/70 text-center font-sans mt-1">
+          This will record a real {bill.type} transaction of <span className="font-mono font-bold text-white">{currencySymbol}{bill.amount.toFixed(2)}</span> on <span className="text-white font-semibold">{bill.account_name}</span>.
+        </p>
+
+        {bill.recurrence !== "one-off" && (
+          <div className="my-4 p-3 rounded-2xl border bg-black/20 text-left" style={{ borderColor: tokens.borderNested }}>
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={generateNext}
+                onChange={(e) => setGenerateNext(e.target.checked)}
+                className="size-4 rounded accent-[#A7F3D0] cursor-pointer"
+              />
+              <span className="text-xs font-semibold text-white font-sans">
+                Generate next occurrence automatically ({bill.recurrence})
+              </span>
+            </label>
+          </div>
+        )}
+
+        <div className="flex items-center justify-center gap-3 mt-5">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2.5 rounded-xl text-xs font-semibold text-white/75 bg-white/10 hover:bg-white/20 cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={handleConfirm}
+            disabled={isProcessing}
+            className="px-6 py-2.5 rounded-xl text-xs font-bold text-[#120824] shadow-lg cursor-pointer"
+            style={{ background: tokens.dashboardActivePill }}
+          >
+            {isProcessing ? "Processing..." : "Confirm Payment"}
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+// ─── Component: Main Net Worth & Trajectory Hero (Features 5 & 6) ──
+
+function NetWorthHeroCard({
+  netWorth,
+  totalIncome,
+  totalExpense,
+  currencySymbol,
+  onAddTransaction,
+}: {
+  netWorth: number
+  totalIncome: number
+  totalExpense: number
+  currencySymbol: string
+  onAddTransaction: () => void
+}) {
+  const { tokens } = useDashboardTheme()
+  const { monthSparklineData } = useFinanceData()
+
+  return (
+    <motion.div
+      {...cardEntrance(0.05)}
+      className="relative overflow-hidden rounded-3xl p-6 sm:p-7 border backdrop-blur-xl hover:scale-[1.01] transition-transform duration-300 group"
+      style={{
+        background: tokens.cardGradient,
+        borderColor: tokens.border,
+        boxShadow: tokens.cardShadow,
+      }}
+    >
+      <div className="absolute inset-0 rounded-3xl pointer-events-none border border-white/10" />
+
+      {/* Header */}
+      <div className="relative z-10 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="size-2 rounded-full bg-[#34D399] shadow-[0_0_8px_#34D399]" />
+            <p className="text-[11px] font-bold tracking-[0.14em] uppercase font-sans text-white/85">
+              TOTAL NET WORTH
+            </p>
+          </div>
+          <div className="flex items-center gap-3.5 flex-wrap">
+            <h1 className="text-4xl sm:text-5xl font-bold tracking-tight font-mono text-white">
+              {currencySymbol}{netWorth.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </h1>
+            <div
+              className="flex items-center gap-1 text-xs font-bold font-mono px-3 py-1 rounded-full border shadow-sm backdrop-blur-md"
+              style={{
+                backgroundColor: "rgba(139, 158, 43, 0.20)",
+                borderColor: "rgba(167, 243, 208, 0.40)",
+                color: "#A7F3D0",
+              }}
+            >
+              <ArrowUpRight className="size-3 text-[#A7F3D0]" />
+              <span>+{currencySymbol}0.00 this month</span>
+            </div>
+          </div>
+        </div>
+
+        <button
+          onClick={onAddTransaction}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all font-sans cursor-pointer shadow-lg bg-black/40 hover:bg-black/55 border border-white/20 hover:border-white/30 text-white hover:scale-[1.02]"
+        >
+          <Plus className="size-3.5" />
+          <span>Add Transaction</span>
+        </button>
+      </div>
+
+      {/* Feature 6: Clean Minimalist Trajectory Sparkline (1st of month to today) */}
+      <div className="relative z-10 mt-6 h-32 sm:h-36 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={monthSparklineData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+            <XAxis hide dataKey="date" />
+            <YAxis hide domain={["dataMin - 100", "dataMax + 100"]} />
+            <Tooltip
+              content={({ active, payload }) => {
+                if (!active || !payload?.length) return null
+                const day = payload[0]?.payload?.date
+                return (
+                  <div className="rounded-xl border p-2.5 text-xs shadow-2xl backdrop-blur-md bg-[#160728]/95 border-white/20 text-white">
+                    <p className="text-[10px] font-mono uppercase mb-0.5 text-white/60">Day {day}</p>
+                    <p className="text-sm font-bold font-mono text-[#FEF08A]">
+                      {currencySymbol}{Number(payload[0]?.value || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                )
+              }}
+            />
+            <Line
+              type="monotone"
+              dataKey="value"
+              stroke={tokens.chartStroke}
+              strokeWidth={2.4}
+              dot={false}
+              activeDot={{ r: 4, fill: "#FFFFFF", stroke: "#5EEAD4", strokeWidth: 2 }}
+              isAnimationActive={false}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Feature 5: Evenly Spaced Bottom 2 Cards (Monthly Income & Monthly Expenses - Savings Rate Removed) */}
+      <div className="relative z-10 mt-4 pt-4 border-t grid grid-cols-2 gap-4" style={{ borderColor: tokens.borderNested }}>
+        {/* Monthly Income (Green) */}
+        <div
+          className="border rounded-2xl p-4 backdrop-blur-md"
+          style={{
+            backgroundColor: tokens.incomeWell,
+            borderColor: tokens.borderIncome,
+          }}
+        >
+          <p className="text-[10.5px] font-semibold uppercase tracking-wider font-sans text-white/75">
+            MONTHLY INCOME
+          </p>
+          <p className="text-base sm:text-lg font-bold font-mono mt-1" style={{ color: tokens.gain }}>
+            +{currencySymbol}{totalIncome.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+          </p>
+        </div>
+
+        {/* Monthly Expenses (Red/Pink) */}
+        <div
+          className="border rounded-2xl p-4 backdrop-blur-md"
+          style={{
+            backgroundColor: tokens.expenseWell,
+            borderColor: tokens.borderExpense,
+          }}
+        >
+          <p className="text-[10.5px] font-semibold uppercase tracking-wider font-sans text-white/75">
+            MONTHLY EXPENSES
+          </p>
+          <p className="text-base sm:text-lg font-bold font-mono mt-1" style={{ color: tokens.loss }}>
+            -{currencySymbol}{totalExpense.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+          </p>
+        </div>
+      </div>
+    </motion.div>
+  )
+}
+
+// ─── Component: Recent Transactions Feed (with Feature 4 Edit/Delete) ─
+
+function RecentTransactionsFeed({
+  transactions,
+  currencySymbol,
+  onNavigate,
+  onAddTransaction,
+  onEditTransaction,
+  onDeleteTransaction,
+}: {
+  transactions: Transaction[]
+  currencySymbol: string
+  onNavigate?: (section: SectionId) => void
+  onAddTransaction: () => void
+  onEditTransaction: (tx: Transaction) => void
+  onDeleteTransaction: (tx: Transaction) => void
+}) {
+  const { tokens } = useDashboardTheme()
+  const [filter, setFilter] = useState<"all" | "expense" | "income">("all")
+  const [search, setSearch] = useState("")
+
+  const filtered = useMemo(() => {
+    return transactions.filter((t) => {
+      const matchesFilter = filter === "all" || t.type === filter
+      const matchesSearch =
+        t.description.toLowerCase().includes(search.toLowerCase()) ||
+        (t.category_name || "").toLowerCase().includes(search.toLowerCase()) ||
+        (t.account_name || "").toLowerCase().includes(search.toLowerCase())
+      return matchesFilter && matchesSearch
+    })
+  }, [transactions, filter, search])
+
+  return (
+    <motion.div
+      {...cardEntrance(0.12)}
+      className="rounded-3xl border p-5 lg:p-6 flex flex-col hover:scale-[1.01] transition-transform duration-300 backdrop-blur-xl"
+      style={{
+        background: tokens.cardGradient,
+        borderColor: tokens.border,
+        boxShadow: tokens.cardShadow,
+      }}
+    >
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b" style={{ borderColor: tokens.border }}>
+        <div>
+          <h3 className="text-base font-bold font-display text-white">Recent Transactions</h3>
+          <p className="text-xs font-sans mt-0.5 text-white/70">
+            Real-time feed across all connected cards & accounts
+          </p>
+        </div>
+
+        {/* Filter Tabs */}
+        <div className="flex items-center gap-1">
+          <div className="flex items-center p-1 border rounded-full" style={{ backgroundColor: "rgba(16, 8, 36, 0.45)", borderColor: tokens.borderNested }}>
+            <button
+              onClick={() => setFilter("all")}
+              className="px-3.5 py-1 text-xs font-bold rounded-full transition-all font-sans cursor-pointer"
+              style={{
+                backgroundColor: filter === "all" ? tokens.filterActivePill : "transparent",
+                color: filter === "all" ? tokens.filterActiveText : "rgba(255, 255, 255, 0.75)",
+              }}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setFilter("expense")}
+              className="px-3 py-1 text-xs font-semibold rounded-full transition-all font-sans cursor-pointer text-white/75 hover:text-white"
+              style={{
+                backgroundColor: filter === "expense" ? tokens.filterActivePill : "transparent",
+                color: filter === "expense" ? tokens.filterActiveText : "rgba(255, 255, 255, 0.75)",
+              }}
+            >
+              Expenses
+            </button>
+            <button
+              onClick={() => setFilter("income")}
+              className="px-3 py-1 text-xs font-semibold rounded-full transition-all font-sans cursor-pointer text-white/75 hover:text-white"
+              style={{
+                backgroundColor: filter === "income" ? tokens.filterActivePill : "transparent",
+                color: filter === "income" ? tokens.filterActiveText : "rgba(255, 255, 255, 0.75)",
+              }}
+            >
+              Income
+            </button>
+          </div>
+
+          <button
+            onClick={() => onNavigate?.("bills")}
+            className="text-xs font-semibold px-2.5 py-1 transition-colors font-sans cursor-pointer text-white/75 hover:text-white"
+          >
+            View all
+          </button>
+        </div>
+      </div>
+
+      {/* Frosted Search Input */}
+      <div className="my-3.5 relative">
+        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-white/60" />
+        <input
+          type="text"
+          placeholder="Filter by merchant, category, or account..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full pl-10 pr-4 py-2.5 border rounded-2xl text-xs font-sans text-white focus:outline-none transition-colors backdrop-blur-md placeholder:text-white/40"
+          style={{
+            backgroundColor: tokens.nestedSurface,
+            borderColor: tokens.borderNested,
+          }}
+        />
+      </div>
+
+      {/* Itemized Rows with Edit & Delete actions */}
+      <div className="flex flex-col gap-2 mt-1 max-h-[380px] overflow-y-auto pr-1">
+        {filtered.length === 0 ? (
+          <div className="text-center py-10 text-white/60">
+            <p className="text-sm font-sans font-medium">No transactions match your filter.</p>
+            <button
+              onClick={onAddTransaction}
+              className="mt-3 text-xs font-bold underline cursor-pointer text-[#FEF08A]"
+            >
+              + Record a new transaction
+            </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredCategories.map((cat, i) => {
-              const isIncome = cat.type === "income"
-              const totalVal = cat.total_spent ?? 0
-              const maxVal = isIncome ? totalIncome : totalExpense
-              const percent = maxVal > 0 ? Math.min(100, Math.round((totalVal / maxVal) * 100)) : 0
-              const catColor = isIncome ? "oklch(0.76 0.16 162)" : "#5b4dc7"
+          filtered.slice(0, 8).map((tx) => {
+            const isIncome = tx.type === "income"
+            const isFee = Boolean(tx.is_fee || tx.category_name?.toLowerCase() === "fees")
+
+            return (
+              <div
+                key={tx.id}
+                className="group flex items-center justify-between p-3 sm:p-3.5 rounded-2xl border transition-all duration-200 hover:bg-white/5 backdrop-blur-md relative"
+                style={{
+                  backgroundColor: tokens.nestedSurface,
+                  borderColor: tokens.borderNested,
+                }}
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className="size-10 rounded-xl flex items-center justify-center shrink-0 shadow-md border"
+                    style={{
+                      backgroundColor: isFee
+                        ? "rgba(254, 240, 138, 0.15)"
+                        : isIncome
+                        ? "rgba(52, 211, 153, 0.20)"
+                        : "rgba(251, 113, 133, 0.20)",
+                      borderColor: isFee
+                        ? "rgba(254, 240, 138, 0.35)"
+                        : isIncome
+                        ? "rgba(52, 211, 153, 0.35)"
+                        : "rgba(251, 113, 133, 0.35)",
+                      color: isFee ? "#FEF08A" : isIncome ? tokens.gain : tokens.loss,
+                    }}
+                  >
+                    {isFee ? <Receipt className="size-4.5" /> : isIncome ? <ArrowDownLeft className="size-4.5" /> : <ArrowUpRight className="size-4.5" />}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold truncate font-sans text-white">
+                        {tx.description}
+                      </p>
+                      {tx.fee_pair_id && (
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-white/10 text-white/70 shrink-0">
+                          linked
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs font-sans text-white/60 mt-0.5">
+                      {tx.category_name || "General"} • {tx.account_name || "Account"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 shrink-0">
+                  <div className="text-right">
+                    <p
+                      className="text-sm sm:text-base font-bold font-mono"
+                      style={{ color: isIncome ? tokens.gain : tokens.loss }}
+                    >
+                      {isIncome ? "+" : "-"}{currencySymbol}{Math.abs(tx.amount).toFixed(2)}
+                    </p>
+                    <p className="text-[10px] font-mono mt-0.5 text-white/50">
+                      {tx.date}
+                    </p>
+                  </div>
+
+                  {/* Feature 4: Edit & Delete Actions */}
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => onEditTransaction(tx)}
+                      className="p-1.5 rounded-lg hover:bg-white/15 text-white/70 hover:text-white transition-colors cursor-pointer"
+                      title="Edit transaction"
+                    >
+                      <Edit3 className="size-3.5" />
+                    </button>
+                    <button
+                      onClick={() => onDeleteTransaction(tx)}
+                      className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors cursor-pointer"
+                      title="Delete transaction"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )
+          })
+        )}
+      </div>
+    </motion.div>
+  )
+}
+
+// ─── Component: Active Accounts Deck ──────────────────────────────
+
+function ActiveAccountsDeck({
+  accounts,
+  currencySymbol,
+  onNavigate,
+  onAddAccount,
+}: {
+  accounts: Account[]
+  currencySymbol: string
+  onNavigate?: (section: SectionId) => void
+  onAddAccount: () => void
+}) {
+  const { tokens } = useDashboardTheme()
+
+  return (
+    <motion.div
+      {...cardEntrance(0.18)}
+      className="rounded-3xl border p-5 lg:p-6 flex flex-col hover:scale-[1.01] transition-transform duration-300 backdrop-blur-xl"
+      style={{
+        background: tokens.cardGradient,
+        borderColor: tokens.border,
+        boxShadow: tokens.cardShadow,
+      }}
+    >
+      <div className="flex items-center justify-between pb-3 border-b" style={{ borderColor: tokens.border }}>
+        <div>
+          <h3 className="text-base font-bold font-display text-white">Active Accounts</h3>
+          <p className="text-xs font-sans text-white/70 mt-0.5">Track your linked Bank accounts</p>
+        </div>
+        <button
+          onClick={onAddAccount}
+          className="text-xs font-semibold px-2.5 py-1 rounded-xl transition-colors font-sans cursor-pointer text-white/80 hover:text-white flex items-center gap-1"
+        >
+          <Plus className="size-3.5" />
+          <span>Add</span>
+        </button>
+      </div>
+
+      <div className="flex flex-col gap-3 mt-4">
+        {accounts.slice(0, 3).map((acc) => {
+          const visual = getAccountVisual(acc.type, acc.name)
+
+          return (
+            <div
+              key={acc.id}
+              onClick={() => onNavigate?.("accounts")}
+              className="p-4 rounded-2xl border flex flex-col justify-between transition-all duration-200 cursor-pointer hover:bg-white/5 backdrop-blur-md relative"
+              style={{
+                backgroundColor: tokens.nestedSurface,
+                borderColor: tokens.borderNested,
+              }}
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="size-9 rounded-xl flex items-center justify-center border border-white/10 bg-white/10 text-white font-mono font-bold text-xs shadow-inner">
+                    <Landmark className="size-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold font-display text-white">{acc.name}</h4>
+                    <p className="text-[11px] font-sans text-white/60">{visual.label}</p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-white/15 bg-white/10 text-white/80">
+                  {acc.currency || "EGP"}
+                </span>
+              </div>
+
+              <div className="flex items-end justify-between mt-3 pt-2 border-t border-white/5">
+                <div>
+                  <p className="text-[9.5px] font-semibold uppercase tracking-wider font-sans text-white/55">
+                    AVAILABLE BALANCE
+                  </p>
+                  <p className="text-base sm:text-lg font-bold font-mono text-white mt-0.5">
+                    {currencySymbol}{Number(acc.balance || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <div className="flex flex-col items-end">
+                  <span className="text-[9.5px] font-mono text-white/60 mb-1">
+                    Cycle {visual.cycle}
+                  </span>
+                  <DotMatrixIndicator progress={visual.fillRatio} dotsCount={7} />
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </motion.div>
+  )
+}
+
+// ─── Component: Category Budget Progress Gauges ───────────────────
+
+function CategoryBudgetGauges({
+  categories,
+  currencySymbol,
+  onNavigate,
+}: {
+  categories: Category[]
+  currencySymbol: string
+  onNavigate?: (section: SectionId) => void
+}) {
+  const { tokens } = useDashboardTheme()
+
+  const defaultMock = useMemo(() => [
+    { name: "sdf", spent: 325, budget: 500, ratio: 0.65 },
+    { name: "Housing & Living", spent: 1040, budget: 1600, ratio: 0.65 },
+    { name: "Food & Dining", spent: 485, budget: 700, ratio: 0.69 },
+  ], [])
+
+  const displayList = categories.length > 0
+    ? categories.slice(0, 3).map((c) => ({
+        name: c.name,
+        spent: c.total_spent || 0,
+        budget: c.budget || 1000,
+        ratio: Math.min(1, ((c.total_spent || 0) / (c.budget || 1000))),
+      }))
+    : defaultMock
+
+  return (
+    <motion.div
+      {...cardEntrance(0.24)}
+      className="rounded-3xl border p-5 lg:p-6 flex flex-col hover:scale-[1.01] transition-transform duration-300 backdrop-blur-xl"
+      style={{
+        background: tokens.cardGradient,
+        borderColor: tokens.border,
+        boxShadow: tokens.cardShadow,
+      }}
+    >
+      <div className="flex items-center justify-between pb-3 border-b" style={{ borderColor: tokens.border }}>
+        <div>
+          <h3 className="text-base font-bold font-display text-white">Category Budgets</h3>
+          <p className="text-xs font-sans text-white/70 mt-0.5">Utilization & spending guardrails</p>
+        </div>
+        <button
+          onClick={() => onNavigate?.("categories")}
+          className="text-xs font-semibold px-2.5 py-1 rounded-xl transition-colors font-sans cursor-pointer text-white/80 hover:text-white"
+        >
+          Manage
+        </button>
+      </div>
+
+      <div className="flex flex-col gap-4 mt-4">
+        {displayList.map((item, idx) => {
+          const pct = Math.round(item.ratio * 100)
+
+          return (
+            <div key={idx} className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between text-xs font-sans">
+                <span className="font-semibold text-white truncate max-w-[140px]">{item.name}</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-white/70">
+                    {currencySymbol}{item.spent.toLocaleString()} / {currencySymbol}{item.budget.toLocaleString()}
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border border-white/10 bg-white/10 text-white/90">
+                    {pct}%
+                  </span>
+                </div>
+              </div>
+
+              {/* Cyan -> Green -> Yellow Progress Bar */}
+              <div className="h-2 w-full rounded-full overflow-hidden bg-white/10 p-[1px]">
+                <div
+                  className="h-full rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]"
+                  style={{
+                    width: `${Math.max(5, pct)}%`,
+                    background: tokens.budgetProgressGradient,
+                  }}
+                />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </motion.div>
+  )
+}
+
+// ─── Section: Header Reusable ─────────────────────────────────────
+
+function SectionHeader({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string
+  subtitle: string
+  children?: React.ReactNode
+}) {
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/10">
+      <div>
+        <h2 className="text-xl sm:text-2xl font-bold font-display text-white">{title}</h2>
+        <p className="text-xs sm:text-sm font-sans text-white/70 mt-0.5">{subtitle}</p>
+      </div>
+      {children && <div className="flex items-center gap-3">{children}</div>}
+    </div>
+  )
+}
+
+// ─── Section: Bills Management (Feature 3 Replaces Transactions) ──
+
+function BillsSection({ onNavigate }: { onNavigate: (s: SectionId) => void }) {
+  const { bills, accounts, categories, deleteBill } = useFinanceData()
+  const { profile } = useUserProfile()
+  const { tokens } = useDashboardTheme()
+  const currencySymbol = getCurrencySymbol(profile.currency)
+
+  const [selectedAccountId, setSelectedAccountId] = useState<string>("all")
+  const [addBillOpen, setAddBillOpen] = useState(false)
+  const [selectedBillToPay, setSelectedBillToPay] = useState<Bill | null>(null)
+
+  // Filter bills by selected account
+  const filteredBills = useMemo(() => {
+    return bills.filter((b) => {
+      if (selectedAccountId === "all") return true
+      return b.account_id === selectedAccountId
+    })
+  }, [bills, selectedAccountId])
+
+  // Current Month Boundaries & Date Computations
+  const now = new Date()
+  const todayStr = now.toISOString().split("T")[0]
+  const currentYear = now.getFullYear()
+  const currentMonth = now.getMonth()
+  const startOfMonthStr = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-01`
+  const lastDayOfMonth = new Date(currentYear, currentMonth + 1, 0).getDate()
+  const endOfMonthStr = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${String(lastDayOfMonth).padStart(2, "0")}`
+
+  // 1. Overdue (past due date, not completed)
+  const overdueBills = useMemo(() => {
+    return filteredBills
+      .filter((b) => !b.is_completed && b.due_date < todayStr)
+      .sort((a, b) => a.due_date.localeCompare(b.due_date))
+  }, [filteredBills, todayStr])
+
+  // 2. This Month (due within current calendar month >= today, not completed)
+  const thisMonthBills = useMemo(() => {
+    return filteredBills
+      .filter((b) => !b.is_completed && b.due_date >= todayStr && b.due_date <= endOfMonthStr)
+      .sort((a, b) => a.due_date.localeCompare(b.due_date))
+  }, [filteredBills, todayStr, endOfMonthStr])
+
+  // 3. Later on... (due in future months, not completed)
+  const laterBills = useMemo(() => {
+    return filteredBills
+      .filter((b) => !b.is_completed && b.due_date > endOfMonthStr)
+      .sort((a, b) => a.due_date.localeCompare(b.due_date))
+  }, [filteredBills, endOfMonthStr])
+
+  const completedBills = useMemo(() => {
+    return filteredBills
+      .filter((b) => b.is_completed)
+      .sort((a, b) => b.due_date.localeCompare(a.due_date))
+  }, [filteredBills])
+
+  // Summary Metrics: Current Calendar Month ONLY (selected account + current month)
+  const totalPlannedIncome = useMemo(() => {
+    return filteredBills
+      .filter((b) => !b.is_completed && b.due_date >= startOfMonthStr && b.due_date <= endOfMonthStr && b.type === "income")
+      .reduce((sum, b) => sum + b.amount, 0)
+  }, [filteredBills, startOfMonthStr, endOfMonthStr])
+
+  const totalPlannedExpenses = useMemo(() => {
+    return filteredBills
+      .filter((b) => !b.is_completed && b.due_date >= startOfMonthStr && b.due_date <= endOfMonthStr && b.type === "expense")
+      .reduce((sum, b) => sum + b.amount + b.fee_amount, 0)
+  }, [filteredBills, startOfMonthStr, endOfMonthStr])
+
+  const expectedRemaining = totalPlannedIncome - totalPlannedExpenses
+
+  // Helper for relative due text
+  const getDueLabel = (dueDateStr: string) => {
+    const due = new Date(dueDateStr)
+    const today = new Date(todayStr)
+    const diffTime = due.getTime() - today.getTime()
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+
+    if (diffDays < 0) return `${Math.abs(diffDays)}d overdue`
+    if (diffDays === 0) return "Due today"
+    if (diffDays === 1) return "Due tomorrow"
+    return `In ${diffDays} days`
+  }
+
+  // Bill Row Renderer
+  const renderBillRow = (b: Bill, isMuted = false) => {
+    const isIncome = b.type === "income"
+    return (
+      <div
+        key={b.id}
+        className={`p-4 rounded-2xl border flex items-center justify-between gap-3 backdrop-blur-md transition-all hover:bg-white/5 ${
+          isMuted ? "opacity-75" : ""
+        }`}
+        style={{
+          backgroundColor: tokens.nestedSurface,
+          borderColor: tokens.borderNested,
+        }}
+      >
+        <div className="flex items-center gap-3">
+          <div
+            className="size-10 rounded-xl flex items-center justify-center font-bold"
+            style={{
+              backgroundColor: isIncome ? "rgba(52, 211, 153, 0.20)" : "rgba(251, 113, 133, 0.20)",
+              color: isIncome ? tokens.gain : tokens.loss,
+            }}
+          >
+            {isIncome ? <ArrowDownLeft className="size-5" /> : <Receipt className="size-5" />}
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h4 className="text-sm font-bold text-white font-sans">{b.name}</h4>
+              <span className="px-2 py-0.5 rounded text-[9.5px] font-mono uppercase bg-white/10 text-white/70">
+                {b.recurrence}
+              </span>
+            </div>
+            <p className="text-xs text-white/60 mt-0.5 font-sans">
+              {b.account_name} • {getDueLabel(b.due_date)} ({b.due_date})
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="text-right">
+            <p
+              className="text-sm sm:text-base font-bold font-mono"
+              style={{ color: isIncome ? tokens.gain : tokens.loss }}
+            >
+              {isIncome ? "+" : "-"}{currencySymbol}{b.amount.toFixed(2)}
+            </p>
+            {b.fee_amount > 0 && (
+              <p className="text-[10px] font-mono text-white/50">+Fee: {currencySymbol}{b.fee_amount.toFixed(2)}</p>
+            )}
+          </div>
+
+          <button
+            onClick={() => setSelectedBillToPay(b)}
+            className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-[#120824] cursor-pointer transition-all shadow-md hover:scale-[1.02]"
+            style={{ background: tokens.dashboardActivePill }}
+          >
+            Mark as paid
+          </button>
+          <button
+            onClick={() => deleteBill(b.id)}
+            className="p-1.5 rounded-lg hover:bg-red-500/20 text-white/50 hover:text-red-400 cursor-pointer"
+            title="Delete bill"
+          >
+            <Trash2 className="size-4" />
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <SectionHeader title="Planned Bills & Incomes" subtitle="Scheduled obligations, recurring income, and planned transfers">
+        <button
+          onClick={() => setAddBillOpen(true)}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all font-sans cursor-pointer shadow-lg hover:scale-[1.02] text-[#120824]"
+          style={{ background: tokens.dashboardActivePill }}
+        >
+          <Plus className="size-4" />
+          <span>Add Bill</span>
+        </button>
+      </SectionHeader>
+
+      {/* Account Selector Filter */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+        <button
+          onClick={() => setSelectedAccountId("all")}
+          className="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all font-sans cursor-pointer shrink-0"
+          style={{
+            background: selectedAccountId === "all" ? tokens.dashboardActivePill : "rgba(255, 255, 255, 0.08)",
+            color: selectedAccountId === "all" ? "#120824" : "rgba(255, 255, 255, 0.8)",
+          }}
+        >
+          All Accounts
+        </button>
+        {accounts.map((acc) => (
+          <button
+            key={acc.id}
+            onClick={() => setSelectedAccountId(acc.id)}
+            className="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all font-sans cursor-pointer shrink-0"
+            style={{
+              background: selectedAccountId === acc.id ? tokens.dashboardActivePill : "rgba(255, 255, 255, 0.08)",
+              color: selectedAccountId === acc.id ? "#120824" : "rgba(255, 255, 255, 0.8)",
+            }}
+          >
+            {acc.name}
+          </button>
+        ))}
+      </div>
+
+      {/* 3 Summary Cards (Current Calendar Month Only) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {/* Planned Income */}
+        <motion.div
+          {...cardEntrance(0.05)}
+          className="p-5 rounded-3xl border backdrop-blur-xl hover:scale-[1.01] transition-transform duration-300"
+          style={{ background: tokens.cardGradient, borderColor: tokens.border, boxShadow: tokens.cardShadow }}
+        >
+          <p className="text-[11px] font-semibold uppercase tracking-wider font-sans text-white/70">
+            Total Planned Income
+          </p>
+          <p className="text-2xl font-bold font-mono mt-1 text-[#4ADE80]">
+            +{currencySymbol}{totalPlannedIncome.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+          </p>
+        </motion.div>
+
+        {/* Planned Expenses */}
+        <motion.div
+          {...cardEntrance(0.10)}
+          className="p-5 rounded-3xl border backdrop-blur-xl hover:scale-[1.01] transition-transform duration-300"
+          style={{ background: tokens.cardGradient, borderColor: tokens.border, boxShadow: tokens.cardShadow }}
+        >
+          <p className="text-[11px] font-semibold uppercase tracking-wider font-sans text-white/70">
+            Total Planned Expenses
+          </p>
+          <p className="text-2xl font-bold font-mono mt-1 text-[#FB7185]">
+            -{currencySymbol}{totalPlannedExpenses.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+          </p>
+        </motion.div>
+
+        {/* Expected Remaining */}
+        <motion.div
+          {...cardEntrance(0.15)}
+          className="p-5 rounded-3xl border backdrop-blur-xl hover:scale-[1.01] transition-transform duration-300"
+          style={{ background: tokens.cardGradient, borderColor: tokens.border, boxShadow: tokens.cardShadow }}
+        >
+          <p className="text-[11px] font-semibold uppercase tracking-wider font-sans text-white/70">
+            Expected Remaining
+          </p>
+          <p
+            className="text-2xl font-bold font-mono mt-1"
+            style={{ color: expectedRemaining >= 0 ? "#FEF08A" : "#FB7185" }}
+          >
+            {expectedRemaining >= 0 ? "+" : "-"}{currencySymbol}{Math.abs(expectedRemaining).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+          </p>
+        </motion.div>
+      </div>
+
+      {/* 1. Overdue Section (Red Highlight, Top) */}
+      {overdueBills.length > 0 && (
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-2">
+            <span className="size-2.5 rounded-full bg-red-400 animate-pulse" />
+            <h3 className="text-sm font-bold uppercase tracking-wider text-red-400 font-display">
+              Overdue ({overdueBills.length})
+            </h3>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            {overdueBills.map((b) => (
+              <div
+                key={b.id}
+                className="p-4 rounded-2xl border border-red-500/40 bg-red-500/15 backdrop-blur-md flex items-center justify-between gap-3"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="size-10 rounded-xl bg-red-500/20 text-red-300 flex items-center justify-center font-bold">
+                    <AlertCircle className="size-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-white font-sans">{b.name}</h4>
+                    <p className="text-xs text-red-200 mt-0.5 font-sans">
+                      {b.account_name} • {getDueLabel(b.due_date)} ({b.due_date})
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <p className="text-sm font-mono font-bold text-white">
+                      {currencySymbol}{b.amount.toFixed(2)}
+                    </p>
+                    {b.fee_amount > 0 && (
+                      <p className="text-[10px] font-mono text-red-300">+Fee: {currencySymbol}{b.fee_amount.toFixed(2)}</p>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() => setSelectedBillToPay(b)}
+                    className="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-[#A7F3D0] hover:bg-[#5EEAD4] text-[#120824] cursor-pointer transition-all shadow-md"
+                  >
+                    Mark as paid
+                  </button>
+                  <button
+                    onClick={() => deleteBill(b.id)}
+                    className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-300 cursor-pointer"
+                    title="Delete bill"
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 2. This Month Section (Middle) */}
+      <div className="flex flex-col gap-3">
+        <h3 className="text-sm font-bold uppercase tracking-wider text-white/80 font-display">
+          This Month ({thisMonthBills.length})
+        </h3>
+
+        {thisMonthBills.length === 0 ? (
+          <div
+            className="p-8 rounded-3xl border text-center backdrop-blur-xl"
+            style={{ background: tokens.cardGradient, borderColor: tokens.border }}
+          >
+            <p className="text-sm text-white/60">No pending bills due this month for this account.</p>
+            <button
+              onClick={() => setAddBillOpen(true)}
+              className="mt-3 text-xs font-bold underline text-[#FEF08A] cursor-pointer"
+            >
+              + Create a new bill
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {thisMonthBills.map((b) => renderBillRow(b, false))}
+          </div>
+        )}
+      </div>
+
+      {/* 3. Later on... Section (Muted, Bottom) */}
+      {laterBills.length > 0 && (
+        <div className="flex flex-col gap-3 pt-4 border-t" style={{ borderColor: tokens.borderNested }}>
+          <h3 className="text-sm font-bold uppercase tracking-wider text-white/60 font-display">
+            Later on... ({laterBills.length})
+          </h3>
+
+          <div className="flex flex-col gap-2">
+            {laterBills.map((b) => renderBillRow(b, true))}
+          </div>
+        </div>
+      )}
+
+      {/* Completed History Accordion */}
+      {completedBills.length > 0 && (
+        <details className="mt-2 text-xs text-white/60">
+          <summary className="cursor-pointer font-bold font-display uppercase tracking-wider mb-3">
+            Completed Bills ({completedBills.length})
+          </summary>
+          <div className="flex flex-col gap-2 opacity-70">
+            {completedBills.slice(0, 5).map((b) => (
+              <div
+                key={b.id}
+                className="p-3 rounded-xl border flex items-center justify-between text-xs"
+                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+              >
+                <span>{b.name} ({b.account_name})</span>
+                <span className="font-mono text-white font-bold">{currencySymbol}{b.amount.toFixed(2)}</span>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+
+      {/* Modals */}
+      <AddBillModal isOpen={addBillOpen} onClose={() => setAddBillOpen(false)} />
+      <MarkBillPaidModal bill={selectedBillToPay} isOpen={Boolean(selectedBillToPay)} onClose={() => setSelectedBillToPay(null)} />
+    </div>
+  )
+}
+
+// ─── Section: Accounts Management (Feature 2 with Held Funds) ─────
+
+function AccountsSection({ onNavigate }: { onNavigate: (s: SectionId) => void }) {
+  const {
+    accounts,
+    deleteAccount,
+    heldFunds,
+    deleteHeldFund,
+    fetchHeldFundHistory
+  } = useFinanceData()
+  const { profile } = useUserProfile()
+  const { tokens } = useDashboardTheme()
+  const currencySymbol = getCurrencySymbol(profile.currency)
+
+  const [addAccOpen, setAddAccOpen] = useState(false)
+  const [addHeldFundOpen, setAddHeldFundOpen] = useState(false)
+
+  // Deposit/Withdraw modal state
+  const [selectedFundForAction, setSelectedFundForAction] = useState<HeldFund | null>(null)
+  const [fundActionMode, setFundActionMode] = useState<"deposit" | "withdrawal">("deposit")
+
+  // Accordion state for expanded history
+  const [expandedFundId, setExpandedFundId] = useState<string | null>(null)
+  const [fundHistoryMap, setFundHistoryMap] = useState<Record<string, HeldFundHistory[]>>({})
+  const [historyLoading, setHistoryLoading] = useState(false)
+
+  const toggleExpand = async (hfId: string) => {
+    if (expandedFundId === hfId) {
+      setExpandedFundId(null)
+      return
+    }
+    setExpandedFundId(hfId)
+    setHistoryLoading(true)
+    const history = await fetchHeldFundHistory(hfId)
+    setFundHistoryMap((prev) => ({ ...prev, [hfId]: history }))
+    setHistoryLoading(false)
+  }
+
+  return (
+    <div className="flex flex-col gap-8">
+      {/* ─── Accounts Section ─── */}
+      <div className="flex flex-col gap-5">
+        <SectionHeader title="Accounts & Liquidity" subtitle="All connected bank vaults, credit lines, and cash stores">
+          <button
+            onClick={() => setAddAccOpen(true)}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all font-sans cursor-pointer shadow-lg hover:scale-[1.02] text-[#120824]"
+            style={{ background: tokens.dashboardActivePill }}
+          >
+            <Plus className="size-4" />
+            <span>New Account</span>
+          </button>
+        </SectionHeader>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {accounts.map((acc, i) => {
+            const visual = getAccountVisual(acc.type, acc.name)
+
+            return (
+              <motion.div
+                key={acc.id}
+                {...cardEntrance(i * 0.06)}
+                className="rounded-3xl p-6 border flex flex-col justify-between relative overflow-hidden shadow-xl group hover:scale-[1.015] transition-transform duration-300 backdrop-blur-xl"
+                style={{
+                  background: tokens.cardGradient,
+                  borderColor: tokens.border,
+                  boxShadow: tokens.cardShadow,
+                }}
+              >
+                <div className="absolute inset-0 rounded-3xl pointer-events-none border border-white/10" />
+
+                <div className="relative z-10 flex items-start justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="size-11 rounded-2xl flex items-center justify-center border border-white/15 bg-white/15 text-white font-mono font-bold text-xs shadow-md">
+                      <Landmark className="size-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold font-display text-white">{acc.name}</h3>
+                      <p className="text-xs font-sans text-white/70">{visual.label}</p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => deleteAccount(acc.id)}
+                    className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg transition-all cursor-pointer hover:bg-red-500/20 text-red-400"
+                    title="Delete account"
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
+                </div>
+
+                <div className="relative z-10 pt-4 border-t" style={{ borderColor: tokens.borderNested }}>
+                  <p className="text-[11px] font-semibold uppercase tracking-wider font-sans text-white/70">
+                    Current Balance
+                  </p>
+                  <p className="text-2xl font-bold font-mono mt-1 text-white">
+                    {currencySymbol}{Number(acc.balance || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+              </motion.div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* ─── FEATURE 2: HELD FUNDS SYSTEM ─── */}
+      <div className="flex flex-col gap-5 pt-4 border-t" style={{ borderColor: tokens.borderNested }}>
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-bold font-display text-white flex items-center gap-2">
+              <PiggyBank className="size-5 text-[#FEF08A]" />
+              Held Funds & Personal Balances
+            </h3>
+            <p className="text-xs text-white/70 font-sans mt-0.5">
+              Isolated pots and external person debts set aside from your primary account balances
+            </p>
+          </div>
+
+          <button
+            onClick={() => setAddHeldFundOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all font-sans cursor-pointer shadow-lg text-[#120824]"
+            style={{ background: tokens.dashboardActivePill }}
+          >
+            <Plus className="size-3.5" />
+            <span>Add Held Fund</span>
+          </button>
+        </div>
+
+        {heldFunds.length === 0 ? (
+          <motion.div
+            {...cardEntrance(0.2)}
+            className="p-8 rounded-3xl border text-center backdrop-blur-xl hover:scale-[1.01] transition-transform duration-300"
+            style={{ background: tokens.cardGradient, borderColor: tokens.border }}
+          >
+            <p className="text-sm text-white/60">No held funds or personal balances created yet.</p>
+            <button
+              onClick={() => setAddHeldFundOpen(true)}
+              className="mt-2 text-xs font-bold underline text-[#FEF08A] cursor-pointer"
+            >
+              + Create your first held fund
+            </button>
+          </motion.div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {heldFunds.map((hf, i) => {
+              const isPerson = hf.type === "person"
+              const isExpanded = expandedFundId === hf.id
+              const historyList = fundHistoryMap[hf.id] || []
 
               return (
                 <motion.div
-                  key={cat.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: i * 0.03 }}
-                  className="surface-card rounded-2xl p-5 flex flex-col justify-between hover:scale-[1.01] transition-transform duration-200 group border border-border/40"
-                  style={{ boxShadow: CARD_SHADOW }}
+                  key={hf.id}
+                  {...cardEntrance(0.1 + i * 0.05)}
+                  className="rounded-3xl p-5 border flex flex-col justify-between transition-all backdrop-blur-xl relative hover:scale-[1.01] transition-transform duration-300"
+                  style={{
+                    background: tokens.cardGradient,
+                    borderColor: tokens.border,
+                    boxShadow: tokens.cardShadow,
+                  }}
                 >
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2.5">
-                        <div className="size-8 rounded-lg bg-accent/50 flex items-center justify-center">
-                          <CircleDot className="size-4 text-foreground" style={{ color: catColor }} />
-                        </div>
-                        <span className="font-bold text-sm text-foreground font-display">{cat.name}</span>
-                      </div>
-                      <span
-                        className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${
-                          isIncome ? "bg-fin-gain/10 text-fin-gain" : "bg-fin-loss/10 text-fin-loss"
-                        }`}
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="size-10 rounded-2xl flex items-center justify-center font-bold shadow-md"
+                        style={{
+                          backgroundColor: isPerson ? "rgba(167, 243, 208, 0.2)" : "rgba(254, 240, 138, 0.2)",
+                          color: isPerson ? "#A7F3D0" : "#FEF08A",
+                        }}
                       >
-                        {cat.type}
-                      </span>
+                        {isPerson ? <UserCheck className="size-5" /> : <PiggyBank className="size-5" />}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-base font-bold text-white font-display">{hf.name}</h4>
+                          <span className="px-2 py-0.5 rounded text-[9.5px] font-mono uppercase bg-white/10 text-white/80">
+                            {hf.type}
+                          </span>
+                        </div>
+                        <p className="text-xs text-white/60 font-sans mt-0.5">Linked: {hf.account_name}</p>
+                      </div>
                     </div>
 
-                    <div className="my-2">
-                      <p className={`text-2xl font-bold font-mono tracking-tight ${isIncome ? "text-fin-gain" : "text-foreground"}`}>
-                        {isIncome ? "+" : ""}{currencySymbol}{totalVal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    <button
+                      onClick={() => deleteHeldFund(hf.id)}
+                      className="p-1.5 rounded-lg hover:bg-red-500/20 text-white/40 hover:text-red-400 cursor-pointer transition-colors"
+                      title="Delete held fund"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t flex items-center justify-between" style={{ borderColor: tokens.borderNested }}>
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-white/60">
+                        Current Pot Balance
                       </p>
-                      <p className="text-[11px] text-muted-foreground font-sans mt-0.5">
-                        {percent}% of total {cat.type}s
+                      <p
+                        className="text-xl font-bold font-mono mt-0.5"
+                        style={{ color: hf.balance >= 0 ? tokens.gain : tokens.loss }}
+                      >
+                        {currencySymbol}{hf.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                       </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setSelectedFundForAction(hf)
+                          setFundActionMode("deposit")
+                        }}
+                        className="px-3 py-1.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white transition-all cursor-pointer"
+                      >
+                        + Deposit
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedFundForAction(hf)
+                          setFundActionMode("withdrawal")
+                        }}
+                        className="px-3 py-1.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white transition-all cursor-pointer"
+                      >
+                        - Withdraw
+                      </button>
+                      <button
+                        onClick={() => toggleExpand(hf.id)}
+                        className="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white cursor-pointer"
+                        title="View history"
+                      >
+                        <ChevronDown className={`size-4 transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                      </button>
                     </div>
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-border/30">
-                    <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-1.5 font-sans">
-                      <span>Monthly Share</span>
-                      <span className="font-mono font-semibold text-foreground">{percent}%</span>
-                    </div>
-                    <div className="h-1.5 rounded-full bg-muted/60 overflow-hidden">
-                      <motion.div
-                        initial={{ width: 0 }}
-                        animate={{ width: `${percent}%` }}
-                        transition={{ duration: 0.8, delay: 0.1 + i * 0.02, ease: EASE_OUT }}
-                        className="h-full rounded-full"
-                        style={{ background: catColor }}
-                      />
-                    </div>
-                  </div>
+                  {/* Expanded History Log */}
+                  {isExpanded && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      className="mt-4 pt-3 border-t flex flex-col gap-2"
+                      style={{ borderColor: tokens.borderNested }}
+                    >
+                      <p className="text-[10.5px] font-bold uppercase tracking-wider text-white/70">
+                        Live Fund History
+                      </p>
+
+                      {historyLoading ? (
+                        <p className="text-xs text-white/50 py-2">Loading logs from Supabase...</p>
+                      ) : historyList.length === 0 ? (
+                        <p className="text-xs text-white/50 py-2">No history recorded yet.</p>
+                      ) : (
+                        <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto pr-1">
+                          {historyList.map((h) => {
+                            const isDep = h.direction === "deposit"
+                            return (
+                              <div
+                                key={h.id}
+                                className="p-2.5 rounded-xl border flex items-center justify-between text-xs"
+                                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+                              >
+                                <div>
+                                  <span className={`font-semibold mr-1.5 ${isDep ? "text-emerald-400" : "text-rose-400"}`}>
+                                    {isDep ? "Deposit" : "Withdrawal"}
+                                  </span>
+                                  <span className="text-white/60">{h.note || "No note"}</span>
+                                </div>
+                                <div className="text-right">
+                                  <span className="font-mono font-bold text-white">
+                                    {isDep ? "+" : "-"}{currencySymbol}{h.amount.toFixed(2)}
+                                  </span>
+                                  <span className="text-[9.5px] text-white/40 block font-mono">{h.date}</span>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </motion.div>
+                  )}
                 </motion.div>
               )
             })}
           </div>
         )}
-      </SectionPanel>
+      </div>
+
+      {/* Modals */}
+      <AddAccountModal isOpen={addAccOpen} onClose={() => setAddAccOpen(false)} />
+      <AddHeldFundModal isOpen={addHeldFundOpen} onClose={() => setAddHeldFundOpen(false)} />
+      <DepositWithdrawHeldFundModal
+        heldFund={selectedFundForAction}
+        mode={fundActionMode}
+        isOpen={Boolean(selectedFundForAction)}
+        onClose={() => setSelectedFundForAction(null)}
+      />
     </div>
   )
 }
 
-// ─── Section: Settings ──────────────────────────────────────────
+// ─── Section: Categories Management ───────────────────────────────
 
-function SettingsSection() {
-  const [activeTab, setActiveTab] = useState("profile")
-  const { profile, updateProfile, initials } = useUserProfile()
-  const router = useRouter()
+function CategoriesSection({ onNavigate }: { onNavigate: (s: SectionId) => void }) {
+  const { categories, createCategory } = useFinanceData()
+  const { profile } = useUserProfile()
+  const { tokens } = useDashboardTheme()
+  const currencySymbol = getCurrencySymbol(profile.currency)
 
-  const [isEditing, setIsEditing] = useState(false)
-  const [fullName, setFullName] = useState(profile.fullName)
-  const [username, setUsername] = useState(profile.username)
-  const [email, setEmail] = useState(profile.email)
-  const [currency, setCurrency] = useState(profile.currency)
-  const [phone, setPhone] = useState(profile.phone || "+1 (555) 019-2834")
-  const [language, setLanguage] = useState(profile.language || "English (US)")
-  const [saveSuccess, setSaveSuccess] = useState(false)
+  const [newCatName, setNewCatName] = useState("")
+  const [newCatType, setNewCatType] = useState<"expense" | "income">("expense")
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  useEffect(() => {
-    setFullName(profile.fullName)
-    setUsername(profile.username)
-    setEmail(profile.email)
-    setCurrency(profile.currency)
-    setPhone(profile.phone || "+1 (555) 019-2834")
-    setLanguage(profile.language || "English (US)")
-  }, [profile])
-
-  const handleSave = (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
-    updateProfile({
-      fullName,
-      username: username.startsWith("@") ? username : `@${username}`,
-      email,
-      currency,
-      phone,
-      language,
-    })
-    setIsEditing(false)
-    setSaveSuccess(true)
-    setTimeout(() => setSaveSuccess(false), 3000)
+    if (!newCatName.trim()) return
+    setIsSubmitting(true)
+    try {
+      await createCategory({
+        name: newCatName.trim(),
+        type: newCatType,
+        currency: profile.currency || "EGP",
+      })
+      setNewCatName("")
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
-  const tabs = [
-    { id: "profile", label: "Profile", icon: UserCog },
-    { id: "notifications", label: "Notifications", icon: BellRing },
-    { id: "security", label: "Security", icon: Lock },
-    { id: "display", label: "Display", icon: Monitor },
-  ]
-
   return (
-    <div className={`flex flex-col gap-5 ${SECTION_MIN_H}`}>
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="rounded-2xl surface-card p-5 lg:p-6 relative overflow-hidden" style={{ boxShadow: CARD_SHADOW }}>
-        <GlowOrb className="w-48 h-48 -top-24 -right-24 bg-primary/6" />
-        <h3 className="text-lg font-bold text-foreground font-display tracking-tight">Account Settings</h3>
-        <p className="text-xs text-muted-foreground mt-1 font-sans">Manage your personal profile, preferences, and security</p>
+    <div className="flex flex-col gap-6">
+      <SectionHeader title="Category Breakdown" subtitle="Manage categorization labels, budgets, and spending allowances" />
+
+      {/* Category Creation Card */}
+      <motion.div
+        {...cardEntrance(0.05)}
+        className="rounded-3xl p-6 border backdrop-blur-xl hover:scale-[1.01] transition-transform duration-300"
+        style={{ background: tokens.cardGradient, borderColor: tokens.border, boxShadow: tokens.cardShadow }}
+      >
+        <h3 className="text-base font-bold font-display text-white mb-3">Add Category</h3>
+        <form onSubmit={handleCreate} className="flex flex-wrap items-center gap-3">
+          <input
+            type="text"
+            required
+            placeholder="Category name (e.g. Subscriptions, Gaming)"
+            value={newCatName}
+            onChange={(e) => setNewCatName(e.target.value)}
+            className="flex-1 min-w-[200px] px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
+            style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+          />
+
+          <select
+            value={newCatType}
+            onChange={(e) => setNewCatType(e.target.value as any)}
+            className="px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
+            style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+          >
+            <option value="expense" className="bg-[#1E0C38] text-white">Expense Category</option>
+            <option value="income" className="bg-[#1E0C38] text-white">Income Category</option>
+          </select>
+
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="px-5 py-2.5 rounded-xl text-xs font-bold text-[#120824] shadow-lg cursor-pointer"
+            style={{ background: tokens.dashboardActivePill }}
+          >
+            {isSubmitting ? "Saving..." : "Create Category"}
+          </button>
+        </form>
       </motion.div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }} className="rounded-2xl surface-card p-3.5 lg:col-span-1" style={{ boxShadow: CARD_SHADOW }}>
-          <nav className="flex flex-col gap-1">
-            {tabs.map((tab) => {
-              const Icon = tab.icon
-              return (
-                <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                  className={`relative flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-semibold transition-all duration-200 w-full text-left font-sans cursor-pointer ${
-                    activeTab === tab.id ? "text-foreground bg-primary/8" : "text-muted-foreground hover:text-foreground hover:bg-accent/40"
-                  }`}>
-                  <Icon className="size-4" />{tab.label}
-                  {activeTab === tab.id && <ChevronRight className="size-3.5 ml-auto text-primary" />}
-                </button>
-              )
-            })}
-            <div className="border-t border-border/50 my-2" />
-            <button
-              onClick={async () => {
-                if (isSupabaseConfigured && supabase) {
-                  try {
-                    await supabase.auth.signOut()
-                  } catch {
-                    // Ignore
-                  }
-                }
-                if (typeof window !== "undefined") {
-                  localStorage.removeItem("spendly_auth_user_id")
-                  localStorage.removeItem("spendly_accounts")
-                  localStorage.removeItem("spendly_transactions")
-                  localStorage.removeItem("spendly_categories")
-                  localStorage.removeItem("spendly_user_profile")
-                }
-                router.replace("/login")
-              }}
-              className="flex items-center gap-3 px-3.5 py-3 rounded-xl text-sm font-semibold text-fin-loss/70 hover:text-fin-loss hover:bg-fin-loss/5 transition-all duration-200 w-full text-left font-sans cursor-pointer"
-            >
-              <LogOut className="size-4" />Sign Out
-            </button>
-          </nav>
-        </motion.div>
-
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }} className="rounded-2xl surface-card p-5 lg:p-7 lg:col-span-3" style={{ boxShadow: CARD_SHADOW }}>
-          <AnimatePresence mode="wait">
-            <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.25 }}>
-              {activeTab === "profile" && (
-                <div className="flex flex-col gap-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="text-sm font-bold text-foreground font-display">Personal Information</h4>
-                      <p className="text-xs text-muted-foreground mt-0.5 font-sans">Manage your personal profile and account details</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setIsEditing(!isEditing)}
-                      className="px-3.5 py-1.5 rounded-xl border border-border/50 hover:border-primary/40 text-xs font-semibold text-foreground hover:bg-accent/40 transition-colors font-sans cursor-pointer"
-                    >
-                      {isEditing ? "Cancel" : "Edit Details"}
-                    </button>
-                  </div>
-
-                  {saveSuccess && (
-                    <div className="p-3 rounded-xl bg-fin-gain/10 border border-fin-gain/20 text-fin-gain text-xs font-sans flex items-center gap-2">
-                      <Check className="size-4" /> Profile details updated successfully!
-                    </div>
-                  )}
-
-                  {/* Profile Header Card */}
-                  <div className="flex items-center gap-4 p-4 rounded-2xl bg-muted/20 border border-border/30">
-                    <div className="size-16 rounded-2xl bg-primary/15 flex items-center justify-center glow-teal-sm shrink-0">
-                      <span className="text-xl font-bold text-primary font-display">{initials}</span>
-                    </div>
-                    <div>
-                      <p className="text-base font-bold text-foreground font-display">{profile.fullName || "Spendly User"}</p>
-                      <p className="text-xs text-muted-foreground font-sans mt-0.5">{profile.username || "@user"}</p>
-                    </div>
-                  </div>
-
-                  {isEditing ? (
-                    <form onSubmit={handleSave} className="flex flex-col gap-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="flex flex-col gap-1.5">
-                          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.06em] font-sans">Full Name</label>
-                          <input
-                            type="text"
-                            value={fullName}
-                            onChange={(e) => setFullName(e.target.value)}
-                            required
-                            className="bg-muted/30 rounded-xl px-4 py-2.5 border border-border/40 text-sm text-foreground focus:outline-none focus:border-primary/60 font-sans"
-                          />
-                        </div>
-
-                        <div className="flex flex-col gap-1.5">
-                          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.06em] font-sans">Username</label>
-                          <input
-                            type="text"
-                            value={username}
-                            onChange={(e) => setUsername(e.target.value)}
-                            required
-                            className="bg-muted/30 rounded-xl px-4 py-2.5 border border-border/40 text-sm text-foreground focus:outline-none focus:border-primary/60 font-sans"
-                          />
-                        </div>
-
-                        <div className="flex flex-col gap-1.5">
-                          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.06em] font-sans">Email</label>
-                          <input
-                            type="email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            required
-                            className="bg-muted/30 rounded-xl px-4 py-2.5 border border-border/40 text-sm text-foreground focus:outline-none focus:border-primary/60 font-sans"
-                          />
-                        </div>
-
-                        <div className="flex flex-col gap-1.5">
-                          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.06em] font-sans">Default Currency</label>
-                          <select
-                            value={currency}
-                            onChange={(e) => setCurrency(e.target.value)}
-                            className="bg-muted/30 rounded-xl px-4 py-2.5 border border-border/40 text-sm text-foreground focus:outline-none focus:border-primary/60 font-sans cursor-pointer appearance-none"
-                          >
-                            <option value="USD" className="bg-card text-foreground">USD ($)</option>
-                            <option value="EGP" className="bg-card text-foreground">EGP (EGP)</option>
-                            <option value="EUR" className="bg-card text-foreground">EUR (€)</option>
-                            <option value="GBP" className="bg-card text-foreground">GBP (£)</option>
-                            <option value="AED" className="bg-card text-foreground">AED (AED)</option>
-                          </select>
-                        </div>
-
-                        <div className="flex flex-col gap-1.5">
-                          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.06em] font-sans">Phone</label>
-                          <input
-                            type="text"
-                            value={phone}
-                            onChange={(e) => setPhone(e.target.value)}
-                            className="bg-muted/30 rounded-xl px-4 py-2.5 border border-border/40 text-sm text-foreground focus:outline-none focus:border-primary/60 font-sans"
-                          />
-                        </div>
-
-                        <div className="flex flex-col gap-1.5">
-                          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.06em] font-sans">Language</label>
-                          <input
-                            type="text"
-                            value={language}
-                            onChange={(e) => setLanguage(e.target.value)}
-                            className="bg-muted/30 rounded-xl px-4 py-2.5 border border-border/40 text-sm text-foreground focus:outline-none focus:border-primary/60 font-sans"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-end gap-3 pt-2">
-                        <button
-                          type="button"
-                          onClick={() => setIsEditing(false)}
-                          className="px-4 py-2 rounded-xl text-xs font-semibold text-muted-foreground hover:bg-accent/40 font-sans cursor-pointer"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="submit"
-                          className="px-5 py-2 rounded-xl text-xs font-semibold bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-sans shadow-md cursor-pointer"
-                        >
-                          Save Changes
-                        </button>
-                      </div>
-                    </form>
-                  ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {[
-                        { label: "Full Name", value: profile.fullName || "Spendly User", icon: UserCog },
-                        { label: "Username", value: profile.username || "@user", icon: UserCog },
-                        { label: "Email", value: profile.email || "user@spendly.app", icon: Mail },
-                        { label: "Default Currency", value: `${profile.currency || "USD"}`, icon: DollarSign },
-                        { label: "Phone", value: profile.phone || "+1 (555) 019-2834", icon: HelpCircle },
-                        { label: "Language", value: profile.language || "English (US)", icon: Languages },
-                      ].map((field, i) => (
-                        <div key={i} className="flex flex-col gap-2">
-                          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[0.06em] font-sans">{field.label}</label>
-                          <div className="flex items-center gap-2.5 bg-muted/30 rounded-xl px-4 py-3 border border-border/30">
-                            <field.icon className="size-4 text-muted-foreground shrink-0" />
-                            <span className="text-sm text-foreground font-sans font-medium">{field.value}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-              {activeTab === "notifications" && (
-                <div className="flex flex-col gap-6">
-                  <div><h4 className="text-sm font-bold text-foreground font-display">Notification Preferences</h4><p className="text-xs text-muted-foreground mt-0.5 font-sans">Choose how you want to be notified</p></div>
-                  {[
-                    { label: "Budget Alerts", desc: "Get notified when a category approaches its spending limit", enabled: true },
-                    { label: "Large Transaction Alerts", desc: "Receive confirmation when transactions over $100 occur", enabled: true },
-                    { label: "Bill Due Reminders", desc: "Alerts 3 days before recurring bills and rent payments", enabled: true },
-                    { label: "Income & Deposits", desc: "Notifications for incoming salary and freelance payments", enabled: true },
-                    { label: "Weekly Spending Summary", desc: "Weekly expense recap sent via email", enabled: false },
-                    { label: "Monthly Digest", desc: "Monthly breakdown of savings rate and net worth", enabled: true },
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-center justify-between py-1">
-                      <div><p className="text-sm font-semibold text-foreground font-sans">{item.label}</p><p className="text-xs text-muted-foreground mt-0.5 font-sans">{item.desc}</p></div>
-                      <div className={`w-11 h-6 rounded-full relative cursor-pointer transition-colors duration-300 ${item.enabled ? "bg-primary" : "bg-muted"}`}>
-                        <div className={`absolute top-0.5 size-5 rounded-full bg-foreground transition-transform duration-300 ${item.enabled ? "translate-x-5.5" : "translate-x-0.5"}`} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {activeTab === "security" && (
-                <div className="flex flex-col gap-5">
-                  <div><h4 className="text-sm font-bold text-foreground font-display">Security Settings</h4><p className="text-xs text-muted-foreground mt-0.5 font-sans">Manage your account security</p></div>
-                  {[
-                    { label: "Two-Factor Authentication", desc: "Add an extra layer of security to your account", status: "Enabled", statusColor: "text-fin-gain" },
-                    { label: "Password", desc: "Last changed 45 days ago", status: "Update", statusColor: "text-primary" },
-                    { label: "Active Sessions", desc: "1 device currently logged in", status: "Manage", statusColor: "text-primary" },
-                    { label: "Data Encryption", desc: "End-to-end encrypted financial records", status: "Active", statusColor: "text-fin-gain" },
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-center justify-between p-4 rounded-xl bg-muted/20 border border-border/30">
-                      <div className="flex items-center gap-3.5">
-                        <div className="size-10 rounded-xl bg-accent/50 flex items-center justify-center"><Lock className="size-4 text-muted-foreground" /></div>
-                        <div><p className="text-sm font-semibold text-foreground font-sans">{item.label}</p><p className="text-xs text-muted-foreground mt-0.5 font-sans">{item.desc}</p></div>
-                      </div>
-                      <span className={`text-xs font-bold ${item.statusColor}`}>{item.status}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-              {activeTab === "display" && (
-                <div className="flex flex-col gap-5">
-                  <div><h4 className="text-sm font-bold text-foreground font-display">Display Preferences</h4><p className="text-xs text-muted-foreground mt-0.5 font-sans">Customize how the dashboard looks</p></div>
-                  {[
-                    { label: "Theme", desc: "Choose your preferred color scheme", value: "Dark", icon: Palette },
-                    { label: "Default Currency", desc: "Primary currency for accounts & analytics", value: profile.currency || "USD ($)", icon: DollarSign },
-                    { label: "Date Format", desc: "How dates are displayed", value: "YYYY-MM-DD", icon: Calendar },
-                    { label: "Number Format", desc: "Standard separator format", value: "1,234.56", icon: Monitor },
-                  ].map((item, i) => {
-                    const Icon = item.icon
-                    return (
-                      <div key={i} className="flex items-center justify-between p-4 rounded-xl bg-muted/20 border border-border/30">
-                        <div className="flex items-center gap-3.5">
-                          <Icon className="size-4 text-muted-foreground" />
-                          <div><p className="text-sm font-semibold text-foreground font-sans">{item.label}</p><p className="text-xs text-muted-foreground font-sans">{item.desc}</p></div>
-                        </div>
-                        <span className="text-xs font-bold text-foreground bg-muted/60 px-3 py-1.5 rounded-lg font-mono">{item.value}</span>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </motion.div>
-          </AnimatePresence>
-        </motion.div>
+      {/* Categories Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {categories.map((c, i) => (
+          <motion.div
+            key={c.id}
+            {...cardEntrance(0.08 + i * 0.04)}
+            className="p-5 rounded-2xl border flex items-center justify-between backdrop-blur-md hover:scale-[1.01] transition-transform duration-300"
+            style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+          >
+            <div>
+              <h4 className="text-sm font-bold text-white font-sans">{c.name}</h4>
+              <p className="text-xs text-white/60 font-mono mt-0.5 capitalize">{c.type}</p>
+            </div>
+            <span className="font-mono text-sm font-bold text-white">
+              {currencySymbol}{(c.total_spent || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+            </span>
+          </motion.div>
+        ))}
       </div>
     </div>
   )
 }
 
-function DashboardSection({ onNavigate }: { onNavigate?: (section: SectionId) => void }) {
+// ─── Section: Settings Management ─────────────────────────────────
+
+function SettingsSection({ onNavigate }: { onNavigate: (s: SectionId) => void }) {
+  const { profile, updateProfile } = useUserProfile()
+  const { isDarkMode, isVideoEnabled, toggleTheme, toggleVideo, tokens } = useDashboardTheme()
+
+  const [fullName, setFullName] = useState(profile.fullName)
+  const [currency, setCurrency] = useState(profile.currency)
+  const [savedSuccess, setSavedSuccess] = useState(false)
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault()
+    updateProfile({ fullName, currency })
+    setSavedSuccess(true)
+    setTimeout(() => setSavedSuccess(false), 2500)
+  }
+
+  const handleLogout = async () => {
+    if (isSupabaseConfigured && supabase) {
+      await supabase.auth.signOut()
+    }
+    if (typeof window !== "undefined") {
+      localStorage.clear()
+      window.location.href = "/login"
+    }
+  }
+
   return (
-    <div className={`flex flex-col gap-5 ${SECTION_MIN_H}`}>
-      <NetWorthCard />
-      <DashboardAccountsSection onNavigate={onNavigate} />
+    <div className="flex flex-col gap-6 max-w-2xl">
+      <SectionHeader title="Application Settings" subtitle="Personal preferences, currency standards, and display configuration" />
+
+      <motion.div
+        {...cardEntrance(0.05)}
+        className="rounded-3xl p-6 sm:p-8 border shadow-xl backdrop-blur-xl hover:scale-[1.01] transition-transform duration-300"
+        style={{
+          background: tokens.cardGradient,
+          borderColor: tokens.border,
+          boxShadow: tokens.cardShadow,
+        }}
+      >
+        <form onSubmit={handleSave} className="space-y-6">
+          {savedSuccess && (
+            <div className="p-3 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-xs flex items-center gap-2">
+              <CheckCircle2 className="size-4 text-emerald-400" />
+              <span>Preferences saved successfully!</span>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider font-display">User Profile</h3>
+
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+                Full Name
+              </label>
+              <input
+                type="text"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                className="w-full px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
+                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+              />
+            </div>
+
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+                Default Currency
+              </label>
+              <select
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value)}
+                className="w-full px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
+                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+              >
+                <option value="EGP" className="bg-[#1E0C38] text-white">EGP (Egyptian Pound)</option>
+                <option value="USD" className="bg-[#1E0C38] text-white">USD (US Dollar)</option>
+                <option value="EUR" className="bg-[#1E0C38] text-white">EUR (Euro)</option>
+                <option value="GBP" className="bg-[#1E0C38] text-white">GBP (British Pound)</option>
+                <option value="SAR" className="bg-[#1E0C38] text-white">SAR (Saudi Riyal)</option>
+                <option value="AED" className="bg-[#1E0C38] text-white">AED (UAE Dirham)</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="pt-4 border-t space-y-4" style={{ borderColor: tokens.borderNested }}>
+            <h3 className="text-sm font-bold text-white uppercase tracking-wider font-display">Display & Aesthetics</h3>
+
+            <div className="flex items-center justify-between p-4 rounded-2xl border" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+              <div>
+                <p className="text-xs font-bold text-white font-sans">Dark / Light Mode</p>
+                <p className="text-[10.5px] text-white/60">{isDarkMode ? "Dark Riviera Blue" : "Light Cyber Glass"}</p>
+              </div>
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-[#120824]"
+                style={{ background: tokens.dashboardActivePill }}
+              >
+                Toggle Theme
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between p-4 rounded-2xl border" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+              <div>
+                <p className="text-xs font-bold text-white font-sans">Background Video Animation</p>
+                <p className="text-[10.5px] text-white/60">{isVideoEnabled ? "Seamless video active" : "Static PNG active"}</p>
+              </div>
+              <button
+                type="button"
+                onClick={toggleVideo}
+                className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-[#120824]"
+                style={{ background: tokens.dashboardActivePill }}
+              >
+                {isVideoEnabled ? "Pause" : "Play"}
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between pt-4 border-t" style={{ borderColor: tokens.border }}>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="flex items-center gap-2 text-xs font-bold p-2 text-[#FB7185] hover:underline cursor-pointer"
+            >
+              <LogOut className="size-4" />
+              <span>Log out of session</span>
+            </button>
+
+            <button
+              type="submit"
+              className="px-6 py-2.5 rounded-xl text-xs font-bold text-[#120824] shadow-lg cursor-pointer"
+              style={{ background: tokens.dashboardActivePill }}
+            >
+              Save Preferences
+            </button>
+          </div>
+        </form>
+      </motion.div>
     </div>
   )
 }
 
-const sectionComponents: Record<SectionId, React.FC<{ onNavigate?: (section: SectionId) => void }>> = {
-  dashboard: DashboardSection,
-  transactions: TransactionsSection,
-  accounts: AccountsSection,
-  categories: CategoriesSection,
-  settings: SettingsSection,
-}
+// ─── Mobile Floating Bottom Navbar (Exact reference: media_1787967675165.jpg) ─────
+
+const MOBILE_NAV_ITEMS = [
+  { id: "dashboard", label: "Dashboard" },
+  { id: "bills", label: "Bills" },
+  { id: "accounts", label: "Accounts" },
+  { id: "categories", label: "Categories" },
+] as const
 
 function MobileFloatingNavbar({
   activeSection,
   onNavigate,
 }: {
   activeSection: SectionId
-  onNavigate: (sectionId: SectionId) => void
+  onNavigate: (section: SectionId) => void
 }) {
+  const { isDarkMode } = useDashboardTheme()
   const [isIdle, setIsIdle] = useState(false)
-  const idleTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const timerRef = useRef<NodeJS.Timeout | null>(null)
 
   const resetIdleTimer = useCallback(() => {
     setIsIdle(false)
-    if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
-    idleTimerRef.current = setTimeout(() => {
+    if (timerRef.current) clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(() => {
       setIsIdle(true)
     }, 2000)
   }, [])
 
   useEffect(() => {
+    const handleInteraction = () => resetIdleTimer()
+
+    window.addEventListener("scroll", handleInteraction, { passive: true })
+    window.addEventListener("touchstart", handleInteraction, { passive: true })
+    window.addEventListener("touchmove", handleInteraction, { passive: true })
+    window.addEventListener("mousemove", handleInteraction, { passive: true })
+
     resetIdleTimer()
-    const events = ["touchstart", "touchmove", "scroll", "mousemove", "mousedown", "click", "keydown"]
-    const handler = () => resetIdleTimer()
-    events.forEach((e) => window.addEventListener(e, handler, { passive: true }))
+
     return () => {
-      if (idleTimerRef.current) clearTimeout(idleTimerRef.current)
-      events.forEach((e) => window.removeEventListener(e, handler))
+      if (timerRef.current) clearTimeout(timerRef.current)
+      window.removeEventListener("scroll", handleInteraction)
+      window.removeEventListener("touchstart", handleInteraction)
+      window.removeEventListener("touchmove", handleInteraction)
+      window.removeEventListener("mousemove", handleInteraction)
     }
   }, [resetIdleTimer])
 
-  const navLinks: { id: SectionId; label: string }[] = [
-    { id: "dashboard", label: "Dashboard" },
-    { id: "transactions", label: "Transactions" },
-    { id: "accounts", label: "Accounts" },
-    { id: "categories", label: "Categories" },
-  ]
-
   return (
     <nav
-      aria-label="Mobile Navigation"
-      style={{
-        opacity: isIdle ? 0.5 : 1,
-        transition: "opacity 0.6s ease-in-out",
-        pointerEvents: "none",
-      }}
-      className="fixed inset-x-0 bottom-4 z-50 px-6 md:hidden flex justify-center"
-      onMouseEnter={() => setIsIdle(false)}
-      onTouchStart={() => setIsIdle(false)}
+      className={`fixed inset-x-0 bottom-4 z-50 px-3 md:hidden flex justify-center transition-opacity duration-500 ease-in-out pointer-events-none ${
+        isIdle ? "opacity-45" : "opacity-100"
+      }`}
     >
-      <div className="pointer-events-auto mx-auto w-full max-w-[320px] rounded-2xl bg-white/5 px-2 py-2 backdrop-blur-sm shadow-xl shadow-black/50">
-        <div className="grid grid-cols-4 items-center w-full">
-          {navLinks.map((item) => {
-            const isActive = activeSection === item.id
+      <div
+        className="pointer-events-auto w-full max-w-[275px] rounded-2xl px-2 py-1.5 backdrop-blur-xl shadow-2xl border transition-all duration-300"
+        style={{
+          backgroundColor: isDarkMode ? "rgba(18, 8, 36, 0.88)" : "rgba(28, 12, 54, 0.88)",
+          borderColor: "rgba(255, 255, 255, 0.15)",
+          boxShadow: "0 8px 32px 0 rgba(0, 0, 0, 0.45), inset 0 1px 0 0 rgba(255, 255, 255, 0.15)",
+        }}
+        onTouchStart={resetIdleTimer}
+        onMouseEnter={() => setIsIdle(false)}
+      >
+        <div className="grid grid-cols-4 items-center w-full text-center">
+          {MOBILE_NAV_ITEMS.map((item) => {
+            const isActive = item.id === activeSection
             return (
               <button
                 key={item.id}
                 onClick={() => {
-                  setIsIdle(false)
+                  resetIdleTimer()
                   onNavigate(item.id)
                 }}
-                className={`w-full text-center text-[11px] font-open-sans-custom transition-colors cursor-pointer whitespace-nowrap py-1 ${
-                  isActive
-                    ? "font-semibold text-white [text-shadow:_0_2px_8px_rgb(0_0_0_/_40%)]"
-                    : "text-gray-300 hover:text-white [text-shadow:_0_2px_6px_rgb(0_0_0_/_40%)]"
-                }`}
+                className="flex items-center justify-center py-1 px-0.5 rounded-lg text-[9.5px] font-sans transition-all cursor-pointer whitespace-nowrap text-center tracking-tight"
+                style={{
+                  color: isActive ? "#FFFFFF" : "rgba(255, 255, 255, 0.65)",
+                  fontWeight: isActive ? "700" : "500",
+                  backgroundColor: isActive ? "rgba(255, 255, 255, 0.12)" : "transparent",
+                }}
               >
-                {item.label}
+                <span>{item.label}</span>
               </button>
             )
           })}
@@ -1947,249 +3657,335 @@ function MobileFloatingNavbar({
   )
 }
 
-export interface FinancialAnalyticsDashboardProps {
-  initialSection?: SectionId
+// ─── Main Dashboard Assembly ──────────────────────────────────────
+
+const sectionComponents: Record<SectionId, React.ComponentType<{ onNavigate: (section: SectionId) => void }>> = {
+  dashboard: () => null,
+  bills: BillsSection,
+  accounts: AccountsSection,
+  categories: CategoriesSection,
+  settings: SettingsSection,
 }
 
-function FinancialAnalyticsDashboardInner({ initialSection = "dashboard" }: FinancialAnalyticsDashboardProps = {}) {
-  const router = useRouter()
+function FinancialAnalyticsDashboardInner({
+  initialSection = "dashboard",
+}: {
+  initialSection?: SectionId
+}) {
   const [activeSection, setActiveSection] = useState<SectionId>(initialSection)
-  const [isTransitioning, setIsTransitioning] = useState(false)
+  const { accounts, transactions, categories, bills, netWorth, totalIncome, totalExpense } = useFinanceData()
+  const { profile, initials } = useUserProfile()
+  const { isDarkMode, isVideoEnabled, tokens, toggleTheme, toggleVideo } = useDashboardTheme()
+  const currencySymbol = getCurrencySymbol(profile.currency)
+
+  const [addTxOpen, setAddTxOpen] = useState(false)
+  const [addAccOpen, setAddAccOpen] = useState(false)
+  
+  // Feature 4: Edit & Delete Modal States
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
+  const [deletingTransaction, setDeletingTransaction] = useState<Transaction | null>(null)
+
+  // In-App Notification System
   const [notificationsOpen, setNotificationsOpen] = useState(false)
-  const [notifItems, setNotifItems] = useState(notifications)
-  const [authLoading, setAuthLoading] = useState(true)
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const { initials } = useUserProfile()
+  const [notifications, setNotifications] = useState<NotificationItem[]>([])
 
+  // Push bill reminders to notification bell (due within 3 days)
   useEffect(() => {
-    let isMounted = true
+    const todayStr = new Date().toISOString().split("T")[0]
+    const today = new Date(todayStr)
+    const newNotifs: NotificationItem[] = []
 
-    const checkAuthentication = async () => {
-      if (isSupabaseConfigured && supabase) {
-        try {
-          if (typeof window !== "undefined") {
-            const url = new URL(window.location.href)
-            const code = url.searchParams.get("code")
-            if (code) {
-              await supabase.auth.exchangeCodeForSession(code)
-            }
-          }
-
-          const { data: { user } } = await supabase.auth.getUser()
-          if (user) {
-            if (isMounted) {
-              if (typeof window !== "undefined") {
-                localStorage.setItem("spendly_auth_user_id", user.id)
-              }
-              setIsAuthenticated(true)
-              setAuthLoading(false)
-            }
-            return
-          }
-
-          const { data: { session } } = await supabase.auth.getSession()
-          if (session?.user) {
-            if (isMounted) {
-              if (typeof window !== "undefined") {
-                localStorage.setItem("spendly_auth_user_id", session.user.id)
-              }
-              setIsAuthenticated(true)
-              setAuthLoading(false)
-            }
-            return
-          }
-        } catch {
-          // Ignore
-        }
-
-        // If URL contains hash tokens, give Supabase client a moment to resolve before redirecting
-        if (typeof window !== "undefined" && (window.location.hash.includes("access_token") || window.location.search.includes("code"))) {
-          setTimeout(async () => {
-            const { data } = await supabase.auth.getSession()
-            if (data?.session?.user && isMounted) {
-              localStorage.setItem("spendly_auth_user_id", data.session.user.id)
-              setIsAuthenticated(true)
-              setAuthLoading(false)
-            } else if (isMounted) {
-              setIsAuthenticated(false)
-              setAuthLoading(false)
-              router.replace("/login")
-            }
-          }, 800)
-          return
-        }
-
-        if (isMounted) {
-          setIsAuthenticated(false)
-          setAuthLoading(false)
-          router.replace("/login")
-        }
-        return
-      }
-
-      // If Supabase not configured, check local storage
-      const localUid = typeof window !== "undefined" ? localStorage.getItem("spendly_auth_user_id") : null
-      if (localUid) {
-        if (isMounted) {
-          setIsAuthenticated(true)
-          setAuthLoading(false)
-        }
-      } else {
-        if (isMounted) {
-          setIsAuthenticated(false)
-          setAuthLoading(false)
-          router.replace("/login")
+    bills.forEach((b) => {
+      if (!b.is_completed) {
+        const due = new Date(b.due_date)
+        const diffDays = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+        if (diffDays >= 0 && diffDays <= 3) {
+          newNotifs.push({
+            id: `bill_${b.id}`,
+            type: "warning",
+            title: "Bill Reminder",
+            message: `${b.name} is due in ${diffDays === 0 ? "today" : diffDays + " days"} — ${currencySymbol}${b.amount.toFixed(2)}`,
+            time: `${diffDays === 0 ? "Today" : "In " + diffDays + "d"}`,
+            read: false,
+          })
         }
       }
+    })
+
+    if (newNotifs.length > 0) {
+      setNotifications(newNotifs)
     }
+  }, [bills, currencySymbol])
 
-    checkAuthentication()
-
-    let authSub: any = null
-    if (isSupabaseConfigured && supabase) {
-      const { data } = supabase.auth.onAuthStateChange((event, session) => {
-        if (event === "SIGNED_OUT" || !session?.user) {
-          if (isMounted) {
-            setIsAuthenticated(false)
-            router.replace("/login")
-          }
-        } else if (session?.user) {
-          if (isMounted) {
-            setIsAuthenticated(true)
-            setAuthLoading(false)
-          }
-        }
-      })
-      authSub = data?.subscription
-    }
-
-    return () => {
-      isMounted = false
-      authSub?.unsubscribe?.()
-    }
-  }, [router])
-
-  const handleNavigation = useCallback((sectionId: SectionId) => {
-    if (sectionId === activeSection) return
-    setIsTransitioning(true)
-    setTimeout(() => { setActiveSection(sectionId); setIsTransitioning(false) }, 180)
-  }, [activeSection])
-
-  const handleMarkRead = useCallback((id: number) => { setNotifItems((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n))) }, [])
-  const handleMarkAllRead = useCallback(() => { setNotifItems((prev) => prev.map((n) => ({ ...n, read: true }))) }, [])
-
-  const unreadCount = useMemo(() => notifItems.filter((n) => !n.read).length, [notifItems])
-  const ActiveComponent = useMemo(() => sectionComponents[activeSection], [activeSection])
-  const activeNav = useMemo(() => NAV_ITEMS.find((n) => n.id === activeSection), [activeSection])
-
-  if (authLoading || !isAuthenticated) {
-    return (
-      <div className="w-full min-h-screen bg-background text-foreground flex items-center justify-center relative">
-        <div className="fixed inset-0 pointer-events-none z-0">
-          <div className="absolute top-0 left-1/4 w-[600px] h-[600px] rounded-full opacity-[0.03] blur-[120px]" style={{ background: C.teal }} />
-          <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] rounded-full opacity-[0.02] blur-[100px]" style={{ background: C.azure }} />
-        </div>
-        <div className="relative z-10 size-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-      </div>
-    )
-  }
+  const unreadNotifsCount = useMemo(() => {
+    return notifications.filter((n) => !n.read).length
+  }, [notifications])
 
   return (
-    <div className="w-full min-h-screen bg-background text-foreground flex flex-col relative" style={{ boxShadow: CARD_SHADOW }}>
-      {/* Atmospheric mesh gradient background */}
-      <div className="fixed inset-0 pointer-events-none z-0">
-        <div className="absolute top-0 left-1/4 w-[600px] h-[600px] rounded-full opacity-[0.03] blur-[120px] animate-float" style={{ background: C.teal }} />
-        <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] rounded-full opacity-[0.02] blur-[100px] animate-float" style={{ background: C.azure, animationDelay: "3s" }} />
-      </div>
+    <div className="relative min-h-screen text-white font-sans overflow-x-hidden selection:bg-[#5EEAD4] selection:text-[#120824]">
+      {/* Cinematic Dual-Slot Environment Background */}
+      <AtmosphericBackground />
 
-      {/* Floating navigation */}
-      <header className="sticky top-0 z-30 px-2 py-3 sm:px-4 sm:py-4">
-        <div className="mx-auto w-full rounded-2xl border-2 border-border/40 bg-card/60 px-3 py-3 backdrop-blur-xl sm:px-6 sm:py-4">
-          <div className="flex min-w-0 items-center justify-between gap-3">
-            <button onClick={() => handleNavigation("dashboard")} className="cursor-pointer shrink-0" aria-label="Go to Dashboard">
-              <span className="text-lg font-semibold tracking-tight text-foreground font-sans sm:text-xl">Spendly</span>
-            </button>
+      <div className="relative z-10 flex flex-col min-h-screen">
+        {/* ─── Top Floating Pill Navbar (Full Viewport Width with 16-24px Margins) ─── */}
+        <header className="sticky top-2 sm:top-2.5 z-40 px-4 sm:px-6 w-full">
+          <div
+            className="flex items-center justify-between px-4 py-2.5 rounded-full border shadow-2xl backdrop-blur-2xl transition-colors duration-500"
+            style={{
+              backgroundColor: tokens.headerBg,
+              borderColor: tokens.headerBorder,
+              boxShadow: tokens.cardShadow,
+            }}
+          >
+            {/* Brand Logo */}
+            <div
+              onClick={() => setActiveSection("dashboard")}
+              className="flex items-center gap-2.5 cursor-pointer select-none"
+            >
+              <div className="size-8 rounded-full bg-white flex items-center justify-center text-black font-bold text-sm shadow-md">
+                S
+              </div>
+              <span className="text-base font-bold tracking-tight font-display text-white">
+                Spendly
+              </span>
+            </div>
 
-            <nav aria-label="Primary navigation" className="hidden min-w-0 items-center gap-2 overflow-x-auto md:flex lg:gap-4 scrollbar-none">
+            {/* Desktop Navigation Pills */}
+            <nav className="hidden md:flex items-center gap-1.5">
               {NAV_ITEMS.map((item) => {
                 const isActive = item.id === activeSection
-                const Icon = item.icon
                 return (
-                  <button key={item.id} onClick={() => handleNavigation(item.id)}
-                    className={`relative flex items-center gap-2 rounded-xl px-3 py-2 text-[13px] font-semibold whitespace-nowrap transition-all duration-250 font-sans cursor-pointer ${
-                      isActive ? "text-foreground bg-accent/40" : "text-muted-foreground hover:text-foreground hover:bg-accent/30"
-                    }`}
-                    aria-current={isActive ? "page" : undefined}
+                  <button
+                    key={item.id}
+                    onClick={() => setActiveSection(item.id)}
+                    className="flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-sans transition-all duration-200 cursor-pointer"
+                    style={{
+                      background: isActive ? tokens.dashboardActivePill : "transparent",
+                      color: isActive ? tokens.dashboardActiveText : "rgba(255, 255, 255, 0.75)",
+                      fontWeight: isActive ? "700" : "500",
+                    }}
                   >
-                    <Icon className="size-4" />
+                    <item.icon className="size-3.5" />
                     <span>{item.label}</span>
-                    {isActive && <motion.div layoutId="nav-indicator" className="absolute bottom-0 left-3 right-3 h-0.5 rounded-full bg-primary" style={{ boxShadow: `0 0 8px 2px rgb(91 77 199 / 0.3)` }} transition={SPRING} />}
                   </button>
                 )
               })}
             </nav>
 
-            <div className="flex items-center gap-1.5">
-              <button className="rounded-xl p-2.5 transition-all duration-200 hover:bg-accent/50 cursor-pointer" aria-label="Search">
-                <Search className="size-4 text-muted-foreground" />
-              </button>
-              <div className="relative">
-                <button onClick={() => setNotificationsOpen((prev) => !prev)} className="relative rounded-xl p-2.5 transition-all duration-200 hover:bg-accent/50 cursor-pointer" aria-label="Notifications" aria-expanded={notificationsOpen}>
-                  <Bell className="size-4 text-muted-foreground" />
-                  {unreadCount > 0 && <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} transition={SPRING} className="absolute -right-0.5 -top-0.5 flex size-5 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground font-mono">{unreadCount}</motion.span>}
-                </button>
-                <NotificationPanel isOpen={notificationsOpen} onClose={() => setNotificationsOpen(false)} items={notifItems} onMarkRead={handleMarkRead} onMarkAllRead={handleMarkAllRead} />
-              </div>
-              <button className="rounded-xl p-2.5 transition-all duration-200 hover:bg-accent/50 cursor-pointer" aria-label="Settings" onClick={() => handleNavigation("settings")}>
-                <Settings className="size-4 text-muted-foreground" />
-              </button>
-              <div onClick={() => handleNavigation("settings")} className="ml-1.5 flex size-9 cursor-pointer items-center justify-center rounded-xl bg-primary/12 glow-teal-sm transition-colors hover:bg-primary/18">
-                <span className="text-xs font-bold text-primary font-display">{initials}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Content */}
-      <main className="w-full px-5 lg:px-10 xl:px-14 py-6 lg:py-8 pb-28 md:pb-8 flex-1 relative z-10">
-        <AnimatePresence mode="wait">
-          <motion.div key={activeSection}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: isTransitioning ? 0.3 : 1, y: isTransitioning ? 6 : 0 }}
-            exit={{ opacity: 0, y: -12 }}
-            transition={{ duration: 0.35, ease: EASE_OUT }}
-          >
-            <ActiveComponent onNavigate={handleNavigation} />
-          </motion.div>
-        </AnimatePresence>
-      </main>
-
-      {/* Floating Navigation Bar for Mobile */}
-      <MobileFloatingNavbar activeSection={activeSection} onNavigate={handleNavigation} />
-
-      {/* Footer */}
-      <footer className="border-t border-border/40 mt-auto relative z-10 pb-16 md:pb-0">
-        <div className="w-full px-5 lg:px-10 xl:px-14 py-4">
-          <div className="flex items-center justify-between text-[11px] text-muted-foreground font-sans">
+            {/* Right Action Icons */}
             <div className="flex items-center gap-2">
-              <div className="size-2 rounded-full bg-fin-gain animate-pulse-soft" />
-              <span className="font-medium">All systems operational</span>
+              {/* Notification Bell */}
+              <button
+                onClick={() => setNotificationsOpen(!notificationsOpen)}
+                className="size-8 rounded-full flex items-center justify-center border border-white/10 bg-white/10 hover:bg-white/20 text-white transition-colors relative cursor-pointer"
+                title="Notifications"
+              >
+                <Bell className="size-3.5" />
+                {unreadNotifsCount > 0 && (
+                  <span className="absolute -top-1 -right-1 size-4 rounded-full bg-[#FEF08A] text-[#120824] text-[9.5px] font-mono font-bold flex items-center justify-center shadow-md">
+                    {unreadNotifsCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Video Toggle */}
+              <button
+                onClick={toggleVideo}
+                className="size-8 rounded-full flex items-center justify-center border border-white/10 bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+                title={isVideoEnabled ? "Pause background animation" : "Enable background video"}
+              >
+                {isVideoEnabled ? <Film className="size-3.5 text-[#A7F3D0]" /> : <VideoOff className="size-3.5 text-white/50" />}
+              </button>
+
+              {/* Theme Mode Toggle */}
+              <button
+                onClick={toggleTheme}
+                className="size-8 rounded-full flex items-center justify-center border border-white/10 bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+                title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+              >
+                {isDarkMode ? <Sun className="size-3.5 text-[#FEF08A]" /> : <Moon className="size-3.5 text-[#A7F3D0]" />}
+              </button>
+
+              {/* Settings */}
+              <button
+                onClick={() => setActiveSection("settings")}
+                className="size-8 rounded-full flex items-center justify-center border border-white/10 bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+                title="Settings"
+              >
+                <Settings className="size-3.5" />
+              </button>
+
+              {/* User Avatar */}
+              <div
+                onClick={() => setActiveSection("settings")}
+                className="size-8 rounded-full flex items-center justify-center text-[#120824] font-bold text-xs shadow-md cursor-pointer ml-1"
+                style={{ background: tokens.dashboardActivePill }}
+              >
+                {initials || "ME"}
+              </div>
             </div>
-            <span className="font-mono text-muted-foreground/60">Last updated: Feb 20, 2026 — 14:32 UTC</span>
           </div>
-        </div>
-      </footer>
+        </header>
+
+        {/* ─── Main Content Canvas ─── */}
+        <main className="flex-1 px-4 sm:px-8 py-6 max-w-7xl mx-auto w-full pb-28 md:pb-12">
+          {activeSection === "dashboard" ? (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-6">
+              {/* Left Column (Hero Card + Recent Transactions) */}
+              <div className="lg:col-span-7 flex flex-col gap-5 lg:gap-6">
+                <NetWorthHeroCard
+                  netWorth={netWorth}
+                  totalIncome={totalIncome}
+                  totalExpense={totalExpense}
+                  currencySymbol={currencySymbol}
+                  onAddTransaction={() => setAddTxOpen(true)}
+                />
+
+                <RecentTransactionsFeed
+                  transactions={transactions}
+                  currencySymbol={currencySymbol}
+                  onNavigate={setActiveSection}
+                  onAddTransaction={() => setAddTxOpen(true)}
+                  onEditTransaction={(tx) => setEditingTransaction(tx)}
+                  onDeleteTransaction={(tx) => setDeletingTransaction(tx)}
+                />
+              </div>
+
+              {/* Right Column (Active Accounts Deck + Category Budgets) */}
+              <div className="lg:col-span-5 flex flex-col gap-5 lg:gap-6">
+                <ActiveAccountsDeck
+                  accounts={accounts}
+                  currencySymbol={currencySymbol}
+                  onNavigate={setActiveSection}
+                  onAddAccount={() => setAddAccOpen(true)}
+                />
+
+                <CategoryBudgetGauges
+                  categories={categories}
+                  currencySymbol={currencySymbol}
+                  onNavigate={setActiveSection}
+                />
+              </div>
+            </div>
+          ) : (
+            (() => {
+              const SectionComponent = sectionComponents[activeSection]
+              return <SectionComponent onNavigate={setActiveSection} />
+            })()
+          )}
+        </main>
+
+        {/* Mobile Floating Bottom Navbar */}
+        <MobileFloatingNavbar activeSection={activeSection} onNavigate={setActiveSection} />
+
+        {/* Modals & Dialogs */}
+        <AddTransactionModal isOpen={addTxOpen} onClose={() => setAddTxOpen(false)} />
+        <AddAccountModal isOpen={addAccOpen} onClose={() => setAddAccOpen(false)} />
+        <EditTransactionModal
+          transaction={editingTransaction}
+          isOpen={Boolean(editingTransaction)}
+          onClose={() => setEditingTransaction(null)}
+        />
+        <DeleteTransactionModal
+          transaction={deletingTransaction}
+          isOpen={Boolean(deletingTransaction)}
+          onClose={() => setDeletingTransaction(null)}
+        />
+        <NotificationPanel
+          isOpen={notificationsOpen}
+          onClose={() => setNotificationsOpen(false)}
+          notifications={notifications}
+          onMarkAsRead={(id) => setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)))}
+          onClearAll={() => setNotifications([])}
+        />
+      </div>
     </div>
   )
 }
 
-export default function FinancialAnalyticsDashboard(props: FinancialAnalyticsDashboardProps = {}) {
+export function FinancialAnalyticsDashboard({
+  initialSection = "dashboard",
+}: {
+  initialSection?: SectionId
+}) {
+  const [isDarkMode, setIsDarkMode] = useState(true)
+  const [isVideoEnabled, setIsVideoEnabled] = useState(true)
+
+  // Initialize theme & video settings from localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const storedTheme = localStorage.getItem("spendly_theme")
+      if (storedTheme === "light") {
+        setIsDarkMode(false)
+      }
+
+      const storedVideo = localStorage.getItem("spendly_bg_video_enabled")
+      if (storedVideo !== null) {
+        setIsVideoEnabled(storedVideo === "true")
+      }
+    }
+  }, [])
+
+  const toggleTheme = useCallback(() => {
+    setIsDarkMode((prev) => {
+      const next = !prev
+      if (typeof window !== "undefined") {
+        localStorage.setItem("spendly_theme", next ? "dark" : "light")
+        if (next) {
+          document.documentElement.classList.add("dark")
+          document.documentElement.classList.remove("light")
+        } else {
+          document.documentElement.classList.add("light")
+          document.documentElement.classList.remove("dark")
+        }
+      }
+      return next
+    })
+  }, [])
+
+  const toggleVideo = useCallback(() => {
+    setIsVideoEnabled((prev) => {
+      const next = !prev
+      if (typeof window !== "undefined") {
+        localStorage.setItem("spendly_bg_video_enabled", String(next))
+      }
+      return next
+    })
+  }, [])
+
+  const setThemeMode = useCallback((mode: "dark" | "light") => {
+    const isDark = mode === "dark"
+    setIsDarkMode(isDark)
+    if (typeof window !== "undefined") {
+      localStorage.setItem("spendly_theme", mode)
+      if (isDark) {
+        document.documentElement.classList.add("dark")
+        document.documentElement.classList.remove("light")
+      } else {
+        document.documentElement.classList.add("light")
+        document.documentElement.classList.remove("dark")
+      }
+    }
+  }, [])
+
+  const currentTokens = isDarkMode ? TOKENS.dark : TOKENS.light
+
+  const themeContextValue = useMemo(() => ({
+    isDarkMode,
+    isVideoEnabled,
+    tokens: currentTokens,
+    toggleTheme,
+    toggleVideo,
+    setThemeMode,
+  }), [isDarkMode, isVideoEnabled, currentTokens, toggleTheme, toggleVideo, setThemeMode])
+
   return (
     <FinanceDataProvider>
-      <FinancialAnalyticsDashboardInner {...props} />
+      <DashboardThemeContext.Provider value={themeContextValue}>
+        <FinancialAnalyticsDashboardInner initialSection={initialSection} />
+      </DashboardThemeContext.Provider>
     </FinanceDataProvider>
   )
 }
 
-export { FinancialAnalyticsDashboard }
+export default FinancialAnalyticsDashboard

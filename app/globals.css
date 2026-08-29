@@ -1,65 +1,140 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:is(.dark, .dark *));
 
-:root {
-  /* Deep obsidian base with warm charcoal undertone */
-  --background: oklch(0.11 0.008 260);
-  --foreground: oklch(0.95 0.005 80);
+:root, .dark, [data-theme="dark"] {
+  /* Cyber-Glassmorphic Dark Mode: Midnight Violet (#120824) with Violet-Royal-Cyan Mesh Cards */
+  --background: #120824;
+  --foreground: #FFFFFF;
 
-  /* Card surfaces with subtle depth */
-  --card: oklch(0.155 0.008 260);
-  --card-foreground: oklch(0.95 0.005 80);
-  --popover: oklch(0.155 0.008 260);
-  --popover-foreground: oklch(0.95 0.005 80);
+  /* Surfaces & Mesh */
+  --surface-hero: linear-gradient(135deg, #261047 0%, #163C7E 52%, #00C2CB 100%);
+  --surface-secondary: linear-gradient(135deg, #261047 0%, #163C7E 52%, #00C2CB 100%);
+  --surface-nested: rgba(12, 18, 38, 0.5);
 
-  /* Accent: vivid cyan-teal — institutional but electric */
-  --primary: #5b4dc7;
-  --primary-foreground: oklch(0.11 0.008 260);
+  /* Card & Popover */
+  --card: #163C7E;
+  --card-foreground: #FFFFFF;
+  --popover: #1B0C38;
+  --popover-foreground: #FFFFFF;
 
-  /* Surfaces */
-  --secondary: oklch(0.185 0.01 260);
-  --secondary-foreground: oklch(0.88 0.008 80);
-  --muted: oklch(0.20 0.01 260);
-  --muted-foreground: oklch(0.58 0.015 260);
-  --accent: oklch(0.20 0.012 260);
-  --accent-foreground: oklch(0.95 0.005 80);
+  /* Accent / CTA: Electric Cyan (#00C2CB) & Royal Blue (#163C7E) */
+  --primary: #00C2CB;
+  --primary-foreground: #120824;
+  --accent: #00C2CB;
+  --accent-foreground: #120824;
+
+  /* Secondary & Muted */
+  --secondary: rgba(12, 18, 38, 0.5);
+  --secondary-foreground: rgba(255, 255, 255, 0.7);
+  --muted: rgba(12, 18, 38, 0.5);
+  --muted-foreground: rgba(255, 255, 255, 0.7);
+
+  /* Borders & Inputs */
+  --border: rgba(255, 255, 255, 0.14);
+  --input: rgba(12, 18, 38, 0.5);
+  --ring: #00C2CB;
+
+  /* Text Tokens */
+  --text-primary: #FFFFFF;
+  --text-secondary: rgba(255, 255, 255, 0.7);
+
+  /* Finance Status Tokens */
+  --fin-gain: #34D399;
+  --fin-loss: #FB7185;
+  --fin-neutral: rgba(255, 255, 255, 0.7);
+  --fin-surface: rgba(12, 18, 38, 0.5);
+  --fin-surface-hover: rgba(12, 18, 38, 0.7);
 
   /* Destructive */
-  --destructive: oklch(0.62 0.22 18);
-  --destructive-foreground: oklch(0.95 0 0);
+  --destructive: #FB7185;
+  --destructive-foreground: #FFFFFF;
 
-  /* Borders & inputs */
-  --border: oklch(0.24 0.012 260);
-  --input: oklch(0.22 0.01 260);
-  --ring: oklch(0.78 0.16 182);
+  /* Charts */
+  --chart-1: #00C2CB;
+  --chart-2: #34D399;
+  --chart-3: #163C7E;
+  --chart-4: #FB7185;
+  --chart-5: #261047;
 
-  /* Charts: teal → azure → amber → rose → slate */
-  --chart-1: oklch(0.78 0.16 182);
-  --chart-2: oklch(0.68 0.14 245);
-  --chart-3: oklch(0.76 0.14 75);
-  --chart-4: oklch(0.62 0.22 18);
-  --chart-5: oklch(0.50 0.02 260);
+  --radius: 1rem;
 
-  --radius: 0.75rem;
+  /* Sidebar / Header */
+  --sidebar: #120824;
+  --sidebar-foreground: #FFFFFF;
+  --sidebar-primary: #00C2CB;
+  --sidebar-primary-foreground: #120824;
+  --sidebar-accent: rgba(12, 18, 38, 0.6);
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: rgba(255, 255, 255, 0.14);
+  --sidebar-ring: #00C2CB;
+}
 
-  /* Sidebar */
-  --sidebar: oklch(0.13 0.008 260);
-  --sidebar-foreground: oklch(0.95 0.005 80);
-  --sidebar-primary: oklch(0.78 0.16 182);
-  --sidebar-primary-foreground: oklch(0.11 0.008 260);
-  --sidebar-accent: oklch(0.20 0.012 260);
-  --sidebar-accent-foreground: oklch(0.95 0.005 80);
-  --sidebar-border: oklch(0.24 0.012 260);
-  --sidebar-ring: oklch(0.78 0.16 182);
+.light, [data-theme="light"], html.light, html.light body {
+  /* Light Cyber Glass Mode: Low-opacity translucent glass revealing light background ribbon art */
+  --background: #E9D5FF;
+  --foreground: #FFFFFF;
 
-  /* Finance tokens */
-  --fin-gain: oklch(0.76 0.16 162);
-  --fin-loss: oklch(0.62 0.22 18);
-  --fin-neutral: oklch(0.58 0.015 260);
-  --fin-surface: oklch(0.175 0.01 260);
-  --fin-surface-hover: oklch(0.21 0.012 260);
+  /* Surfaces & Mesh */
+  --surface-hero: linear-gradient(135deg, rgba(45, 15, 85, 0.38) 0%, rgba(30, 94, 69, 0.30) 45%, rgba(145, 168, 38, 0.28) 100%);
+  --surface-secondary: linear-gradient(135deg, rgba(45, 15, 85, 0.38) 0%, rgba(30, 94, 69, 0.30) 45%, rgba(145, 168, 38, 0.28) 100%);
+  --surface-nested: rgba(20, 10, 42, 0.35);
+
+  /* Card & Popover */
+  --card: rgba(45, 15, 85, 0.38);
+  --card-foreground: #FFFFFF;
+  --popover: rgba(28, 12, 54, 0.90);
+  --popover-foreground: #FFFFFF;
+
+  /* Accent / CTA */
+  --primary: #A7F3D0;
+  --primary-foreground: #120824;
+  --accent: #FEF08A;
+  --accent-foreground: #120824;
+
+  /* Secondary & Muted */
+  --secondary: rgba(20, 10, 42, 0.35);
+  --secondary-foreground: rgba(255, 255, 255, 0.85);
+  --muted: rgba(20, 10, 42, 0.35);
+  --muted-foreground: rgba(255, 255, 255, 0.85);
+
+  /* Borders & Dividers */
+  --border: rgba(255, 255, 255, 0.25);
+  --input: rgba(20, 10, 42, 0.35);
+  --ring: #5EEAD4;
+
+  /* Text Tokens */
+  --text-primary: #FFFFFF;
+  --text-secondary: rgba(255, 255, 255, 0.85);
+
+  /* Finance Status Tokens */
+  --fin-gain: #4ADE80;
+  --fin-loss: #FB7185;
+  --fin-neutral: rgba(255, 255, 255, 0.85);
+  --fin-surface: rgba(20, 10, 42, 0.35);
+  --fin-surface-hover: rgba(20, 10, 42, 0.50);
+
+  /* Destructive */
+  --destructive: #FB7185;
+  --destructive-foreground: #FFFFFF;
+
+  /* Charts */
+  --chart-1: #FFFFFF;
+  --chart-2: #4ADE80;
+  --chart-3: #5EEAD4;
+  --chart-4: #FB7185;
+  --chart-5: #FEF08A;
+
+  /* Sidebar / Header */
+  --sidebar: rgba(28, 12, 54, 0.82);
+  --sidebar-foreground: #FFFFFF;
+  --sidebar-primary: #5EEAD4;
+  --sidebar-primary-foreground: #120824;
+  --sidebar-accent: rgba(20, 10, 42, 0.35);
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: rgba(255, 255, 255, 0.18);
+  --sidebar-ring: #5EEAD4;
 }
 
 @theme inline {
@@ -68,6 +143,7 @@
   --font-display: var(--font-rubik), 'Rubik', system-ui, sans-serif;
   --font-heading: var(--font-rubik), 'Rubik', system-ui, sans-serif;
   --font-serif: var(--font-instrument), 'Instrument Serif', Georgia, serif;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -87,15 +163,23 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
+  --color-surface-secondary: var(--surface-secondary);
+  --color-surface-nested: var(--surface-nested);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -104,6 +188,7 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
   --color-fin-gain: var(--fin-gain);
   --color-fin-loss: var(--fin-loss);
   --color-fin-neutral: var(--fin-neutral);
@@ -126,25 +211,57 @@
   }
 }
 
-/* Added infinite scroll animation for text carousel */
-@keyframes scroll-left {
-  0% {
-    transform: translateX(0);
-  }
-  100% {
-    transform: translateX(-50%);
-  }
+/* ── Option 2 Hero Surface Gradient & Card Surfaces ── */
+.surface-hero-gradient {
+  background: var(--surface-hero);
+  border: 1px solid var(--border);
 }
 
-.animate-scroll-left {
-  animation: scroll-left 25s linear infinite;
+.surface-secondary-card {
+  background-color: var(--surface-secondary);
+  border: 1px solid var(--border);
 }
 
-@media (max-width: 767px) {
-  .horizontal-panel {
-    overflow-y: hidden;
-    overscroll-behavior: contain;
-  }
+.surface-nested-card {
+  background-color: var(--surface-nested);
+  border: 1px solid var(--border);
+}
+
+.surface-card {
+  background-color: var(--card);
+  border: 1px solid var(--border);
+}
+
+.surface-elevated {
+  background-color: var(--surface-nested);
+  border: 1px solid var(--border);
+}
+
+/* ── Atmospheric Ambient Layer ── */
+.ambient-glow-mesh {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.ambient-glow-emerald {
+  position: absolute;
+  width: 650px;
+  height: 650px;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(27, 61, 40, 0.28) 0%, rgba(13, 38, 24, 0.12) 50%, transparent 70%);
+  filter: blur(80px);
+}
+
+.ambient-glow-gold {
+  position: absolute;
+  width: 500px;
+  height: 500px;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgba(212, 169, 52, 0.12) 0%, rgba(212, 169, 52, 0.03) 50%, transparent 70%);
+  filter: blur(90px);
 }
 
 /* ── Grain overlay ─────────────────────────────── */
@@ -154,43 +271,33 @@
   inset: 0;
   z-index: 9999;
   pointer-events: none;
-  opacity: 0.035;
+  opacity: 0.03;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
   background-repeat: repeat;
   background-size: 128px 128px;
 }
 
-/* ── Glow effects ──────────────────────────────── */
-.glow-teal {
-  box-shadow:
-    0 0 0 1px oklch(0.78 0.16 182 / 0.08),
-    0 0 20px -4px oklch(0.78 0.16 182 / 0.12),
-    0 0 40px -8px oklch(0.78 0.16 182 / 0.06);
+/* ── Micro-textures & Borders ──────────────────── */
+.micro-border {
+  border: 1px solid var(--border);
 }
 
-.glow-teal-sm {
-  box-shadow:
-    0 0 0 1px oklch(0.78 0.16 182 / 0.06),
-    0 0 12px -2px oklch(0.78 0.16 182 / 0.08);
+.micro-border-luminous {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
 }
 
-/* ── Card surface ──────────────────────────────── */
-.surface-card {
-  background: linear-gradient(
-    145deg,
-    oklch(0.165 0.01 260),
-    oklch(0.145 0.008 260)
-  );
-  border: 1px solid oklch(0.26 0.012 260 / 0.6);
+/* ── Dot-Matrix Indicators ────────────────────── */
+.dot-matrix-grid {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 3px;
 }
 
-.surface-elevated {
-  background: linear-gradient(
-    145deg,
-    oklch(0.19 0.012 260),
-    oklch(0.16 0.008 260)
-  );
-  border: 1px solid oklch(0.28 0.015 260 / 0.5);
+.dot-matrix-cell {
+  width: 5px;
+  height: 5px;
+  border-radius: 1px;
 }
 
 /* ── Animations ────────────────────────────────── */
@@ -204,26 +311,14 @@
   50% { opacity: 0.6; }
 }
 
-@keyframes fade-up {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
 @keyframes float {
   0%, 100% { transform: translateY(0px); }
-  50% { transform: translateY(-6px); }
-}
-
-@keyframes gradient-shift {
-  0%, 100% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
+  50% { transform: translateY(-8px); }
 }
 
 .animate-shimmer { animation: shimmer 2s infinite; }
 .animate-pulse-soft { animation: pulse-soft 2s ease-in-out infinite; }
-.animate-fade-up { animation: fade-up 0.5s ease-out forwards; }
-.animate-float { animation: float 6s ease-in-out infinite; }
-.animate-gradient { animation: gradient-shift 8s ease-in-out infinite; background-size: 200% 200%; }
+.animate-float { animation: float 8s ease-in-out infinite; }
 
 .scrollbar-none {
   -ms-overflow-style: none;
@@ -232,3 +327,4 @@
 .scrollbar-none::-webkit-scrollbar {
   display: none;
 }
+
