@@ -353,15 +353,15 @@ function AtmosphericBackground() {
 function getAccountVisual(type: string, name: string) {
   const lowerName = name.toLowerCase()
   if (lowerName.includes("qnb") || type === "checking") {
-    return { label: "Checking Account", cycle: "30/30", fillRatio: 0.82 }
+    return { label: "Checking Account" }
   }
-  if (lowerName.includes("sdf") || type === "credit") {
-    return { label: "Credit Card", cycle: "24/38", fillRatio: 0.65 }
+  if (lowerName.includes("credit") || type === "credit") {
+    return { label: "Credit Card" }
   }
-  if (lowerName.includes("cxv") || type === "savings") {
-    return { label: "Checking Account", cycle: "30/30", fillRatio: 0.40 }
+  if (lowerName.includes("savings") || type === "savings") {
+    return { label: "Savings Account" }
   }
-  return { label: "Bank Account", cycle: "30/30", fillRatio: 0.70 }
+  return { label: type === "checking" ? "Checking Account" : type === "credit" ? "Credit Card" : type === "savings" ? "Savings Account" : "Bank Account" }
 }
 
 function getCurrencySymbol(curr?: string) {
@@ -374,26 +374,6 @@ function getCurrencySymbol(curr?: string) {
   if (c === "SAR") return "SAR "
   if (c === "AED") return "AED "
   return `${c} `
-}
-
-// ─── Component: Dot Matrix Indicator ──────────────────────────────
-
-function DotMatrixIndicator({ progress, dotsCount = 8 }: { progress: number; dotsCount?: number }) {
-  const activeCount = Math.round(progress * dotsCount)
-  return (
-    <div className="flex items-center gap-1">
-      {Array.from({ length: dotsCount }).map((_, i) => (
-        <span
-          key={i}
-          className="size-1.5 rounded-full transition-all duration-300"
-          style={{
-            backgroundColor: i < activeCount ? "#FEF08A" : "rgba(255, 255, 255, 0.2)",
-            boxShadow: i < activeCount ? "0 0 6px rgba(254, 240, 138, 0.8)" : "none",
-          }}
-        />
-      ))}
-    </div>
-  )
 }
 
 // ─── Component: Notification Panel ────────────────────────────────
@@ -2734,21 +2714,13 @@ function ActiveAccountsDeck({
                 </span>
               </div>
 
-              <div className="flex items-end justify-between mt-3 pt-2 border-t border-white/5">
-                <div>
-                  <p className="text-[9.5px] font-semibold uppercase tracking-wider font-sans text-white/55">
-                    AVAILABLE BALANCE
-                  </p>
-                  <p className="text-base sm:text-lg font-bold font-mono text-white mt-0.5">
-                    {currencySymbol}{Number(acc.balance || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                  </p>
-                </div>
-                <div className="flex flex-col items-end">
-                  <span className="text-[9.5px] font-mono text-white/60 mb-1">
-                    Cycle {visual.cycle}
-                  </span>
-                  <DotMatrixIndicator progress={visual.fillRatio} dotsCount={7} />
-                </div>
+              <div className="mt-3 pt-2 border-t border-white/5">
+                <p className="text-[9.5px] font-semibold uppercase tracking-wider font-sans text-white/55">
+                  AVAILABLE BALANCE
+                </p>
+                <p className="text-base sm:text-lg font-bold font-mono text-white mt-0.5">
+                  {currencySymbol}{Number(acc.balance || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                </p>
               </div>
             </div>
           )
