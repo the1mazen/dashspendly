@@ -2855,9 +2855,9 @@ function ActiveAccountsDeck({
       <div className="flex flex-col gap-3 mt-4">
         {accounts.slice(0, 3).map((acc) => {
           const visual = getAccountVisual(acc.type, acc.name)
-          const heldTotal = heldFunds
-            .filter((hf) => hf.account_id === acc.id)
-            .reduce((sum, hf) => sum + (hf.balance || 0), 0)
+          const linkedHeldFunds = heldFunds.filter((hf) => hf.account_id === acc.id)
+          const hasLinkedHeldFunds = linkedHeldFunds.length > 0
+          const heldTotal = linkedHeldFunds.reduce((sum, hf) => sum + (hf.balance || 0), 0)
           const totalWithHeld = (acc.balance || 0) + heldTotal
 
           return (
@@ -2894,14 +2894,16 @@ function ActiveAccountsDeck({
                     {currencySymbol}{Number(acc.balance || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
                   </p>
                 </div>
-                <div className="flex flex-col items-end text-right">
-                  <p className="text-[9px] font-semibold uppercase tracking-wider font-sans text-white/50">
-                    WITH HELD FUNDS
-                  </p>
-                  <p className="text-xs sm:text-sm font-bold font-mono text-amber-200/90 mt-0.5">
-                    {currencySymbol}{Number(totalWithHeld).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                  </p>
-                </div>
+                {hasLinkedHeldFunds && (
+                  <div className="flex flex-col items-end text-right">
+                    <p className="text-[9px] font-semibold uppercase tracking-wider font-sans text-white/50">
+                      WITH HELD FUNDS
+                    </p>
+                    <p className="text-xs sm:text-sm font-bold font-mono text-amber-200/90 mt-0.5">
+                      {currencySymbol}{Number(totalWithHeld).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           )
@@ -3464,9 +3466,9 @@ function AccountsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {accounts.map((acc, i) => {
             const visual = getAccountVisual(acc.type, acc.name)
-            const heldTotal = heldFunds
-              .filter((hf) => hf.account_id === acc.id)
-              .reduce((sum, hf) => sum + (hf.balance || 0), 0)
+            const linkedHeldFunds = heldFunds.filter((hf) => hf.account_id === acc.id)
+            const hasLinkedHeldFunds = linkedHeldFunds.length > 0
+            const heldTotal = linkedHeldFunds.reduce((sum, hf) => sum + (hf.balance || 0), 0)
             const totalWithHeld = (acc.balance || 0) + heldTotal
 
             return (
@@ -3511,14 +3513,16 @@ function AccountsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
                       {currencySymbol}{Number(acc.balance || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
                     </p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider font-sans text-white/60">
-                      With held funds
-                    </p>
-                    <p className="text-sm sm:text-base font-bold font-mono text-amber-200/90 mt-0.5">
-                      {currencySymbol}{Number(totalWithHeld).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                    </p>
-                  </div>
+                  {hasLinkedHeldFunds && (
+                    <div className="text-right">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider font-sans text-white/60">
+                        With held funds
+                      </p>
+                      <p className="text-sm sm:text-base font-bold font-mono text-amber-200/90 mt-0.5">
+                        {currencySymbol}{Number(totalWithHeld).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </motion.div>
             )
