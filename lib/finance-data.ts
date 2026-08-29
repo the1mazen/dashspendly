@@ -63,7 +63,7 @@ export interface HeldFundHistory {
   user_id?: string
   amount_cents: number
   amount: number
-  direction: "deposit" | "withdrawal"
+  direction: "deposit" | "withdrawal" | "payment" | "expense"
   note?: string
   date: string
   created_at?: string
@@ -1270,6 +1270,156 @@ function useFinanceDataInternal() {
     }
   }, [accounts, heldFunds, fetchData])
 
+  const payFromHeldFund = useCallback(async (
+    heldFundId: string,
+    amount: number,
+    note?: string,
+    date?: string
+  ) => {
+    if (isNaN(amount) || amount <= 0) throw new Error("Please enter a valid payment amount.")
+    const fund = heldFunds.find((h) => h.id === heldFundId)
+    if (!fund) throw new Error("Held fund not found.")
+
+    const amountCents = Math.round(amount * 100)
+    const dateStr = date || new Date().toISOString().split("T")[0]
+    const noteStr = note?.trim() || "Payment from held fund"
+
+    if (isSupabaseConfigured && supabase && isValidUUID(heldFundId)) {
+      const userId = await resolveCurrentUserId()
+      if (!userId) throw new Error("User authentication required.")
+
+      // 1. Insert history record with direction "payment" (does NOT touch transactions or accounts)
+      let { error: histErr } = await supabase.from("held_fund_history").insert({
+        id: generateUUID(),
+        held_fund_id: heldFundId,
+        user_id: userId,
+        amount_cents: amountCents,
+        direction: "payment",
+        note: noteStr,
+        date: dateStr,
+      })
+
+      // Fallback if Postgres constraint only allows 'withdrawal'
+      if (histErr && (histErr.message?.includes("direction") || histErr.code === "23514")) {
+        const retry = await supabase.from("held_fund_history").insert({
+          id: generateUUID(),
+          held_fund_id: heldFundId,
+          user_id: userId,
+          amount_cents: amountCents,
+          direction: "withdrawal",
+          note: `Payment: ${noteStr}`,
+          date: dateStr,
+        })
+        histErr = retry.error
+      }
+
+      if (histErr) throw new Error(histErr.message || "Failed to record payment.")
+
+      // 2. Reduce held fund balance
+      const newBalCents = (fund.balance_cents || 0) - amountCents
+      const { error: balErr } = await supabase
+        .from("held_funds")
+        .update({ balance_cents: newBalCents })
+        .eq("id", heldFundId)
+        .eq("user_id", userId)
+      if (balErr) throw new Error(balErr.message || "Failed to update fund balance.")
+
+      await fetchData()
+    } else {
+      setHeldFunds((prev) => {
+        const updated = prev.map((h) => {
+          if (h.id === heldFundId) {
+            const nextBal = (h.balance_cents || 0) - amountCents
+            return { ...h, balance_cents: nextBal, balance: nextBal / 100 }
+          }
+          return h
+        })
+        saveLocal(STORAGE_HELD_FUNDS_KEY, updated)
+        return updated
+      })
+    }
+  }, [heldFunds, fetchData])
+
+  const updateHeldFundHistory = useCallback(async (
+    historyItem: HeldFundHistory,
+    updates: {
+      amount?: number
+      note?: string
+      date?: string
+    }
+  ) => {
+    const fund = heldFunds.find((h) => h.id === historyItem.held_fund_id)
+    const newAmount = updates.amount !== undefined ? updates.amount : historyItem.amount
+    const newAmountCents = Math.round(newAmount * 100)
+    const diffCents = newAmountCents - historyItem.amount_cents
+    const newNote = updates.note !== undefined ? updates.note.trim() : (historyItem.note || "")
+    const newDate = updates.date || historyItem.date
+
+    if (isSupabaseConfigured && supabase && isValidUUID(historyItem.id)) {
+      const userId = await resolveCurrentUserId()
+      if (!userId) throw new Error("User authentication required.")
+
+      const { error: histErr } = await supabase
+        .from("held_fund_history")
+        .update({
+          amount_cents: newAmountCents,
+          note: newNote,
+          date: newDate,
+        })
+        .eq("id", historyItem.id)
+        .eq("user_id", userId)
+
+      if (histErr) throw new Error(histErr.message || "Failed to update history record.")
+
+      // Adjust fund balance if amount changed
+      if (fund && diffCents !== 0) {
+        const isIncomeToFund = historyItem.direction === "deposit"
+        const balanceAdjustment = isIncomeToFund ? diffCents : -diffCents
+        const newBalCents = (fund.balance_cents || 0) + balanceAdjustment
+
+        await supabase
+          .from("held_funds")
+          .update({ balance_cents: newBalCents })
+          .eq("id", fund.id)
+          .eq("user_id", userId)
+      }
+
+      await fetchData()
+    }
+  }, [heldFunds, fetchData])
+
+  const deleteHeldFundHistory = useCallback(async (historyItem: HeldFundHistory) => {
+    const fund = heldFunds.find((h) => h.id === historyItem.held_fund_id)
+
+    if (isSupabaseConfigured && supabase && isValidUUID(historyItem.id)) {
+      const userId = await resolveCurrentUserId()
+      if (!userId) throw new Error("User authentication required.")
+
+      const { error: delErr } = await supabase
+        .from("held_fund_history")
+        .delete()
+        .eq("id", historyItem.id)
+        .eq("user_id", userId)
+
+      if (delErr) throw new Error(delErr.message || "Failed to delete history record.")
+
+      // Revert fund balance
+      if (fund) {
+        const isIncomeToFund = historyItem.direction === "deposit"
+        const revertAdjustment = isIncomeToFund ? -historyItem.amount_cents : historyItem.amount_cents
+        const newBalCents = (fund.balance_cents || 0) + revertAdjustment
+
+        await supabase
+          .from("held_funds")
+          .update({ balance_cents: newBalCents })
+          .eq("id", fund.id)
+          .eq("user_id", userId)
+      }
+
+      await fetchData()
+    }
+  }, [heldFunds, fetchData])
+
   const fetchHeldFundHistory = useCallback(async (heldFundId: string): Promise<HeldFundHistory[]> => {
     if (isSupabaseConfigured && supabase) {
       const userId = await resolveCurrentUserId()
@@ -1646,6 +1796,9 @@ function useFinanceDataInternal() {
     deleteHeldFund,
     depositToHeldFund,
     withdrawFromHeldFund,
+    payFromHeldFund,
+    updateHeldFundHistory,
+    deleteHeldFundHistory,
     fetchHeldFundHistory,
     createBill,
     deleteBill,

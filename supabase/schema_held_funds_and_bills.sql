@@ -24,11 +24,15 @@ create table if not exists public.held_fund_history (
   held_fund_id uuid references public.held_funds(id) not null,
   user_id uuid references auth.users(id) not null,
   amount_cents bigint not null,
-  direction text not null check (direction in ('deposit', 'withdrawal')),
+  direction text not null check (direction in ('deposit', 'withdrawal', 'payment', 'expense')),
   note text,
   date date not null default current_date,
   created_at timestamptz default now()
 );
+
+-- Ensure direction check constraint accepts 'payment' and 'expense'
+alter table if exists public.held_fund_history drop constraint if exists held_fund_history_direction_check;
+alter table if exists public.held_fund_history add constraint held_fund_history_direction_check check (direction in ('deposit', 'withdrawal', 'payment', 'expense'));
 
 -- 3. Enable RLS on Held Funds & History
 alter table public.held_funds enable row level security;

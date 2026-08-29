@@ -1712,11 +1712,11 @@ function DepositWithdrawHeldFundModal({
   onClose,
 }: {
   heldFund: HeldFund | null
-  mode: "deposit" | "withdrawal"
+  mode: "deposit" | "withdrawal" | "pay"
   isOpen: boolean
   onClose: () => void
 }) {
-  const { depositToHeldFund, withdrawFromHeldFund } = useFinanceData()
+  const { depositToHeldFund, withdrawFromHeldFund, payFromHeldFund } = useFinanceData()
   const { profile } = useUserProfile()
   const { tokens } = useDashboardTheme()
   const currencySymbol = getCurrencySymbol(profile.currency)
@@ -1739,8 +1739,10 @@ function DepositWithdrawHeldFundModal({
 
       if (mode === "deposit") {
         await depositToHeldFund(heldFund.id, amt, note, date)
-      } else {
+      } else if (mode === "withdrawal") {
         await withdrawFromHeldFund(heldFund.id, amt, note, date)
+      } else {
+        await payFromHeldFund(heldFund.id, amt, note, date)
       }
       setAmount("")
       setNote("")
@@ -1751,6 +1753,24 @@ function DepositWithdrawHeldFundModal({
       setIsSubmitting(false)
     }
   }
+
+  const titleText = mode === "deposit"
+    ? `Deposit Into ${heldFund.name}`
+    : mode === "withdrawal"
+    ? `Withdraw From ${heldFund.name}`
+    : `Pay from ${heldFund.name}`
+
+  const subtitleText = mode === "deposit"
+    ? `Transfers funds from ${heldFund.account_name || "linked account"} into this held pot`
+    : mode === "withdrawal"
+    ? `Returns funds back to ${heldFund.account_name || "linked account"}`
+    : `Expense paid directly from this held fund. Does NOT touch ${heldFund.account_name || "linked account"} or main transactions.`
+
+  const buttonText = mode === "deposit"
+    ? "Confirm Deposit"
+    : mode === "withdrawal"
+    ? "Confirm Withdrawal"
+    : "Record Payment"
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
@@ -1767,12 +1787,10 @@ function DepositWithdrawHeldFundModal({
         <div className="flex items-center justify-between pb-4 border-b" style={{ borderColor: tokens.border }}>
           <div>
             <h3 className="text-base font-bold font-display text-white">
-              {mode === "deposit" ? "Deposit Into" : "Withdraw From"} {heldFund.name}
+              {titleText}
             </h3>
             <p className="text-xs text-white/70">
-              {mode === "deposit"
-                ? `Transfers funds from ${heldFund.account_name} into this held pot`
-                : `Returns funds back to ${heldFund.account_name}`}
+              {subtitleText}
             </p>
           </div>
           <button onClick={onClose} className="text-white/60 hover:text-white cursor-pointer">✕</button>
@@ -1822,7 +1840,7 @@ function DepositWithdrawHeldFundModal({
             </label>
             <input
               type="text"
-              placeholder="e.g. Set aside salary bonus"
+              placeholder={mode === "pay" ? "e.g. Paid dinner, groceries" : "e.g. Set aside salary bonus"}
               value={note}
               onChange={(e) => setNote(e.target.value)}
               className="w-full px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
@@ -1831,16 +1849,163 @@ function DepositWithdrawHeldFundModal({
           </div>
 
           <div className="flex items-center justify-end gap-3 pt-3 border-t" style={{ borderColor: tokens.border }}>
-            <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-semibold text-white/70">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-semibold text-white/70 cursor-pointer">
               Cancel
             </button>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-6 py-2.5 rounded-xl text-xs font-bold text-[#120824]"
+              className="px-6 py-2.5 rounded-xl text-xs font-bold text-[#120824] shadow-lg cursor-pointer transition-opacity disabled:opacity-50"
               style={{ background: tokens.dashboardActivePill }}
             >
-              {isSubmitting ? "Processing..." : mode === "deposit" ? "Confirm Deposit" : "Confirm Withdrawal"}
+              {isSubmitting ? "Processing..." : buttonText}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </div>
+  )
+}
+
+// ─── Modal: Edit Held Fund History Record ──────────────────────────
+
+function EditHeldFundHistoryModal({
+  historyItem,
+  isOpen,
+  onClose,
+  onSuccess,
+}: {
+  historyItem: HeldFundHistory | null
+  isOpen: boolean
+  onClose: () => void
+  onSuccess: () => void
+}) {
+  const { updateHeldFundHistory } = useFinanceData()
+  const { profile } = useUserProfile()
+  const { tokens } = useDashboardTheme()
+  const currencySymbol = getCurrencySymbol(profile.currency)
+
+  const [amount, setAmount] = useState(historyItem ? String(historyItem.amount) : "")
+  const [note, setNote] = useState(historyItem ? historyItem.note || "" : "")
+  const [date, setDate] = useState(historyItem ? historyItem.date : new Date().toISOString().split("T")[0])
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (historyItem) {
+      setAmount(String(historyItem.amount))
+      setNote(historyItem.note || "")
+      setDate(historyItem.date)
+      setErrorMsg(null)
+    }
+  }, [historyItem])
+
+  if (!isOpen || !historyItem) return null
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsSubmitting(true)
+    setErrorMsg(null)
+    try {
+      const amt = parseFloat(amount)
+      if (isNaN(amt) || amt <= 0) throw new Error("Please enter a valid amount.")
+      await updateHeldFundHistory(historyItem, { amount: amt, note, date })
+      onSuccess()
+      onClose()
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to update record.")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="w-full max-w-md rounded-3xl p-6 border shadow-2xl backdrop-blur-2xl"
+        style={{
+          background: tokens.cardGradient,
+          borderColor: tokens.border,
+          boxShadow: tokens.cardShadow,
+        }}
+      >
+        <div className="flex items-center justify-between pb-4 border-b" style={{ borderColor: tokens.border }}>
+          <div>
+            <h3 className="text-base font-bold font-display text-white">Edit Fund Transaction</h3>
+            <p className="text-xs text-white/70">Modify history entry and auto-adjust fund balance</p>
+          </div>
+          <button onClick={onClose} className="text-white/60 hover:text-white cursor-pointer">✕</button>
+        </div>
+
+        {errorMsg && (
+          <div className="mt-3 p-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-200 text-xs">
+            {errorMsg}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+                Amount ({currencySymbol.trim()})
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                required
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-mono text-white focus:outline-none"
+                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+              />
+            </div>
+
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+                Date
+              </label>
+              <input
+                type="date"
+                required
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-mono text-white focus:outline-none"
+                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+              Note
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. Grocery payment, Rent deposit"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              className="w-full px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
+              style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-4 border-t" style={{ borderColor: tokens.border }}>
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2.5 rounded-xl text-xs font-semibold text-white/80 hover:text-white cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-5 py-2.5 rounded-xl text-xs font-bold text-[#120824] shadow-lg cursor-pointer transition-opacity disabled:opacity-50"
+              style={{ background: tokens.dashboardActivePill }}
+            >
+              {isSubmitting ? "Saving..." : "Save Changes"}
             </button>
           </div>
         </form>
@@ -2650,11 +2815,13 @@ function RecentTransactionsFeed({
 
 function ActiveAccountsDeck({
   accounts,
+  heldFunds = [],
   currencySymbol,
   onNavigate,
   onAddAccount,
 }: {
   accounts: Account[]
+  heldFunds?: HeldFund[]
   currencySymbol: string
   onNavigate?: (section: SectionId) => void
   onAddAccount: () => void
@@ -2688,6 +2855,10 @@ function ActiveAccountsDeck({
       <div className="flex flex-col gap-3 mt-4">
         {accounts.slice(0, 3).map((acc) => {
           const visual = getAccountVisual(acc.type, acc.name)
+          const heldTotal = heldFunds
+            .filter((hf) => hf.account_id === acc.id)
+            .reduce((sum, hf) => sum + (hf.balance || 0), 0)
+          const totalWithHeld = (acc.balance || 0) + heldTotal
 
           return (
             <div
@@ -2714,13 +2885,23 @@ function ActiveAccountsDeck({
                 </span>
               </div>
 
-              <div className="mt-3 pt-2 border-t border-white/5">
-                <p className="text-[9.5px] font-semibold uppercase tracking-wider font-sans text-white/55">
-                  AVAILABLE BALANCE
-                </p>
-                <p className="text-base sm:text-lg font-bold font-mono text-white mt-0.5">
-                  {currencySymbol}{Number(acc.balance || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                </p>
+              <div className="flex items-end justify-between mt-3 pt-2 border-t border-white/5">
+                <div>
+                  <p className="text-[9.5px] font-semibold uppercase tracking-wider font-sans text-white/55">
+                    AVAILABLE BALANCE
+                  </p>
+                  <p className="text-base sm:text-lg font-bold font-mono text-white mt-0.5">
+                    {currencySymbol}{Number(acc.balance || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <div className="flex flex-col items-end text-right">
+                  <p className="text-[9px] font-semibold uppercase tracking-wider font-sans text-white/50">
+                    WITH HELD FUNDS
+                  </p>
+                  <p className="text-xs sm:text-sm font-bold font-mono text-amber-200/90 mt-0.5">
+                    {currencySymbol}{Number(totalWithHeld).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                  </p>
+                </div>
               </div>
             </div>
           )
@@ -3231,6 +3412,7 @@ function AccountsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
     deleteAccount,
     heldFunds,
     deleteHeldFund,
+    deleteHeldFundHistory,
     fetchHeldFundHistory
   } = useFinanceData()
   const { profile } = useUserProfile()
@@ -3240,9 +3422,12 @@ function AccountsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
   const [addAccOpen, setAddAccOpen] = useState(false)
   const [addHeldFundOpen, setAddHeldFundOpen] = useState(false)
 
-  // Deposit/Withdraw modal state
+  // Deposit/Withdraw/Pay modal state
   const [selectedFundForAction, setSelectedFundForAction] = useState<HeldFund | null>(null)
-  const [fundActionMode, setFundActionMode] = useState<"deposit" | "withdrawal">("deposit")
+  const [fundActionMode, setFundActionMode] = useState<"deposit" | "withdrawal" | "pay">("deposit")
+
+  // Edit history modal state
+  const [editingHistoryItem, setEditingHistoryItem] = useState<HeldFundHistory | null>(null)
 
   // Accordion state for expanded history
   const [expandedFundId, setExpandedFundId] = useState<string | null>(null)
@@ -3279,6 +3464,10 @@ function AccountsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {accounts.map((acc, i) => {
             const visual = getAccountVisual(acc.type, acc.name)
+            const heldTotal = heldFunds
+              .filter((hf) => hf.account_id === acc.id)
+              .reduce((sum, hf) => sum + (hf.balance || 0), 0)
+            const totalWithHeld = (acc.balance || 0) + heldTotal
 
             return (
               <motion.div
@@ -3313,13 +3502,23 @@ function AccountsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
                   </button>
                 </div>
 
-                <div className="relative z-10 pt-4 border-t" style={{ borderColor: tokens.borderNested }}>
-                  <p className="text-[11px] font-semibold uppercase tracking-wider font-sans text-white/70">
-                    Current Balance
-                  </p>
-                  <p className="text-2xl font-bold font-mono mt-1 text-white">
-                    {currencySymbol}{Number(acc.balance || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                  </p>
+                <div className="relative z-10 pt-4 border-t flex items-end justify-between" style={{ borderColor: tokens.borderNested }}>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wider font-sans text-white/70">
+                      Available Balance
+                    </p>
+                    <p className="text-2xl font-bold font-mono mt-1 text-white">
+                      {currencySymbol}{Number(acc.balance || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider font-sans text-white/60">
+                      With held funds
+                    </p>
+                    <p className="text-sm sm:text-base font-bold font-mono text-amber-200/90 mt-0.5">
+                      {currencySymbol}{Number(totalWithHeld).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                    </p>
+                  </div>
                 </div>
               </motion.div>
             )
@@ -3430,6 +3629,15 @@ function AccountsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
                       <button
                         onClick={() => {
                           setSelectedFundForAction(hf)
+                          setFundActionMode("pay")
+                        }}
+                        className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/30 transition-all cursor-pointer shadow-sm"
+                      >
+                        💸 Pay
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedFundForAction(hf)
                           setFundActionMode("deposit")
                         }}
                         className="px-3 py-1.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white transition-all cursor-pointer"
@@ -3472,26 +3680,54 @@ function AccountsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
                       ) : historyList.length === 0 ? (
                         <p className="text-xs text-white/50 py-2">No history recorded yet.</p>
                       ) : (
-                        <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto pr-1">
+                        <div className="flex flex-col gap-1.5 max-h-56 overflow-y-auto pr-1">
                           {historyList.map((h) => {
                             const isDep = h.direction === "deposit"
+                            const isPay = h.direction === "payment" || h.direction === "expense"
+                            const label = isDep ? "Deposit" : isPay ? "Payment" : "Withdrawal"
+                            const labelColor = isDep ? "text-emerald-400" : isPay ? "text-amber-400" : "text-rose-400"
+
                             return (
                               <div
                                 key={h.id}
-                                className="p-2.5 rounded-xl border flex items-center justify-between text-xs"
+                                className="p-2.5 rounded-xl border flex items-center justify-between text-xs group/item transition-colors hover:bg-white/5"
                                 style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
                               >
                                 <div>
-                                  <span className={`font-semibold mr-1.5 ${isDep ? "text-emerald-400" : "text-rose-400"}`}>
-                                    {isDep ? "Deposit" : "Withdrawal"}
+                                  <span className={`font-semibold mr-1.5 ${labelColor}`}>
+                                    {label}
                                   </span>
                                   <span className="text-white/60">{h.note || "No note"}</span>
                                 </div>
-                                <div className="text-right">
-                                  <span className="font-mono font-bold text-white">
-                                    {isDep ? "+" : "-"}{currencySymbol}{h.amount.toFixed(2)}
-                                  </span>
-                                  <span className="text-[9.5px] text-white/40 block font-mono">{h.date}</span>
+                                <div className="flex items-center gap-2">
+                                  <div className="text-right">
+                                    <span className="font-mono font-bold text-white">
+                                      {isDep ? "+" : "-"}{currencySymbol}{h.amount.toFixed(2)}
+                                    </span>
+                                    <span className="text-[9.5px] text-white/40 block font-mono">{h.date}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                                    <button
+                                      onClick={() => setEditingHistoryItem(h)}
+                                      className="p-1 rounded-md hover:bg-white/10 text-white/60 hover:text-white cursor-pointer transition-colors"
+                                      title="Edit record"
+                                    >
+                                      <Edit3 className="size-3.5" />
+                                    </button>
+                                    <button
+                                      onClick={async () => {
+                                        if (confirm("Delete this fund transaction? The fund balance will be adjusted.")) {
+                                          await deleteHeldFundHistory(h)
+                                          const updated = await fetchHeldFundHistory(hf.id)
+                                          setFundHistoryMap((prev) => ({ ...prev, [hf.id]: updated }))
+                                        }
+                                      }}
+                                      className="p-1 rounded-md hover:bg-red-500/20 text-white/60 hover:text-red-400 cursor-pointer transition-colors"
+                                      title="Delete record"
+                                    >
+                                      <Trash2 className="size-3.5" />
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
                             )
@@ -3515,6 +3751,17 @@ function AccountsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
         mode={fundActionMode}
         isOpen={Boolean(selectedFundForAction)}
         onClose={() => setSelectedFundForAction(null)}
+      />
+      <EditHeldFundHistoryModal
+        historyItem={editingHistoryItem}
+        isOpen={Boolean(editingHistoryItem)}
+        onClose={() => setEditingHistoryItem(null)}
+        onSuccess={async () => {
+          if (expandedFundId) {
+            const updated = await fetchHeldFundHistory(expandedFundId)
+            setFundHistoryMap((prev) => ({ ...prev, [expandedFundId]: updated }))
+          }
+        }}
       />
     </div>
   )
@@ -3998,7 +4245,7 @@ function FinancialAnalyticsDashboardInner({
   initialSection?: SectionId
 }) {
   const [activeSection, setActiveSection] = useState<SectionId>(initialSection)
-  const { accounts, transactions, categories, bills, netWorth, totalIncome, totalExpense } = useFinanceData()
+  const { accounts, transactions, categories, heldFunds, bills, netWorth, totalIncome, totalExpense } = useFinanceData()
   const { profile, initials } = useUserProfile()
   const { isDarkMode, isVideoEnabled, tokens, toggleTheme, toggleVideo } = useDashboardTheme()
   const currencySymbol = getCurrencySymbol(profile.currency)
@@ -4180,6 +4427,7 @@ function FinancialAnalyticsDashboardInner({
               <div className="lg:col-span-5 flex flex-col gap-5 lg:gap-6">
                 <ActiveAccountsDeck
                   accounts={accounts}
+                  heldFunds={heldFunds}
                   currencySymbol={currencySymbol}
                   onNavigate={setActiveSection}
                   onAddAccount={() => setAddAccOpen(true)}
