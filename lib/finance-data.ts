@@ -213,7 +213,6 @@ async function ensureSystemCategory(userId: string, categoryName: string, type: 
         user_id: userId,
         name: categoryName.trim(),
         type,
-        currency: "EGP",
       })
       .select("id")
       .single()
@@ -542,7 +541,6 @@ function useFinanceDataInternal() {
         user_id: userId,
         name: catData.name.trim(),
         type: catData.type,
-        currency,
       }
       if (budgetCents != null) {
         insertPayload.budget_cents = budgetCents
@@ -562,7 +560,6 @@ function useFinanceDataInternal() {
             user_id: userId,
             name: catData.name.trim(),
             type: catData.type,
-            currency,
           })
           .select()
           .single()
