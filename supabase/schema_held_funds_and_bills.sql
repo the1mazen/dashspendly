@@ -79,3 +79,30 @@ do $$ begin
       on public.bills for all using (auth.uid() = user_id);
   end if;
 end $$;
+
+-- 5. Ensure Categories, Accounts, and Transactions RLS Policies exist
+alter table if exists public.categories enable row level security;
+alter table if exists public.accounts enable row level security;
+alter table if exists public.transactions enable row level security;
+
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename = 'categories' and policyname = 'Users manage own categories') then
+    create policy "Users manage own categories"
+      on public.categories for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  end if;
+end $$;
+
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename = 'accounts' and policyname = 'Users manage own accounts') then
+    create policy "Users manage own accounts"
+      on public.accounts for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  end if;
+end $$;
+
+do $$ begin
+  if not exists (select 1 from pg_policies where tablename = 'transactions' and policyname = 'Users manage own transactions') then
+    create policy "Users manage own transactions"
+      on public.transactions for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  end if;
+end $$;
+

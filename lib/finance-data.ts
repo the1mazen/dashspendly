@@ -455,38 +455,40 @@ function useFinanceDataInternal() {
   const createAccount = useCallback(async (accountData: { name: string; type: string; starting_balance: number; currency?: string }) => {
     const startingCents = Math.round((accountData.starting_balance || 0) * 100)
     const currency = accountData.currency || "EGP"
+    const newAccId = generateUUID()
 
     if (isSupabaseConfigured && supabase) {
-      try {
-        const userId = await resolveCurrentUserId()
-        if (userId) {
-          const { data, error } = await supabase
-            .from("accounts")
-            .insert({
-              user_id: userId,
-              name: accountData.name.trim(),
-              type: accountData.type || "checking",
-              starting_balance_cents: startingCents,
-              currency,
-            })
-            .select()
-            .single()
+      const userId = await resolveCurrentUserId()
+      if (!userId) {
+        throw new Error("No active Supabase user session found. Please log in to save accounts to cloud.")
+      }
 
-          if (!error && data) {
-            await fetchData()
-            return data
-          }
-          if (error) {
-            console.warn("Supabase account insert error, using local fallback:", error)
-          }
-        }
-      } catch (err) {
-        console.warn("Supabase createAccount exception:", err)
+      const { data, error } = await supabase
+        .from("accounts")
+        .insert({
+          id: newAccId,
+          user_id: userId,
+          name: accountData.name.trim(),
+          type: accountData.type || "checking",
+          starting_balance_cents: startingCents,
+          currency,
+        })
+        .select()
+        .single()
+
+      if (error) {
+        console.error("Supabase account insert error:", error)
+        throw new Error(`Failed to save account to Supabase: ${error.message}`)
+      }
+
+      if (data) {
+        await fetchData()
+        return data
       }
     }
 
     const newAcc: Account = {
-      id: "acc_" + Date.now(),
+      id: newAccId,
       name: accountData.name.trim(),
       type: accountData.type || "checking",
       starting_balance_cents: startingCents,
@@ -506,7 +508,7 @@ function useFinanceDataInternal() {
     if (isSupabaseConfigured && supabase) {
       try {
         const userId = await resolveCurrentUserId()
-        if (userId) {
+        if (userId && isValidUUID(accountId)) {
           await supabase.from("accounts").delete().eq("id", accountId).eq("user_id", userId)
         }
       } catch (err) {
@@ -527,57 +529,60 @@ function useFinanceDataInternal() {
   const createCategory = useCallback(async (catData: { name: string; type: "income" | "expense"; budget?: number; currency?: string }) => {
     const currency = catData.currency || "EGP"
     const budgetCents = catData.budget && catData.budget > 0 ? Math.round(catData.budget * 100) : null
+    const newCatId = generateUUID()
 
     if (isSupabaseConfigured && supabase) {
-      try {
-        const userId = await resolveCurrentUserId()
-        if (userId) {
-          const insertPayload: any = {
+      const userId = await resolveCurrentUserId()
+      if (!userId) {
+        throw new Error("No active Supabase user session found. Please log in to save categories to cloud.")
+      }
+
+      const insertPayload: any = {
+        id: newCatId,
+        user_id: userId,
+        name: catData.name.trim(),
+        type: catData.type,
+        currency,
+      }
+      if (budgetCents != null) {
+        insertPayload.budget_cents = budgetCents
+      }
+
+      let { data, error } = await supabase
+        .from("categories")
+        .insert(insertPayload)
+        .select()
+        .single()
+
+      if (error && (error.message?.includes("budget_cents") || error.code === "PGRST204" || error.code === "42703")) {
+        const retry = await supabase
+          .from("categories")
+          .insert({
+            id: newCatId,
             user_id: userId,
             name: catData.name.trim(),
             type: catData.type,
             currency,
-          }
-          if (budgetCents != null) {
-            insertPayload.budget_cents = budgetCents
-          }
+          })
+          .select()
+          .single()
+        data = retry.data
+        error = retry.error
+      }
 
-          let { data, error } = await supabase
-            .from("categories")
-            .insert(insertPayload)
-            .select()
-            .single()
+      if (error) {
+        console.error("Supabase category insert error:", error)
+        throw new Error(`Failed to save category to Supabase: ${error.message}`)
+      }
 
-          if (error && (error.message?.includes("budget_cents") || error.code === "PGRST204" || error.code === "42703")) {
-            const retry = await supabase
-              .from("categories")
-              .insert({
-                user_id: userId,
-                name: catData.name.trim(),
-                type: catData.type,
-                currency,
-              })
-              .select()
-              .single()
-            data = retry.data
-            error = retry.error
-          }
-
-          if (!error && data) {
-            await fetchData()
-            return data
-          }
-          if (error) {
-            console.warn("Supabase category insert error, using local fallback:", error)
-          }
-        }
-      } catch (err) {
-        console.warn("Supabase category creation exception:", err)
+      if (data) {
+        await fetchData()
+        return data
       }
     }
 
     const newCat: Category = {
-      id: generateUUID(),
+      id: newCatId,
       name: catData.name.trim(),
       type: catData.type,
       currency,

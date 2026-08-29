@@ -22,11 +22,21 @@ export const supabase = isSupabaseConfigured
 export async function resolveCurrentUserId(): Promise<string | null> {
   if (isSupabaseConfigured && supabase) {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user?.id) return user.id
-
       const { data: { session } } = await supabase.auth.getSession()
-      if (session?.user?.id) return session.user.id
+      if (session?.user?.id) {
+        if (typeof window !== "undefined") {
+          localStorage.setItem("spendly_auth_user_id", session.user.id)
+        }
+        return session.user.id
+      }
+
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user?.id) {
+        if (typeof window !== "undefined") {
+          localStorage.setItem("spendly_auth_user_id", user.id)
+        }
+        return user.id
+      }
     } catch {
       // Ignore auth resolution error
     }
