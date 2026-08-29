@@ -76,6 +76,8 @@ export function useUserProfile() {
   const [loading, setLoading] = useState(true)
 
   const fetchProfile = useCallback(async () => {
+    const local = getLocalUserProfile()
+
     // 1. If Supabase is configured, check authenticated user
     if (isSupabaseConfigured && supabase) {
       try {
@@ -107,18 +109,18 @@ export function useUserProfile() {
 
           const firstName = dbProfile?.first_name || userMeta.first_name || userMeta.firstName || ""
           const lastName = dbProfile?.last_name || userMeta.last_name || userMeta.lastName || ""
-          const fullName = dbProfile?.full_name || userMeta.full_name || userMeta.fullName || (firstName && lastName ? `${firstName} ${lastName}` : firstName || userEmail.split("@")[0] || "User")
-          const rawUsername = dbProfile?.username || userMeta.username || userMeta.user_name || userEmail.split("@")[0] || "user"
+          const fullName = dbProfile?.full_name || userMeta.full_name || userMeta.fullName || (firstName && lastName ? `${firstName} ${lastName}` : firstName || userEmail.split("@")[0] || local.fullName || "User")
+          const rawUsername = dbProfile?.username || userMeta.username || userMeta.user_name || userEmail.split("@")[0] || local.username || "user"
           const username = rawUsername.startsWith("@") ? rawUsername : `@${rawUsername}`
-          const currency = dbProfile?.default_currency || dbProfile?.currency || userMeta.default_currency || userMeta.currency || "USD"
+          const currency = userMeta.default_currency || userMeta.currency || dbProfile?.default_currency || dbProfile?.currency || local.currency || "USD"
 
           const supaProfile: UserProfile = {
             fullName,
             username,
-            email: userEmail || dbProfile?.email || "",
+            email: userEmail || dbProfile?.email || local.email || "",
             currency,
-            phone: dbProfile?.phone || userMeta.phone || "+1 (555) 019-2834",
-            language: dbProfile?.language || userMeta.language || "English (US)",
+            phone: dbProfile?.phone || userMeta.phone || local.phone || "+1 (555) 019-2834",
+            language: dbProfile?.language || userMeta.language || local.language || "English (US)",
           }
           setProfile(supaProfile)
           saveLocalUserProfile(supaProfile)
@@ -131,7 +133,6 @@ export function useUserProfile() {
     }
 
     // 2. Fall back to local storage profile
-    const local = getLocalUserProfile()
     setProfile(local)
     setLoading(false)
   }, [])
@@ -176,14 +177,18 @@ export function useUserProfile() {
 
         const userId = await resolveCurrentUserId()
         if (userId) {
-          await supabase.from("profiles").upsert({
-            id: userId,
-            full_name: updated.fullName,
-            username: cleanUser,
-            default_currency: updated.currency,
-            language: updated.language,
-            phone: updated.phone,
-          })
+          try {
+            await supabase.from("profiles").upsert({
+              id: userId,
+              full_name: updated.fullName,
+              username: cleanUser,
+              default_currency: updated.currency,
+              language: updated.language,
+              phone: updated.phone,
+            })
+          } catch {
+            // Ignore profiles table schema variations
+          }
         }
       } catch (err) {
         console.warn("Error updating Supabase user metadata:", err)

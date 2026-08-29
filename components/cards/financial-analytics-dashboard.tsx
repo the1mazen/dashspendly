@@ -3675,21 +3675,33 @@ function SettingsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
 
   const [fullName, setFullName] = useState(profile.fullName)
   const [currency, setCurrency] = useState(profile.currency)
+  const [isSaving, setIsSaving] = useState(false)
   const [savedSuccess, setSavedSuccess] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [resetModalOpen, setResetModalOpen] = useState(false)
   const [resetSuccessAlert, setResetSuccessAlert] = useState(false)
 
-  // Sync state if profile changes (e.g. after reset)
+  // Sync state if profile changes (e.g. after reset or load)
   useEffect(() => {
     setFullName(profile.fullName)
     setCurrency(profile.currency)
-  }, [profile])
+  }, [profile.fullName, profile.currency])
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
-    updateProfile({ fullName, currency })
-    setSavedSuccess(true)
-    setTimeout(() => setSavedSuccess(false), 2500)
+    setIsSaving(true)
+    setSaveError(null)
+    setSavedSuccess(false)
+    try {
+      await updateProfile({ fullName, currency })
+      setSavedSuccess(true)
+      setTimeout(() => setSavedSuccess(false), 3000)
+    } catch (err: any) {
+      console.error("Save profile error:", err)
+      setSaveError(err?.message || "Failed to update preferences.")
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const handleLogout = async () => {
@@ -3734,6 +3746,12 @@ function SettingsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
             <div className="p-3 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-xs flex items-center gap-2">
               <CheckCircle2 className="size-4 text-emerald-400" />
               <span>Preferences saved successfully!</span>
+            </div>
+          )}
+
+          {saveError && (
+            <div className="p-3 rounded-2xl bg-red-500/20 border border-red-500/40 text-red-200 text-xs">
+              {saveError}
             </div>
           )}
 
@@ -3851,10 +3869,11 @@ function SettingsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
 
             <button
               type="submit"
-              className="px-6 py-2.5 rounded-xl text-xs font-bold text-[#120824] shadow-lg cursor-pointer"
+              disabled={isSaving}
+              className="px-6 py-2.5 rounded-xl text-xs font-bold text-[#120824] shadow-lg cursor-pointer transition-opacity disabled:opacity-50"
               style={{ background: tokens.dashboardActivePill }}
             >
-              Save Preferences
+              {isSaving ? "Saving..." : "Save Preferences"}
             </button>
           </div>
         </form>

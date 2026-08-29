@@ -228,6 +228,8 @@ async function ensureSystemCategory(userId: string, categoryName: string, type: 
 // Helper: Ensure system account exists in Supabase
 async function ensureSystemAccount(userId: string, accountId: string, accounts: Account[]): Promise<string | undefined> {
   if (!isSupabaseConfigured || !supabase || !userId || !accountId) return undefined
+
+  // 1. Check if the account ID already exists in Supabase for this user
   if (isValidUUID(accountId)) {
     try {
       const { data } = await supabase.from("accounts").select("id").eq("id", accountId).eq("user_id", userId).maybeSingle()
@@ -237,6 +239,7 @@ async function ensureSystemAccount(userId: string, accountId: string, accounts: 
     }
   }
 
+  // 2. Find the account in client state and ensure it is created in Supabase
   const acc = accounts.find((a) => a.id === accountId)
   if (acc) {
     try {
@@ -248,8 +251,8 @@ async function ensureSystemAccount(userId: string, accountId: string, accounts: 
         .maybeSingle()
       if (existing?.id && isValidUUID(String(existing.id))) return String(existing.id)
 
-      const newId = generateUUID()
-      const { data: created } = await supabase
+      const newId = isValidUUID(acc.id) ? acc.id : generateUUID()
+      const { data: created, error } = await supabase
         .from("accounts")
         .insert({
           id: newId,
@@ -261,12 +264,36 @@ async function ensureSystemAccount(userId: string, accountId: string, accounts: 
         })
         .select("id")
         .single()
-      if (created?.id) return String(created.id)
-      return newId
+      if (!error && created?.id) return String(created.id)
+      if (newId) return newId
     } catch (err) {
       console.warn("Error ensuring account:", err)
     }
   }
+
+  // 3. Fallback: check if user has any account in Supabase or create default
+  try {
+    const { data: anyAcc } = await supabase.from("accounts").select("id").eq("user_id", userId).limit(1).maybeSingle()
+    if (anyAcc?.id) return String(anyAcc.id)
+
+    const defId = generateUUID()
+    const { data: defCreated } = await supabase
+      .from("accounts")
+      .insert({
+        id: defId,
+        user_id: userId,
+        name: "Main Account",
+        type: "checking",
+        starting_balance_cents: 0,
+        currency: "EGP",
+      })
+      .select("id")
+      .single()
+    if (defCreated?.id) return String(defCreated.id)
+  } catch (err) {
+    console.warn("Error creating fallback account:", err)
+  }
+
   return undefined
 }
 
@@ -650,28 +677,35 @@ function useFinanceDataInternal() {
       const userId = await resolveCurrentUserId()
       if (!userId) throw new Error("User session not found. Please log in again.")
 
-      // 1. Safely resolve Category UUID
+      // 1. Safely resolve Category UUID (verifying existence in Supabase)
       let resolvedCategoryId: string | null = null
       if (txData.category_id && isValidUUID(txData.category_id)) {
-        resolvedCategoryId = txData.category_id
-      } else if (txData.category_id) {
+        try {
+          const { data } = await supabase.from("categories").select("id").eq("id", txData.category_id).eq("user_id", userId).maybeSingle()
+          if (data?.id) {
+            resolvedCategoryId = String(data.id)
+          }
+        } catch {
+          // Ignore
+        }
+      }
+
+      if (!resolvedCategoryId && txData.category_id) {
         const localCat = categories.find((c) => c.id === txData.category_id)
         const catName = localCat?.name || txData.category_name || "General"
         resolvedCategoryId = (await ensureSystemCategory(userId, catName, txData.type === "income" ? "income" : "expense")) || null
-      } else if (txData.category_name?.trim()) {
+      } else if (!resolvedCategoryId && txData.category_name?.trim()) {
         resolvedCategoryId = (await ensureSystemCategory(userId, txData.category_name.trim(), txData.type === "income" ? "income" : "expense")) || null
       }
 
-      // 2. Safely resolve Source Account UUID
-      let resolvedAccountId = txData.account_id
-      if (!isValidUUID(resolvedAccountId)) {
-        resolvedAccountId = (await ensureSystemAccount(userId, txData.account_id, accounts)) || txData.account_id
-      }
+      // 2. Safely resolve Source Account UUID (guaranteeing it exists in Supabase public.accounts)
+      const resolvedAccId = await ensureSystemAccount(userId, txData.account_id, accounts)
+      const resolvedAccountId = resolvedAccId || txData.account_id
 
       // 3. Safely resolve Destination Account UUID (for transfer)
       let resolvedDestAccountId = txData.destination_account_id
-      if (resolvedDestAccountId && !isValidUUID(resolvedDestAccountId)) {
-        resolvedDestAccountId = (await ensureSystemAccount(userId, txData.destination_account_id!, accounts)) || txData.destination_account_id
+      if (resolvedDestAccountId) {
+        resolvedDestAccountId = (await ensureSystemAccount(userId, resolvedDestAccountId, accounts)) || resolvedDestAccountId
       }
 
       // Generate a fee_pair_id if fee exists so original + fee are linked
