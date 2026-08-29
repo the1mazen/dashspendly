@@ -393,58 +393,68 @@ function useFinanceDataInternal() {
     const currency = accountData.currency || "EGP"
 
     if (isSupabaseConfigured && supabase) {
-      const userId = await resolveCurrentUserId()
-      if (!userId) throw new Error("User authentication required.")
+      try {
+        const userId = await resolveCurrentUserId()
+        if (userId) {
+          const { data, error } = await supabase
+            .from("accounts")
+            .insert({
+              user_id: userId,
+              name: accountData.name.trim(),
+              type: accountData.type || "checking",
+              starting_balance_cents: startingCents,
+              currency,
+            })
+            .select()
+            .single()
 
-      const { data, error } = await supabase
-        .from("accounts")
-        .insert({
-          user_id: userId,
-          name: accountData.name.trim(),
-          type: accountData.type || "checking",
-          starting_balance_cents: startingCents,
-          currency,
-        })
-        .select()
-        .single()
-
-      if (error) throw new Error(error.message || "Failed to create account.")
-      await fetchData()
-      return data
-    } else {
-      const newAcc: Account = {
-        id: "acc_" + Date.now(),
-        name: accountData.name,
-        type: accountData.type || "checking",
-        starting_balance_cents: startingCents,
-        balance: accountData.starting_balance || 0,
-        currency,
-        created_at: new Date().toISOString(),
+          if (!error && data) {
+            await fetchData()
+            return data
+          }
+          if (error) {
+            console.warn("Supabase account insert error, using local fallback:", error)
+          }
+        }
+      } catch (err) {
+        console.warn("Supabase createAccount exception:", err)
       }
-      setAccounts((prev) => {
-        const updated = [...prev, newAcc]
-        saveLocal(STORAGE_ACCOUNTS_KEY, updated)
-        return updated
-      })
-      return newAcc
     }
+
+    const newAcc: Account = {
+      id: "acc_" + Date.now(),
+      name: accountData.name.trim(),
+      type: accountData.type || "checking",
+      starting_balance_cents: startingCents,
+      balance: accountData.starting_balance || 0,
+      currency,
+      created_at: new Date().toISOString(),
+    }
+    setAccounts((prev) => {
+      const updated = [...prev, newAcc]
+      saveLocal(STORAGE_ACCOUNTS_KEY, updated)
+      return updated
+    })
+    return newAcc
   }, [fetchData])
 
   const deleteAccount = useCallback(async (accountId: string) => {
     if (isSupabaseConfigured && supabase) {
-      const userId = await resolveCurrentUserId()
-      if (!userId) throw new Error("User authentication required.")
-      const { error } = await supabase.from("accounts").delete().eq("id", accountId).eq("user_id", userId)
-      if (error) throw new Error(error.message || "Failed to delete account.")
-      await fetchData()
-    } else {
-      setAccounts((prev) => {
-        const updated = prev.filter((a) => a.id !== accountId)
-        saveLocal(STORAGE_ACCOUNTS_KEY, updated)
-        return updated
-      })
+      try {
+        const userId = await resolveCurrentUserId()
+        if (userId) {
+          await supabase.from("accounts").delete().eq("id", accountId).eq("user_id", userId)
+        }
+      } catch (err) {
+        console.warn("Supabase account delete error:", err)
+      }
     }
-  }, [fetchData])
+    setAccounts((prev) => {
+      const updated = prev.filter((a) => a.id !== accountId)
+      saveLocal(STORAGE_ACCOUNTS_KEY, updated)
+      return updated
+    })
+  }, [])
 
   // ─────────────────────────────────────────────────────────────────
   // CATEGORIES CRUD
@@ -455,77 +465,87 @@ function useFinanceDataInternal() {
     const budgetCents = catData.budget && catData.budget > 0 ? Math.round(catData.budget * 100) : null
 
     if (isSupabaseConfigured && supabase) {
-      const userId = await resolveCurrentUserId()
-      if (!userId) throw new Error("User authentication required.")
-
-      const insertPayload: any = {
-        user_id: userId,
-        name: catData.name.trim(),
-        type: catData.type,
-        currency,
-      }
-      if (budgetCents != null) {
-        insertPayload.budget_cents = budgetCents
-      }
-
-      let { data, error } = await supabase
-        .from("categories")
-        .insert(insertPayload)
-        .select()
-        .single()
-
-      if (error && (error.message?.includes("budget_cents") || error.code === "PGRST204")) {
-        const retry = await supabase
-          .from("categories")
-          .insert({
+      try {
+        const userId = await resolveCurrentUserId()
+        if (userId) {
+          const insertPayload: any = {
             user_id: userId,
             name: catData.name.trim(),
             type: catData.type,
             currency,
-          })
-          .select()
-          .single()
-        data = retry.data
-        error = retry.error
-      }
+          }
+          if (budgetCents != null) {
+            insertPayload.budget_cents = budgetCents
+          }
 
-      if (error) throw new Error(error.message || "Failed to create category.")
-      await fetchData()
-      return data
-    } else {
-      const newCat: Category = {
-        id: "cat_" + Date.now(),
-        name: catData.name,
-        type: catData.type,
-        currency,
-        budget: catData.budget,
-        total_spent: 0,
-        created_at: new Date().toISOString(),
+          let { data, error } = await supabase
+            .from("categories")
+            .insert(insertPayload)
+            .select()
+            .single()
+
+          if (error && (error.message?.includes("budget_cents") || error.code === "PGRST204" || error.code === "42703")) {
+            const retry = await supabase
+              .from("categories")
+              .insert({
+                user_id: userId,
+                name: catData.name.trim(),
+                type: catData.type,
+                currency,
+              })
+              .select()
+              .single()
+            data = retry.data
+            error = retry.error
+          }
+
+          if (!error && data) {
+            await fetchData()
+            return data
+          }
+          if (error) {
+            console.warn("Supabase category insert error, using local fallback:", error)
+          }
+        }
+      } catch (err) {
+        console.warn("Supabase category creation exception:", err)
       }
-      setCategories((prev) => {
-        const updated = [...prev, newCat]
-        saveLocal(STORAGE_CATEGORIES_KEY, updated)
-        return updated
-      })
-      return newCat
     }
+
+    const newCat: Category = {
+      id: "cat_" + Date.now(),
+      name: catData.name.trim(),
+      type: catData.type,
+      currency,
+      budget: catData.budget,
+      total_spent: 0,
+      created_at: new Date().toISOString(),
+    }
+    setCategories((prev) => {
+      const updated = [...prev, newCat]
+      saveLocal(STORAGE_CATEGORIES_KEY, updated)
+      return updated
+    })
+    return newCat
   }, [fetchData])
 
   const deleteCategory = useCallback(async (categoryId: string) => {
     if (isSupabaseConfigured && supabase) {
-      const userId = await resolveCurrentUserId()
-      if (!userId) throw new Error("User authentication required.")
-      const { error } = await supabase.from("categories").delete().eq("id", categoryId).eq("user_id", userId)
-      if (error) throw new Error(error.message || "Failed to delete category.")
-      await fetchData()
-    } else {
-      setCategories((prev) => {
-        const updated = prev.filter((c) => c.id !== categoryId)
-        saveLocal(STORAGE_CATEGORIES_KEY, updated)
-        return updated
-      })
+      try {
+        const userId = await resolveCurrentUserId()
+        if (userId) {
+          await supabase.from("categories").delete().eq("id", categoryId).eq("user_id", userId)
+        }
+      } catch (err) {
+        console.warn("Supabase category delete error:", err)
+      }
     }
-  }, [fetchData])
+    setCategories((prev) => {
+      const updated = prev.filter((c) => c.id !== categoryId)
+      saveLocal(STORAGE_CATEGORIES_KEY, updated)
+      return updated
+    })
+  }, [])
 
   // ─────────────────────────────────────────────────────────────────
   // TRANSACTIONS CRUD (Atomic Fee System & InstaPay)

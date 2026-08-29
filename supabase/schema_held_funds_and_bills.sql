@@ -3,8 +3,9 @@
 -- Copy and run this in Supabase SQL Editor: https://supabase.com/dashboard/project/djayknvnhlmseskklnip/sql
 -- =====================================================================
 
--- 0. Ensure fee_pair_id column exists on transactions
+-- 0. Ensure fee_pair_id and budget_cents columns exist
 alter table if exists public.transactions add column if not exists fee_pair_id text;
+alter table if exists public.categories add column if not exists budget_cents bigint default 0;
 
 -- 1. Held Funds Table
 create table if not exists public.held_funds (

@@ -1418,25 +1418,34 @@ function AddAccountModal({
   const [name, setName] = useState("")
   const [type, setType] = useState("checking")
   const [startingBalance, setStartingBalance] = useState("")
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   if (!isOpen) return null
 
+  const handleClose = () => {
+    setName("")
+    setStartingBalance("")
+    setErrorMessage(null)
+    onClose()
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!name.trim()) return
+    setErrorMessage(null)
     setIsSubmitting(true)
     try {
       await createAccount({
-        name,
+        name: name.trim(),
         type,
         starting_balance: parseFloat(startingBalance) || 0,
         currency: profile.currency || "EGP",
       })
-      setName("")
-      setStartingBalance("")
-      onClose()
-    } catch (err) {
-      console.error(err)
+      handleClose()
+    } catch (err: any) {
+      console.error("Failed to create account:", err)
+      setErrorMessage(err?.message || "Failed to create account. Please try again.")
     } finally {
       setIsSubmitting(false)
     }
@@ -1456,8 +1465,14 @@ function AddAccountModal({
       >
         <div className="flex items-center justify-between pb-4 border-b" style={{ borderColor: tokens.border }}>
           <h3 className="text-base font-bold font-display text-white">Create New Account</h3>
-          <button onClick={onClose} className="text-white/60 hover:text-white cursor-pointer">✕</button>
+          <button onClick={handleClose} className="text-white/60 hover:text-white cursor-pointer">✕</button>
         </div>
+
+        {errorMessage && (
+          <div className="mt-3 p-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-200 text-xs">
+            {errorMessage}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
           <div>
@@ -1510,13 +1525,13 @@ function AddAccountModal({
           </div>
 
           <div className="flex items-center justify-end gap-3 pt-3 border-t" style={{ borderColor: tokens.border }}>
-            <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-semibold text-white/70">
+            <button type="button" onClick={handleClose} className="px-4 py-2 text-xs font-semibold text-white/70 hover:text-white cursor-pointer">
               Cancel
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
-              className="px-6 py-2.5 rounded-xl text-xs font-bold text-[#120824]"
+              disabled={isSubmitting || !name.trim()}
+              className="px-6 py-2.5 rounded-xl text-xs font-bold text-[#120824] cursor-pointer disabled:opacity-50"
               style={{ background: tokens.dashboardActivePill }}
             >
               {isSubmitting ? "Creating..." : "Create Account"}
@@ -3542,23 +3557,31 @@ function CategoriesSection({ onNavigate }: { onNavigate: (s: SectionId) => void 
   const [newCatName, setNewCatName] = useState("")
   const [newCatType, setNewCatType] = useState<"expense" | "income">("expense")
   const [newCatBudget, setNewCatBudget] = useState("")
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newCatName.trim()) return
+    setErrorMessage(null)
+    setSuccessMessage(null)
     setIsSubmitting(true)
     try {
+      const createdName = newCatName.trim()
       await createCategory({
-        name: newCatName.trim(),
+        name: createdName,
         type: newCatType,
         budget: parseFloat(newCatBudget) || undefined,
         currency: profile.currency || "EGP",
       })
       setNewCatName("")
       setNewCatBudget("")
-    } catch (err) {
+      setSuccessMessage(`Category "${createdName}" created successfully!`)
+      setTimeout(() => setSuccessMessage(null), 3000)
+    } catch (err: any) {
       console.error(err)
+      setErrorMessage(err?.message || "Failed to create category. Please try again.")
     } finally {
       setIsSubmitting(false)
     }
@@ -3575,6 +3598,19 @@ function CategoriesSection({ onNavigate }: { onNavigate: (s: SectionId) => void 
         style={{ background: tokens.cardGradient, borderColor: tokens.border, boxShadow: tokens.cardShadow }}
       >
         <h3 className="text-base font-bold font-display text-white mb-3">Add Category</h3>
+
+        {errorMessage && (
+          <div className="mb-3 p-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-200 text-xs">
+            {errorMessage}
+          </div>
+        )}
+
+        {successMessage && (
+          <div className="mb-3 p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-xs">
+            {successMessage}
+          </div>
+        )}
+
         <form onSubmit={handleCreate} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
           <input
             type="text"
