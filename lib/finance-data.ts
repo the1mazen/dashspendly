@@ -162,6 +162,20 @@ export function saveLocalCategories(categories: Category[]): Category[] {
   return saveLocal(STORAGE_CATEGORIES_KEY, categories)
 }
 
+export function clearAllLocalFinanceData(): void {
+  if (typeof window === "undefined") return
+  try {
+    localStorage.removeItem(STORAGE_ACCOUNTS_KEY)
+    localStorage.removeItem(STORAGE_TRANSACTIONS_KEY)
+    localStorage.removeItem(STORAGE_CATEGORIES_KEY)
+    localStorage.removeItem(STORAGE_HELD_FUNDS_KEY)
+    localStorage.removeItem(STORAGE_HELD_HISTORY_KEY)
+    localStorage.removeItem(STORAGE_BILLS_KEY)
+  } catch {
+    // Ignore error
+  }
+}
+
 // Helper: Ensure system category exists in Supabase
 async function ensureSystemCategory(userId: string, categoryName: string, type: "income" | "expense" = "expense"): Promise<string | undefined> {
   if (!isSupabaseConfigured || !supabase || !userId) return undefined
@@ -1278,6 +1292,77 @@ function useFinanceDataInternal() {
     }
   }, [bills, createTransaction, fetchData])
 
+  const resetAllUserData = useCallback(async (password: string): Promise<{ success: boolean; error?: string }> => {
+    if (!password || !password.trim()) {
+      return { success: false, error: "Password is required to confirm data reset." }
+    }
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        let userEmail = ""
+        let userId = ""
+        const { data: userData } = await supabase.auth.getUser()
+        if (userData?.user) {
+          userEmail = userData.user.email || ""
+          userId = userData.user.id
+        } else {
+          const { data: sessionData } = await supabase.auth.getSession()
+          if (sessionData?.session?.user) {
+            userEmail = sessionData.session.user.email || ""
+            userId = sessionData.session.user.id
+          }
+        }
+
+        if (userEmail) {
+          const { error: verifyError } = await supabase.auth.signInWithPassword({
+            email: userEmail,
+            password: password,
+          })
+          if (verifyError) {
+            return { success: false, error: "Incorrect password. Data reset cancelled." }
+          }
+        }
+
+        if (!userId) {
+          userId = (await resolveCurrentUserId()) || ""
+        }
+
+        if (userId) {
+          // Delete from all tables in foreign-key safe order
+          // 1. Transactions
+          await supabase.from("transactions").delete().eq("user_id", userId)
+          // 2. Held fund history
+          await supabase.from("held_fund_history").delete().eq("user_id", userId)
+          // 3. Held funds
+          await supabase.from("held_funds").delete().eq("user_id", userId)
+          // 4. Bills
+          await supabase.from("bills").delete().eq("user_id", userId)
+          // 5. Categories
+          await supabase.from("categories").delete().eq("user_id", userId)
+          // 6. Accounts
+          await supabase.from("accounts").delete().eq("user_id", userId)
+          // 7. Profiles
+          await supabase.from("profiles").delete().eq("id", userId)
+        }
+      } catch (err: any) {
+        console.error("Error during Supabase data reset:", err)
+        return { success: false, error: err?.message || "Failed to reset data in database." }
+      }
+    }
+
+    // Clear local storage
+    clearAllLocalFinanceData()
+
+    // Clear React states
+    setAccounts([])
+    setTransactions([])
+    setCategories([])
+    setHeldFunds([])
+    setBills([])
+
+    return { success: true }
+  }, [])
+
   // ─────────────────────────────────────────────────────────────────
   // DASHBOARD CALCULATIONS
   // ─────────────────────────────────────────────────────────────────
@@ -1364,6 +1449,7 @@ function useFinanceDataInternal() {
     createBill,
     deleteBill,
     markBillAsPaid,
+    resetAllUserData,
     refreshFinanceData: fetchData,
   }
 }

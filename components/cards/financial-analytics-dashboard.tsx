@@ -8,7 +8,8 @@ import {
   Sun, Moon, Film, VideoOff,
   Bell, Check, Trash2, Edit3, Settings, ShieldCheck, DollarSign, Wallet,
   CreditCard, ArrowLeftRight, PiggyBank, Search, BarChart3,
-  LogOut, CircleDot, AlertCircle, Calendar, Receipt, ChevronDown, Clock, RefreshCw, UserCheck
+  LogOut, CircleDot, AlertCircle, Calendar, Receipt, ChevronDown, Clock, RefreshCw, UserCheck,
+  AlertTriangle, RotateCcw, Lock, Eye, EyeOff
 } from "lucide-react"
 import {
   AreaChart, Area, LineChart, Line,
@@ -1210,6 +1211,191 @@ function DeleteTransactionModal({
             {isDeleting ? "Deleting..." : "Delete Permanently"}
           </button>
         </div>
+      </motion.div>
+    </div>
+  )
+}
+
+// ─── Modal: Reset All User Data Confirmation ───────────────────────
+
+function ResetDataModal({
+  isOpen,
+  onClose,
+  onSuccess,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  onSuccess?: () => void
+}) {
+  const { resetAllUserData } = useFinanceData()
+  const { resetProfile } = useUserProfile()
+  const { tokens } = useDashboardTheme()
+
+  const [password, setPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
+  const [isResetting, setIsResetting] = useState(false)
+  const [errorMessage, setErrorMessage] = useState("")
+  const [successMessage, setSuccessMessage] = useState(false)
+
+  if (!isOpen) return null
+
+  const handleClose = () => {
+    if (isResetting) return
+    setPassword("")
+    setShowPassword(false)
+    setErrorMessage("")
+    setSuccessMessage(false)
+    onClose()
+  }
+
+  const handleConfirmReset = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!password.trim()) {
+      setErrorMessage("Please enter your account password to confirm.")
+      return
+    }
+
+    setIsResetting(true)
+    setErrorMessage("")
+
+    try {
+      const result = await resetAllUserData(password)
+      if (!result.success) {
+        setErrorMessage(result.error || "Failed to reset data. Please check your password.")
+        setIsResetting(false)
+        return
+      }
+
+      await resetProfile()
+      setSuccessMessage(true)
+      setTimeout(() => {
+        setIsResetting(false)
+        handleClose()
+        if (onSuccess) onSuccess()
+      }, 1500)
+    } catch (err: any) {
+      setErrorMessage(err?.message || "An unexpected error occurred.")
+      setIsResetting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        className="w-full max-w-lg rounded-3xl p-6 sm:p-8 border shadow-2xl backdrop-blur-2xl text-left"
+        style={{
+          background: tokens.cardGradient,
+          borderColor: "rgba(239, 68, 68, 0.4)",
+          boxShadow: "0 25px 50px -12px rgba(239, 68, 68, 0.25)",
+        }}
+      >
+        <div className="flex items-center gap-3.5 mb-5 pb-4 border-b" style={{ borderColor: tokens.borderNested }}>
+          <div className="size-11 rounded-2xl bg-red-500/20 border border-red-500/40 text-red-400 flex items-center justify-center shrink-0 shadow-lg shadow-red-500/10">
+            <AlertTriangle className="size-5" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-white font-display">Permanent Data Reset</h3>
+            <p className="text-[11.5px] text-red-200/80 font-sans">This action will completely wipe your financial records</p>
+          </div>
+        </div>
+
+        {successMessage ? (
+          <div className="py-8 text-center space-y-3">
+            <div className="size-14 rounded-full bg-emerald-500/20 border border-emerald-500/50 text-emerald-400 flex items-center justify-center mx-auto animate-pulse">
+              <CheckCircle2 className="size-8" />
+            </div>
+            <h4 className="text-base font-bold text-white font-display">Data Reset Successfully!</h4>
+            <p className="text-xs text-white/70">All your transactions, accounts, bills, and cloud data have been wiped cleanly.</p>
+          </div>
+        ) : (
+          <form onSubmit={handleConfirmReset} className="space-y-4">
+            <div className="p-3.5 rounded-2xl bg-red-950/40 border border-red-500/30 text-xs text-red-200/90 space-y-2">
+              <div className="flex items-center gap-1.5 font-bold text-red-300">
+                <AlertCircle className="size-4 shrink-0 text-red-400" />
+                <span>The following data will be permanently deleted:</span>
+              </div>
+              <ul className="list-disc list-inside text-[11px] text-red-200/80 space-y-1 pl-1">
+                <li>All Bank & Cash accounts, wallets, and balances</li>
+                <li>All Income, Expense, Transfer & Fee transactions</li>
+                <li>All Planned payments, upcoming bills, and recurring items</li>
+                <li>All Held funds and deposit/withdrawal histories</li>
+                <li>All Custom categories, budget targets, and profile settings</li>
+              </ul>
+            </div>
+
+            {errorMessage && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-3 rounded-xl bg-red-500/20 border border-red-500/50 text-xs text-red-200 flex items-center gap-2"
+              >
+                <AlertCircle className="size-4 text-red-400 shrink-0" />
+                <span>{errorMessage}</span>
+              </motion.div>
+            )}
+
+            <div className="space-y-1.5 pt-1">
+              <label className="text-[11px] font-semibold uppercase tracking-wider block text-white/80">
+                Enter your account password to confirm
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-white/40">
+                  <Lock className="size-4" />
+                </div>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Account password"
+                  autoFocus
+                  disabled={isResetting}
+                  className="w-full pl-10 pr-10 py-2.5 border rounded-xl text-sm text-white placeholder-white/40 focus:outline-none focus:ring-1 focus:ring-red-500 transition-all"
+                  style={{
+                    backgroundColor: tokens.nestedSurface,
+                    borderColor: errorMessage ? "rgba(239, 68, 68, 0.6)" : tokens.borderNested,
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-white/50 hover:text-white transition-colors cursor-pointer"
+                >
+                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-4 border-t" style={{ borderColor: tokens.borderNested }}>
+              <button
+                type="button"
+                onClick={handleClose}
+                disabled={isResetting}
+                className="px-4 py-2.5 rounded-xl text-xs font-semibold text-white/75 hover:text-white bg-white/10 hover:bg-white/15 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isResetting || !password.trim()}
+                className="px-5 py-2.5 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-700 text-white transition-all shadow-lg shadow-red-600/30 flex items-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isResetting ? (
+                  <>
+                    <RefreshCw className="size-3.5 animate-spin" />
+                    <span>Resetting Data...</span>
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw className="size-3.5" />
+                    <span>Wipe & Reset Everything</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        )}
       </motion.div>
     </div>
   )
@@ -3482,6 +3668,14 @@ function SettingsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
   const [fullName, setFullName] = useState(profile.fullName)
   const [currency, setCurrency] = useState(profile.currency)
   const [savedSuccess, setSavedSuccess] = useState(false)
+  const [resetModalOpen, setResetModalOpen] = useState(false)
+  const [resetSuccessAlert, setResetSuccessAlert] = useState(false)
+
+  // Sync state if profile changes (e.g. after reset)
+  useEffect(() => {
+    setFullName(profile.fullName)
+    setCurrency(profile.currency)
+  }, [profile])
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault()
@@ -3503,6 +3697,20 @@ function SettingsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
   return (
     <div className="flex flex-col gap-6 max-w-2xl">
       <SectionHeader title="Application Settings" subtitle="Personal preferences, currency standards, and display configuration" />
+
+      {resetSuccessAlert && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-4 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-xs flex items-center gap-3 shadow-lg"
+        >
+          <CheckCircle2 className="size-5 text-emerald-400 shrink-0" />
+          <div>
+            <p className="font-bold text-white">Data Reset Complete</p>
+            <p className="text-[11.5px] text-emerald-200/90">All your financial transactions, accounts, bills, and cloud records have been permanently cleared.</p>
+          </div>
+        </motion.div>
+      )}
 
       <motion.div
         {...cardEntrance(0.05)}
@@ -3568,7 +3776,7 @@ function SettingsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
               <button
                 type="button"
                 onClick={toggleTheme}
-                className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-[#120824]"
+                className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-[#120824] cursor-pointer"
                 style={{ background: tokens.dashboardActivePill }}
               >
                 Toggle Theme
@@ -3583,10 +3791,42 @@ function SettingsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
               <button
                 type="button"
                 onClick={toggleVideo}
-                className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-[#120824]"
+                className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-[#120824] cursor-pointer"
                 style={{ background: tokens.dashboardActivePill }}
               >
                 {isVideoEnabled ? "Pause" : "Play"}
+              </button>
+            </div>
+          </div>
+
+          {/* Danger Zone: Full Data Reset */}
+          <div className="pt-4 border-t space-y-3" style={{ borderColor: tokens.borderNested }}>
+            <div className="flex items-center gap-2 text-red-400">
+              <AlertTriangle className="size-4" />
+              <h3 className="text-sm font-bold uppercase tracking-wider font-display text-red-400">Danger Zone</h3>
+            </div>
+
+            <div
+              className="p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+              style={{
+                backgroundColor: "rgba(220, 38, 38, 0.08)",
+                borderColor: "rgba(239, 68, 68, 0.25)",
+              }}
+            >
+              <div className="space-y-1">
+                <p className="text-xs font-bold text-white font-sans">Reset All Account Data</p>
+                <p className="text-[11px] text-white/60">
+                  Permanently delete all accounts, transactions, bills, categories, and cloud data. Requires your password to confirm.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setResetModalOpen(true)}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold text-red-200 bg-red-600/20 hover:bg-red-600/35 border border-red-500/40 hover:border-red-500/70 transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer shadow-lg shadow-red-950/40"
+              >
+                <RotateCcw className="size-3.5 text-red-400" />
+                <span>Reset All Data</span>
               </button>
             </div>
           </div>
@@ -3611,6 +3851,16 @@ function SettingsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
           </div>
         </form>
       </motion.div>
+
+      {/* Reset Confirmation Modal */}
+      <ResetDataModal
+        isOpen={resetModalOpen}
+        onClose={() => setResetModalOpen(false)}
+        onSuccess={() => {
+          setResetSuccessAlert(true)
+          setTimeout(() => setResetSuccessAlert(false), 6000)
+        }}
+      />
     </div>
   )
 }

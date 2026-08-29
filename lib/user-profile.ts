@@ -47,6 +47,17 @@ export function getLocalUserProfile(): UserProfile {
   return DEFAULT_USER_PROFILE
 }
 
+export function resetLocalUserProfile(): UserProfile {
+  if (typeof window === "undefined") return DEFAULT_USER_PROFILE
+  try {
+    localStorage.removeItem(STORAGE_KEY)
+    window.dispatchEvent(new CustomEvent(PROFILE_UPDATED_EVENT, { detail: DEFAULT_USER_PROFILE }))
+  } catch {
+    // Ignore error
+  }
+  return DEFAULT_USER_PROFILE
+}
+
 export function saveLocalUserProfile(profile: Partial<UserProfile>): UserProfile {
   if (typeof window === "undefined") return DEFAULT_USER_PROFILE
   try {
@@ -181,11 +192,17 @@ export function useUserProfile() {
     return updated
   }, [])
 
+  const resetProfile = useCallback(async () => {
+    const fresh = resetLocalUserProfile()
+    setProfile(fresh)
+  }, [])
+
   return {
     profile,
     loading,
     initials: getInitials(profile.fullName || profile.username),
     updateProfile,
+    resetProfile,
     refreshProfile: fetchProfile,
   }
 }
