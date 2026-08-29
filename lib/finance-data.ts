@@ -176,24 +176,42 @@ export function clearAllLocalFinanceData(): void {
   }
 }
 
+export function generateUUID(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID()
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0
+    const v = c === "x" ? r : (r & 0x3) | 0x8
+    return v.toString(16)
+  })
+}
+
+export function isValidUUID(str?: string | null): boolean {
+  if (!str) return false
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str)
+}
+
 // Helper: Ensure system category exists in Supabase
 async function ensureSystemCategory(userId: string, categoryName: string, type: "income" | "expense" = "expense"): Promise<string | undefined> {
-  if (!isSupabaseConfigured || !supabase || !userId) return undefined
+  if (!isSupabaseConfigured || !supabase || !userId || !categoryName) return undefined
   try {
     const { data: existing } = await supabase
       .from("categories")
       .select("id")
       .eq("user_id", userId)
-      .ilike("name", categoryName)
+      .ilike("name", categoryName.trim())
       .maybeSingle()
 
-    if (existing?.id) return String(existing.id)
+    if (existing?.id && isValidUUID(String(existing.id))) return String(existing.id)
 
+    const newId = generateUUID()
     const { data: created, error } = await supabase
       .from("categories")
       .insert({
+        id: newId,
         user_id: userId,
-        name: categoryName,
+        name: categoryName.trim(),
         type,
         currency: "EGP",
       })
@@ -201,8 +219,54 @@ async function ensureSystemCategory(userId: string, categoryName: string, type: 
       .single()
 
     if (!error && created?.id) return String(created.id)
+    if (newId) return newId
   } catch (err) {
     console.warn(`Error ensuring category ${categoryName}:`, err)
+  }
+  return undefined
+}
+
+// Helper: Ensure system account exists in Supabase
+async function ensureSystemAccount(userId: string, accountId: string, accounts: Account[]): Promise<string | undefined> {
+  if (!isSupabaseConfigured || !supabase || !userId || !accountId) return undefined
+  if (isValidUUID(accountId)) {
+    try {
+      const { data } = await supabase.from("accounts").select("id").eq("id", accountId).eq("user_id", userId).maybeSingle()
+      if (data?.id) return String(data.id)
+    } catch {
+      // Ignore
+    }
+  }
+
+  const acc = accounts.find((a) => a.id === accountId)
+  if (acc) {
+    try {
+      const { data: existing } = await supabase
+        .from("accounts")
+        .select("id")
+        .eq("user_id", userId)
+        .ilike("name", acc.name.trim())
+        .maybeSingle()
+      if (existing?.id && isValidUUID(String(existing.id))) return String(existing.id)
+
+      const newId = generateUUID()
+      const { data: created } = await supabase
+        .from("accounts")
+        .insert({
+          id: newId,
+          user_id: userId,
+          name: acc.name.trim(),
+          type: acc.type || "checking",
+          starting_balance_cents: acc.starting_balance_cents || 0,
+          currency: acc.currency || "EGP",
+        })
+        .select("id")
+        .single()
+      if (created?.id) return String(created.id)
+      return newId
+    } catch (err) {
+      console.warn("Error ensuring account:", err)
+    }
   }
   return undefined
 }
@@ -513,7 +577,7 @@ function useFinanceDataInternal() {
     }
 
     const newCat: Category = {
-      id: "cat_" + Date.now(),
+      id: generateUUID(),
       name: catData.name.trim(),
       type: catData.type,
       currency,
@@ -533,7 +597,7 @@ function useFinanceDataInternal() {
     if (isSupabaseConfigured && supabase) {
       try {
         const userId = await resolveCurrentUserId()
-        if (userId) {
+        if (userId && isValidUUID(categoryId)) {
           await supabase.from("categories").delete().eq("id", categoryId).eq("user_id", userId)
         }
       } catch (err) {
@@ -584,25 +648,44 @@ function useFinanceDataInternal() {
       const userId = await resolveCurrentUserId()
       if (!userId) throw new Error("User session not found. Please log in again.")
 
-      let resolvedCategoryId: string | null = txData.category_id || null
-      if (!resolvedCategoryId && txData.category_name?.trim()) {
-        resolvedCategoryId = await ensureSystemCategory(userId, txData.category_name.trim(), txData.type === "income" ? "income" : "expense") || null
+      // 1. Safely resolve Category UUID
+      let resolvedCategoryId: string | null = null
+      if (txData.category_id && isValidUUID(txData.category_id)) {
+        resolvedCategoryId = txData.category_id
+      } else if (txData.category_id) {
+        const localCat = categories.find((c) => c.id === txData.category_id)
+        const catName = localCat?.name || txData.category_name || "General"
+        resolvedCategoryId = (await ensureSystemCategory(userId, catName, txData.type === "income" ? "income" : "expense")) || null
+      } else if (txData.category_name?.trim()) {
+        resolvedCategoryId = (await ensureSystemCategory(userId, txData.category_name.trim(), txData.type === "income" ? "income" : "expense")) || null
+      }
+
+      // 2. Safely resolve Source Account UUID
+      let resolvedAccountId = txData.account_id
+      if (!isValidUUID(resolvedAccountId)) {
+        resolvedAccountId = (await ensureSystemAccount(userId, txData.account_id, accounts)) || txData.account_id
+      }
+
+      // 3. Safely resolve Destination Account UUID (for transfer)
+      let resolvedDestAccountId = txData.destination_account_id
+      if (resolvedDestAccountId && !isValidUUID(resolvedDestAccountId)) {
+        resolvedDestAccountId = (await ensureSystemAccount(userId, txData.destination_account_id!, accounts)) || txData.destination_account_id
       }
 
       // Generate a fee_pair_id if fee exists so original + fee are linked
-      const feePairId = feeCents > 0 ? (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : "fee_" + Date.now()) : undefined
+      const feePairId = feeCents > 0 ? generateUUID() : undefined
 
       const rowsToInsert: any[] = []
 
       if (txData.type === "transfer") {
-        const transferPairId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : "tp_" + Date.now()
+        const transferPairId = generateUUID()
         const outNote = noteText ? `Transfer to ${destAcc?.name || "Account"}: ${noteText}` : `Transfer to ${destAcc?.name || "Account"}`
         const inNote = noteText ? `Transfer from ${srcAcc?.name || "Account"}: ${noteText}` : `Transfer from ${srcAcc?.name || "Account"}`
 
         rowsToInsert.push(
           {
             user_id: userId,
-            account_id: txData.account_id,
+            account_id: resolvedAccountId,
             category_id: resolvedCategoryId,
             amount_cents: amountCents,
             type: "expense",
@@ -613,7 +696,7 @@ function useFinanceDataInternal() {
           },
           {
             user_id: userId,
-            account_id: txData.destination_account_id,
+            account_id: resolvedDestAccountId,
             category_id: resolvedCategoryId,
             amount_cents: amountCents,
             type: "income",
@@ -626,7 +709,7 @@ function useFinanceDataInternal() {
         const defaultDesc = noteText || (txData.type === "income" ? "Income" : "Expense")
         rowsToInsert.push({
           user_id: userId,
-          account_id: txData.account_id,
+          account_id: resolvedAccountId,
           category_id: resolvedCategoryId,
           amount_cents: amountCents,
           type: txData.type,
@@ -642,8 +725,8 @@ function useFinanceDataInternal() {
         const feeLabel = noteText ? `Fee — ${noteText}` : `Fee — ${txData.type === "transfer" ? "Transfer" : "Transaction"}`
         rowsToInsert.push({
           user_id: userId,
-          account_id: txData.account_id,
-          category_id: feeCategoryId || null,
+          account_id: resolvedAccountId,
+          category_id: (feeCategoryId && isValidUUID(feeCategoryId)) ? feeCategoryId : null,
           amount_cents: feeCents,
           type: "expense",
           fee_pair_id: feePairId,
@@ -668,14 +751,14 @@ function useFinanceDataInternal() {
       return data
     } else {
       // Local fallback
-      const feePairId = feeCents > 0 ? "fee_local_" + Date.now() : undefined
+      const feePairId = feeCents > 0 ? generateUUID() : undefined
       const newTxs: Transaction[] = []
 
       if (txData.type === "transfer") {
-        const tpId = "tp_local_" + Date.now()
+        const tpId = generateUUID()
         newTxs.push(
           {
-            id: "tx_" + Date.now(),
+            id: generateUUID(),
             account_id: txData.account_id,
             amount_cents: amountCents,
             amount: txData.amount,
@@ -688,7 +771,7 @@ function useFinanceDataInternal() {
             account_name: srcAcc?.name,
           },
           {
-            id: "tx_" + Date.now() + 1,
+            id: generateUUID(),
             account_id: txData.destination_account_id!,
             amount_cents: amountCents,
             amount: txData.amount,
@@ -702,7 +785,7 @@ function useFinanceDataInternal() {
         )
       } else {
         newTxs.push({
-          id: "tx_" + Date.now(),
+          id: generateUUID(),
           account_id: txData.account_id,
           category_id: txData.category_id,
           amount_cents: amountCents,
@@ -719,7 +802,7 @@ function useFinanceDataInternal() {
 
       if (feeCents > 0) {
         newTxs.push({
-          id: "tx_fee_" + Date.now() + 2,
+          id: generateUUID(),
           account_id: txData.account_id,
           amount_cents: feeCents,
           amount: feeAmount,
@@ -770,14 +853,27 @@ function useFinanceDataInternal() {
         .eq("user_id", userId)
         .single()
 
-      if (fetchErr || !currentTx) throw new Error("Transaction not found or access denied.")
+      let resolvedCategoryId: string | null = null
+      if (updateData.category_id && isValidUUID(updateData.category_id)) {
+        resolvedCategoryId = updateData.category_id
+      } else if (updateData.category_id) {
+        const localCat = categories.find((c) => c.id === updateData.category_id)
+        if (localCat) {
+          resolvedCategoryId = (await ensureSystemCategory(userId, localCat.name, updateData.type === "income" ? "income" : "expense")) || null
+        }
+      }
+
+      let resolvedAccountId = updateData.account_id
+      if (!isValidUUID(resolvedAccountId)) {
+        resolvedAccountId = (await ensureSystemAccount(userId, updateData.account_id, accounts)) || updateData.account_id
+      }
 
       // Update primary row
       const { error: updateErr } = await supabase
         .from("transactions")
         .update({
-          account_id: updateData.account_id,
-          category_id: updateData.category_id || null,
+          account_id: resolvedAccountId,
+          category_id: resolvedCategoryId,
           amount_cents: amountCents,
           type: updateData.type,
           note: updateData.note.trim(),
@@ -905,11 +1001,18 @@ function useFinanceDataInternal() {
       const userId = await resolveCurrentUserId()
       if (!userId) throw new Error("User authentication required.")
 
+      let resolvedAccountId = data.account_id
+      if (!isValidUUID(resolvedAccountId)) {
+        resolvedAccountId = (await ensureSystemAccount(userId, data.account_id, accounts)) || data.account_id
+      }
+
+      const newHfId = generateUUID()
       const { data: newHf, error } = await supabase
         .from("held_funds")
         .insert({
+          id: newHfId,
           user_id: userId,
-          account_id: data.account_id,
+          account_id: resolvedAccountId,
           name: data.name.trim(),
           type: data.type,
           balance_cents: initCents,
@@ -922,6 +1025,7 @@ function useFinanceDataInternal() {
       if (initCents > 0 && newHf) {
         // Insert initial history row & expense transaction
         await supabase.from("held_fund_history").insert({
+          id: generateUUID(),
           held_fund_id: newHf.id,
           user_id: userId,
           amount_cents: initCents,
@@ -932,9 +1036,10 @@ function useFinanceDataInternal() {
 
         const hfCatId = await ensureSystemCategory(userId, "Held Funds", "expense")
         await supabase.from("transactions").insert({
+          id: generateUUID(),
           user_id: userId,
-          account_id: data.account_id,
-          category_id: hfCatId || null,
+          account_id: resolvedAccountId,
+          category_id: (hfCatId && isValidUUID(hfCatId)) ? hfCatId : null,
           amount_cents: initCents,
           type: "expense",
           note: `Held Fund Allocation — ${data.name.trim()}`,
@@ -946,9 +1051,9 @@ function useFinanceDataInternal() {
       return newHf
     } else {
       const newHf: HeldFund = {
-        id: "hf_" + Date.now(),
+        id: generateUUID(),
         account_id: data.account_id,
-        name: data.name,
+        name: data.name.trim(),
         type: data.type,
         balance_cents: initCents,
         balance: (data.initial_balance || 0),
@@ -961,17 +1066,18 @@ function useFinanceDataInternal() {
       })
       return newHf
     }
-  }, [fetchData])
+  }, [accounts, fetchData])
 
   const deleteHeldFund = useCallback(async (heldFundId: string) => {
     if (isSupabaseConfigured && supabase) {
       const userId = await resolveCurrentUserId()
       if (!userId) throw new Error("User authentication required.")
 
-      // Delete history first then held fund
-      await supabase.from("held_fund_history").delete().eq("held_fund_id", heldFundId).eq("user_id", userId)
-      const { error } = await supabase.from("held_funds").delete().eq("id", heldFundId).eq("user_id", userId)
-      if (error) throw new Error(error.message || "Failed to delete held fund.")
+      if (isValidUUID(heldFundId)) {
+        await supabase.from("held_fund_history").delete().eq("held_fund_id", heldFundId).eq("user_id", userId)
+        const { error } = await supabase.from("held_funds").delete().eq("id", heldFundId).eq("user_id", userId)
+        if (error) throw new Error(error.message || "Failed to delete held fund.")
+      }
       await fetchData()
     } else {
       setHeldFunds((prev) => {
@@ -996,12 +1102,13 @@ function useFinanceDataInternal() {
     const dateStr = date || new Date().toISOString().split("T")[0]
     const noteStr = note?.trim() || "Deposit into fund"
 
-    if (isSupabaseConfigured && supabase) {
+    if (isSupabaseConfigured && supabase && isValidUUID(heldFundId)) {
       const userId = await resolveCurrentUserId()
       if (!userId) throw new Error("User authentication required.")
 
       // 1. Insert into history
       const { error: histErr } = await supabase.from("held_fund_history").insert({
+        id: generateUUID(),
         held_fund_id: heldFundId,
         user_id: userId,
         amount_cents: amountCents,
@@ -1021,11 +1128,16 @@ function useFinanceDataInternal() {
       if (balErr) throw new Error(balErr.message || "Failed to update fund balance.")
 
       // 3. Insert real expense transaction on linked account
+      let resolvedAccountId = fund.account_id
+      if (!isValidUUID(resolvedAccountId)) {
+        resolvedAccountId = (await ensureSystemAccount(userId, fund.account_id, accounts)) || fund.account_id
+      }
       const hfCatId = await ensureSystemCategory(userId, "Held Funds", "expense")
       const { error: txErr } = await supabase.from("transactions").insert({
+        id: generateUUID(),
         user_id: userId,
-        account_id: fund.account_id,
-        category_id: hfCatId || null,
+        account_id: resolvedAccountId,
+        category_id: (hfCatId && isValidUUID(hfCatId)) ? hfCatId : null,
         amount_cents: amountCents,
         type: "expense",
         note: `Deposit to ${fund.name}: ${noteStr}`,
@@ -1047,7 +1159,7 @@ function useFinanceDataInternal() {
         return updated
       })
     }
-  }, [heldFunds, fetchData])
+  }, [accounts, heldFunds, fetchData])
 
   const withdrawFromHeldFund = useCallback(async (
     heldFundId: string,
@@ -1063,12 +1175,13 @@ function useFinanceDataInternal() {
     const dateStr = date || new Date().toISOString().split("T")[0]
     const noteStr = note?.trim() || "Withdrawal from fund"
 
-    if (isSupabaseConfigured && supabase) {
+    if (isSupabaseConfigured && supabase && isValidUUID(heldFundId)) {
       const userId = await resolveCurrentUserId()
       if (!userId) throw new Error("User authentication required.")
 
       // 1. Insert into history
       const { error: histErr } = await supabase.from("held_fund_history").insert({
+        id: generateUUID(),
         held_fund_id: heldFundId,
         user_id: userId,
         amount_cents: amountCents,
@@ -1088,11 +1201,16 @@ function useFinanceDataInternal() {
       if (balErr) throw new Error(balErr.message || "Failed to update fund balance.")
 
       // 3. Insert real income transaction on linked account
+      let resolvedAccountId = fund.account_id
+      if (!isValidUUID(resolvedAccountId)) {
+        resolvedAccountId = (await ensureSystemAccount(userId, fund.account_id, accounts)) || fund.account_id
+      }
       const hfCatId = await ensureSystemCategory(userId, "Held Funds", "income")
       const { error: txErr } = await supabase.from("transactions").insert({
+        id: generateUUID(),
         user_id: userId,
-        account_id: fund.account_id,
-        category_id: hfCatId || null,
+        account_id: resolvedAccountId,
+        category_id: (hfCatId && isValidUUID(hfCatId)) ? hfCatId : null,
         amount_cents: amountCents,
         type: "income",
         note: `Withdrawal from ${fund.name}: ${noteStr}`,
@@ -1114,12 +1232,12 @@ function useFinanceDataInternal() {
         return updated
       })
     }
-  }, [heldFunds, fetchData])
+  }, [accounts, heldFunds, fetchData])
 
   const fetchHeldFundHistory = useCallback(async (heldFundId: string): Promise<HeldFundHistory[]> => {
     if (isSupabaseConfigured && supabase) {
       const userId = await resolveCurrentUserId()
-      if (!userId) return []
+      if (!userId || !isValidUUID(heldFundId)) return []
       const { data, error } = await supabase
         .from("held_fund_history")
         .select("*")
@@ -1174,15 +1292,36 @@ function useFinanceDataInternal() {
       const userId = await resolveCurrentUserId()
       if (!userId) throw new Error("User authentication required.")
 
+      let resolvedAccountId = billData.account_id
+      if (!isValidUUID(resolvedAccountId)) {
+        resolvedAccountId = (await ensureSystemAccount(userId, billData.account_id, accounts)) || billData.account_id
+      }
+
+      let resolvedDestAccountId = billData.destination_account_id
+      if (resolvedDestAccountId && !isValidUUID(resolvedDestAccountId)) {
+        resolvedDestAccountId = (await ensureSystemAccount(userId, billData.destination_account_id!, accounts)) || billData.destination_account_id
+      }
+
+      let resolvedCategoryId: string | null = null
+      if (billData.category_id && isValidUUID(billData.category_id)) {
+        resolvedCategoryId = billData.category_id
+      } else if (billData.category_id) {
+        const localCat = categories.find((c) => c.id === billData.category_id)
+        if (localCat) {
+          resolvedCategoryId = (await ensureSystemCategory(userId, localCat.name, billData.type === "income" ? "income" : "expense")) || null
+        }
+      }
+
       const { data, error } = await supabase
         .from("bills")
         .insert({
+          id: generateUUID(),
           user_id: userId,
           name: billData.name.trim(),
           type: billData.type,
-          account_id: billData.account_id,
-          destination_account_id: billData.type === "transfer" ? billData.destination_account_id : null,
-          category_id: billData.category_id || null,
+          account_id: resolvedAccountId,
+          destination_account_id: billData.type === "transfer" ? resolvedDestAccountId : null,
+          category_id: resolvedCategoryId,
           amount_cents: amountCents,
           fee_amount_cents: feeCents,
           fee_type: billData.fee_type || null,
@@ -1199,8 +1338,8 @@ function useFinanceDataInternal() {
       return data
     } else {
       const newB: Bill = {
-        id: "bill_" + Date.now(),
-        name: billData.name,
+        id: generateUUID(),
+        name: billData.name.trim(),
         type: billData.type,
         account_id: billData.account_id,
         destination_account_id: billData.destination_account_id,
@@ -1223,7 +1362,7 @@ function useFinanceDataInternal() {
       })
       return newB
     }
-  }, [fetchData])
+  }, [accounts, categories, fetchData])
 
   const deleteBill = useCallback(async (billId: string) => {
     if (isSupabaseConfigured && supabase) {
@@ -1285,13 +1424,19 @@ function useFinanceDataInternal() {
 
         const nextDateStr = nextDate.toISOString().split("T")[0]
 
+        let nextAccId = bill.account_id
+        if (!isValidUUID(nextAccId)) {
+          nextAccId = (await ensureSystemAccount(userId, bill.account_id, accounts)) || bill.account_id
+        }
+
         await supabase.from("bills").insert({
+          id: generateUUID(),
           user_id: userId,
           name: bill.name,
           type: bill.type,
-          account_id: bill.account_id,
-          destination_account_id: bill.destination_account_id || null,
-          category_id: bill.category_id || null,
+          account_id: nextAccId,
+          destination_account_id: (bill.destination_account_id && isValidUUID(bill.destination_account_id)) ? bill.destination_account_id : null,
+          category_id: (bill.category_id && isValidUUID(bill.category_id)) ? bill.category_id : null,
           amount_cents: bill.amount_cents,
           fee_amount_cents: bill.fee_amount_cents,
           fee_type: bill.fee_type || null,
