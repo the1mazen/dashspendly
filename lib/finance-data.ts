@@ -275,6 +275,8 @@ function useFinanceDataInternal() {
               .filter((t) => t.category_id === String(c.id) && t.type === "expense")
               .reduce((sum, t) => sum + Math.abs(t.amount), 0)
 
+            const budget = c.budget_cents != null ? c.budget_cents / 100 : (c.budget != null ? c.budget : undefined)
+
             return {
               id: String(c.id),
               user_id: c.user_id,
@@ -283,6 +285,7 @@ function useFinanceDataInternal() {
               parent_category_id: c.parent_category_id ? String(c.parent_category_id) : undefined,
               currency: c.currency || "EGP",
               total_spent: catSpent,
+              budget,
               created_at: c.created_at,
             }
           })
@@ -433,21 +436,45 @@ function useFinanceDataInternal() {
   // CATEGORIES CRUD
   // ─────────────────────────────────────────────────────────────────
 
-  const createCategory = useCallback(async (catData: { name: string; type: "income" | "expense"; currency?: string }) => {
+  const createCategory = useCallback(async (catData: { name: string; type: "income" | "expense"; budget?: number; currency?: string }) => {
     const currency = catData.currency || "EGP"
+    const budgetCents = catData.budget && catData.budget > 0 ? Math.round(catData.budget * 100) : null
+
     if (isSupabaseConfigured && supabase) {
       const userId = await resolveCurrentUserId()
       if (!userId) throw new Error("User authentication required.")
-      const { data, error } = await supabase
+
+      const insertPayload: any = {
+        user_id: userId,
+        name: catData.name.trim(),
+        type: catData.type,
+        currency,
+      }
+      if (budgetCents != null) {
+        insertPayload.budget_cents = budgetCents
+      }
+
+      let { data, error } = await supabase
         .from("categories")
-        .insert({
-          user_id: userId,
-          name: catData.name.trim(),
-          type: catData.type,
-          currency,
-        })
+        .insert(insertPayload)
         .select()
         .single()
+
+      if (error && (error.message?.includes("budget_cents") || error.code === "PGRST204")) {
+        const retry = await supabase
+          .from("categories")
+          .insert({
+            user_id: userId,
+            name: catData.name.trim(),
+            type: catData.type,
+            currency,
+          })
+          .select()
+          .single()
+        data = retry.data
+        error = retry.error
+      }
+
       if (error) throw new Error(error.message || "Failed to create category.")
       await fetchData()
       return data
@@ -457,6 +484,7 @@ function useFinanceDataInternal() {
         name: catData.name,
         type: catData.type,
         currency,
+        budget: catData.budget,
         total_spent: 0,
         created_at: new Date().toISOString(),
       }
@@ -466,6 +494,22 @@ function useFinanceDataInternal() {
         return updated
       })
       return newCat
+    }
+  }, [fetchData])
+
+  const deleteCategory = useCallback(async (categoryId: string) => {
+    if (isSupabaseConfigured && supabase) {
+      const userId = await resolveCurrentUserId()
+      if (!userId) throw new Error("User authentication required.")
+      const { error } = await supabase.from("categories").delete().eq("id", categoryId).eq("user_id", userId)
+      if (error) throw new Error(error.message || "Failed to delete category.")
+      await fetchData()
+    } else {
+      setCategories((prev) => {
+        const updated = prev.filter((c) => c.id !== categoryId)
+        saveLocal(STORAGE_CATEGORIES_KEY, updated)
+        return updated
+      })
     }
   }, [fetchData])
 
@@ -1308,6 +1352,7 @@ function useFinanceDataInternal() {
     createAccount,
     deleteAccount,
     createCategory,
+    deleteCategory,
     createTransaction,
     updateTransaction,
     deleteTransaction,

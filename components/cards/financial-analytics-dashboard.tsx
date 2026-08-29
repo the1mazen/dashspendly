@@ -2570,20 +2570,25 @@ function CategoryBudgetGauges({
 }) {
   const { tokens } = useDashboardTheme()
 
-  const defaultMock = useMemo(() => [
-    { name: "sdf", spent: 325, budget: 500, ratio: 0.65 },
-    { name: "Housing & Living", spent: 1040, budget: 1600, ratio: 0.65 },
-    { name: "Food & Dining", spent: 485, budget: 700, ratio: 0.69 },
-  ], [])
+  // Filter only expense categories that exist in user's profile/Supabase data
+  const expenseCategories = useMemo(() => {
+    return categories.filter((c) => c.type === "expense")
+  }, [categories])
 
-  const displayList = categories.length > 0
-    ? categories.slice(0, 3).map((c) => ({
+  const displayList = useMemo(() => {
+    return expenseCategories.slice(0, 4).map((c) => {
+      const spent = c.total_spent || 0
+      const budget = c.budget && c.budget > 0 ? c.budget : undefined
+      const ratio = budget ? Math.min(1, spent / budget) : (spent > 0 ? 1 : 0)
+      return {
+        id: c.id,
         name: c.name,
-        spent: c.total_spent || 0,
-        budget: c.budget || 1000,
-        ratio: Math.min(1, ((c.total_spent || 0) / (c.budget || 1000))),
-      }))
-    : defaultMock
+        spent,
+        budget,
+        ratio,
+      }
+    })
+  }, [expenseCategories])
 
   return (
     <motion.div
@@ -2608,38 +2613,51 @@ function CategoryBudgetGauges({
         </button>
       </div>
 
-      <div className="flex flex-col gap-4 mt-4">
-        {displayList.map((item, idx) => {
-          const pct = Math.round(item.ratio * 100)
+      {expenseCategories.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-6 text-center">
+          <p className="text-xs text-white/60">No expense categories created yet.</p>
+          <button
+            onClick={() => onNavigate?.("categories")}
+            className="mt-2 text-xs font-bold underline text-[#FEF08A] cursor-pointer"
+          >
+            + Create your first category
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4 mt-4">
+          {displayList.map((item) => {
+            const pct = Math.round(item.ratio * 100)
 
-          return (
-            <div key={idx} className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between text-xs font-sans">
-                <span className="font-semibold text-white truncate max-w-[140px]">{item.name}</span>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-white/70">
-                    {currencySymbol}{item.spent.toLocaleString()} / {currencySymbol}{item.budget.toLocaleString()}
-                  </span>
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border border-white/10 bg-white/10 text-white/90">
-                    {pct}%
-                  </span>
+            return (
+              <div key={item.id} className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between text-xs font-sans">
+                  <span className="font-semibold text-white truncate max-w-[140px]">{item.name}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-white/70">
+                      {currencySymbol}{item.spent.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {item.budget != null ? ` / ${currencySymbol}${item.budget.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ""}
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border border-white/10 bg-white/10 text-white/90">
+                      {item.budget != null ? `${pct}%` : "Tracked"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Cyan -> Green -> Yellow Progress Bar */}
+                <div className="h-2 w-full rounded-full overflow-hidden bg-white/10 p-[1px]">
+                  <div
+                    className="h-full rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]"
+                    style={{
+                      width: `${item.budget != null ? Math.max(4, pct) : (item.spent > 0 ? 100 : 4)}%`,
+                      background: tokens.budgetProgressGradient,
+                    }}
+                  />
                 </div>
               </div>
-
-              {/* Cyan -> Green -> Yellow Progress Bar */}
-              <div className="h-2 w-full rounded-full overflow-hidden bg-white/10 p-[1px]">
-                <div
-                  className="h-full rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]"
-                  style={{
-                    width: `${Math.max(5, pct)}%`,
-                    background: tokens.budgetProgressGradient,
-                  }}
-                />
-              </div>
-            </div>
-          )
-        })}
-      </div>
+            )
+          })}
+        </div>
+      )}
     </motion.div>
   )
 }
@@ -3329,16 +3347,15 @@ function AccountsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
   )
 }
 
-// ─── Section: Categories Management ───────────────────────────────
-
 function CategoriesSection({ onNavigate }: { onNavigate: (s: SectionId) => void }) {
-  const { categories, createCategory } = useFinanceData()
+  const { categories, createCategory, deleteCategory } = useFinanceData()
   const { profile } = useUserProfile()
   const { tokens } = useDashboardTheme()
   const currencySymbol = getCurrencySymbol(profile.currency)
 
   const [newCatName, setNewCatName] = useState("")
   const [newCatType, setNewCatType] = useState<"expense" | "income">("expense")
+  const [newCatBudget, setNewCatBudget] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -3349,9 +3366,11 @@ function CategoriesSection({ onNavigate }: { onNavigate: (s: SectionId) => void 
       await createCategory({
         name: newCatName.trim(),
         type: newCatType,
+        budget: parseFloat(newCatBudget) || undefined,
         currency: profile.currency || "EGP",
       })
       setNewCatName("")
+      setNewCatBudget("")
     } catch (err) {
       console.error(err)
     } finally {
@@ -3370,31 +3389,41 @@ function CategoriesSection({ onNavigate }: { onNavigate: (s: SectionId) => void 
         style={{ background: tokens.cardGradient, borderColor: tokens.border, boxShadow: tokens.cardShadow }}
       >
         <h3 className="text-base font-bold font-display text-white mb-3">Add Category</h3>
-        <form onSubmit={handleCreate} className="flex flex-wrap items-center gap-3">
+        <form onSubmit={handleCreate} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
           <input
             type="text"
             required
-            placeholder="Category name (e.g. Subscriptions, Gaming)"
+            placeholder="Category name (e.g. Subscriptions)"
             value={newCatName}
             onChange={(e) => setNewCatName(e.target.value)}
-            className="flex-1 min-w-[200px] px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
+            className="w-full px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
             style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
           />
 
           <select
             value={newCatType}
             onChange={(e) => setNewCatType(e.target.value as any)}
-            className="px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
+            className="w-full px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
             style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
           >
             <option value="expense" className="bg-[#1E0C38] text-white">Expense Category</option>
             <option value="income" className="bg-[#1E0C38] text-white">Income Category</option>
           </select>
 
+          <input
+            type="number"
+            step="0.01"
+            placeholder={`Monthly Budget (${currencySymbol.trim()}) - opt`}
+            value={newCatBudget}
+            onChange={(e) => setNewCatBudget(e.target.value)}
+            className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-mono text-white focus:outline-none"
+            style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+          />
+
           <button
             type="submit"
             disabled={isSubmitting}
-            className="px-5 py-2.5 rounded-xl text-xs font-bold text-[#120824] shadow-lg cursor-pointer"
+            className="w-full px-5 py-2.5 rounded-xl text-xs font-bold text-[#120824] shadow-lg cursor-pointer transition-all"
             style={{ background: tokens.dashboardActivePill }}
           >
             {isSubmitting ? "Saving..." : "Create Category"}
@@ -3404,22 +3433,41 @@ function CategoriesSection({ onNavigate }: { onNavigate: (s: SectionId) => void 
 
       {/* Categories Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {categories.map((c, i) => (
-          <motion.div
-            key={c.id}
-            {...cardEntrance(0.08 + i * 0.04)}
-            className="p-5 rounded-2xl border flex items-center justify-between backdrop-blur-md hover:scale-[1.01] transition-transform duration-300"
-            style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
-          >
-            <div>
-              <h4 className="text-sm font-bold text-white font-sans">{c.name}</h4>
-              <p className="text-xs text-white/60 font-mono mt-0.5 capitalize">{c.type}</p>
-            </div>
-            <span className="font-mono text-sm font-bold text-white">
-              {currencySymbol}{(c.total_spent || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-            </span>
-          </motion.div>
-        ))}
+        {categories.length === 0 ? (
+          <div className="col-span-full p-8 rounded-3xl border text-center backdrop-blur-xl" style={{ background: tokens.cardGradient, borderColor: tokens.border }}>
+            <p className="text-sm text-white/60">No categories created yet. Create your first category above.</p>
+          </div>
+        ) : (
+          categories.map((c, i) => (
+            <motion.div
+              key={c.id}
+              {...cardEntrance(0.08 + i * 0.04)}
+              className="p-5 rounded-2xl border flex items-center justify-between backdrop-blur-md hover:scale-[1.01] transition-transform duration-300 relative group"
+              style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+            >
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-sm font-bold text-white font-sans">{c.name}</h4>
+                  <span className="px-2 py-0.5 rounded text-[9.5px] font-mono uppercase bg-white/10 text-white/70">
+                    {c.type}
+                  </span>
+                </div>
+                <p className="text-xs text-white/60 font-mono mt-1">
+                  Spent: <span className="text-white font-semibold">{currencySymbol}{(c.total_spent || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+                  {c.budget != null ? ` / Budget: ${currencySymbol}${c.budget.toLocaleString("en-US", { minimumFractionDigits: 2 })}` : ""}
+                </p>
+              </div>
+
+              <button
+                onClick={() => deleteCategory(c.id)}
+                className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-red-500/20 text-white/40 hover:text-red-400 cursor-pointer transition-all"
+                title="Delete category"
+              >
+                <Trash2 className="size-4" />
+              </button>
+            </motion.div>
+          ))
+        )}
       </div>
     </div>
   )
