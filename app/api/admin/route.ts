@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 
 const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim()
-const serviceRoleKey = (
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+const serviceRoleKey = (process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim()
+const anonKey = (
   process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
   ""
@@ -11,12 +11,30 @@ const serviceRoleKey = (
 
 const adminEmail = (process.env.ADMIN_EMAIL || "themazen21@gmail.com").trim().toLowerCase()
 
-function getAdminClient() {
-  return createClient(supabaseUrl, serviceRoleKey, {
+function getAdminClient(userToken?: string) {
+  // If service role key is configured, it bypasses RLS
+  if (serviceRoleKey) {
+    return createClient(supabaseUrl, serviceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    })
+  }
+
+  // Otherwise, use anon key with user's authenticated Bearer token
+  return createClient(supabaseUrl, anonKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,
     },
+    global: userToken
+      ? {
+          headers: {
+            Authorization: `Bearer ${userToken}`,
+          },
+        }
+      : undefined,
   })
 }
 
@@ -28,7 +46,7 @@ async function verifyAdmin(req: NextRequest) {
     return { authorized: false, error: "No authorization token provided." }
   }
 
-  const supabase = getAdminClient()
+  const supabase = getAdminClient(token)
   const { data: { user }, error } = await supabase.auth.getUser(token)
 
   if (error || !user || !user.email) {
@@ -52,7 +70,7 @@ async function verifyAdmin(req: NextRequest) {
   const isMetadataAdmin = Boolean(user.user_metadata?.is_admin)
   const isProfileAdmin = Boolean(profile?.is_admin)
 
-  // If user matches ADMIN_EMAIL, we grant access and self-heal is_admin in profile
+  // If user matches ADMIN_EMAIL, self-heal is_admin in profile
   if (!isProfileAdmin && userEmail === adminEmail) {
     try {
       await supabase.from("profiles").upsert({
@@ -66,7 +84,7 @@ async function verifyAdmin(req: NextRequest) {
     return { authorized: false, error: "User is not marked as admin." }
   }
 
-  return { authorized: true, user }
+  return { authorized: true, user, token }
 }
 
 export async function GET(req: NextRequest) {
@@ -75,40 +93,42 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: authCheck.error }, { status: 403 })
   }
 
-  const supabase = getAdminClient()
+  const supabase = getAdminClient(authCheck.token)
 
   try {
-    // 1. Fetch users from auth.admin if service key available, else from profiles
+    // 1. Fetch users from auth.admin if service key available, else fallback
     let usersList: any[] = []
     try {
-      const { data: authUsers } = await supabase.auth.admin.listUsers()
-      if (authUsers?.users) {
-        usersList = authUsers.users.map((u) => ({
-          id: u.id,
-          email: u.email,
-          created_at: u.created_at,
-          last_sign_in_at: u.last_sign_in_at,
-          raw_user_meta_data: u.user_metadata,
-        }))
+      if (serviceRoleKey) {
+        const { data: authUsers, error: authErr } = await supabase.auth.admin.listUsers()
+        if (authUsers?.users) {
+          usersList = authUsers.users.map((u) => ({
+            id: u.id,
+            email: u.email,
+            created_at: u.created_at,
+            last_sign_in_at: u.last_sign_in_at,
+            raw_user_meta_data: u.user_metadata,
+          }))
+        }
       }
-    } catch {
-      // Service role key might not have admin rights or using anon fallback
+    } catch (e) {
+      console.warn("auth.admin.listUsers error:", e)
     }
 
-    // 2. Fetch profiles, transactions, accounts, bills, held funds
+    // 2. Fetch profiles, transactions, accounts, bills, held funds with error insulation
     const [profilesRes, txRes, accRes, billRes, hfRes] = await Promise.all([
-      supabase.from("profiles").select("*"),
-      supabase.from("transactions").select("id, user_id, amount_cents, type, is_fee"),
-      supabase.from("accounts").select("id, user_id, name, type, starting_balance_cents, currency"),
-      supabase.from("bills").select("id, user_id, amount_cents, is_completed"),
-      supabase.from("held_funds").select("id, user_id, name, balance_cents, type"),
+      supabase.from("profiles").select("*").then((r) => r.data || []),
+      supabase.from("transactions").select("id, user_id, amount_cents, type, is_fee").then((r) => r.data || []),
+      supabase.from("accounts").select("id, user_id, name, type, starting_balance_cents, currency").then((r) => r.data || []),
+      supabase.from("bills").select("id, user_id, amount_cents, is_completed").then((r) => r.data || []),
+      supabase.from("held_funds").select("id, user_id, name, balance_cents, type").then((r) => r.data || []),
     ])
 
-    const profiles = profilesRes.data || []
-    const transactions = txRes.data || []
-    const accounts = accRes.data || []
-    const bills = billRes.data || []
-    const heldFunds = hfRes.data || []
+    const profiles = profilesRes
+    const transactions = txRes
+    const accounts = accRes
+    const bills = billRes
+    const heldFunds = hfRes
 
     // Merge auth users with profiles
     const mergedUserMap = new Map<string, any>()
