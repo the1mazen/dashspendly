@@ -1,27 +1,24 @@
 -- ==============================================================================
 -- SUPABASE ADMIN FULL ACCESS MIGRATION
--- Run this SQL in your Supabase SQL Editor (https://supabase.com/dashboard/project/_/sql)
--- This grants root administrative access to themazen21@gmail.com and any user marked is_admin = true.
+-- Run this SQL in your Supabase SQL Editor:
+-- https://supabase.com/dashboard/project/djayknvnhlmseskklnip/sql
 -- ==============================================================================
 
--- 1. Helper function to check if current authenticated user is an administrator
+-- 1. Helper function: Fast JWT + Profile Admin Check
 create or replace function public.is_app_admin()
 returns boolean
 language sql
 security definer
 stable
 as $$
-  select exists (
-    select 1 from auth.users
-    where id = auth.uid()
-      and (
-        email = 'themazen21@gmail.com'
-        or raw_user_meta_data->>'is_admin' = 'true'
-      )
-  ) or exists (
-    select 1 from public.profiles
-    where id = auth.uid()
-      and is_admin = true
+  select (
+    (coalesce(auth.jwt()->>'email', '') = 'themazen21@gmail.com')
+    or (coalesce(auth.jwt()->'user_metadata'->>'is_admin', 'false') = 'true')
+    or exists (
+      select 1 from public.profiles
+      where id = auth.uid()
+        and is_admin = true
+    )
   );
 $$;
 
