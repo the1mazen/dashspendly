@@ -118,10 +118,10 @@ export async function GET(req: NextRequest) {
     // 2. Fetch profiles, transactions, accounts, bills, held funds with error insulation
     const [profilesRes, txRes, accRes, billRes, hfRes] = await Promise.all([
       supabase.from("profiles").select("*").then((r) => r.data || []),
-      supabase.from("transactions").select("id, user_id, account_id, destination_account_id, amount_cents, type, is_fee").then((r) => r.data || []),
-      supabase.from("accounts").select("id, user_id, name, type, starting_balance_cents, currency").then((r) => r.data || []),
-      supabase.from("bills").select("id, user_id, amount_cents, is_completed").then((r) => r.data || []),
-      supabase.from("held_funds").select("id, user_id, name, balance_cents, type").then((r) => r.data || []),
+      supabase.from("transactions").select("*").then((r) => r.data || []),
+      supabase.from("accounts").select("*").then((r) => r.data || []),
+      supabase.from("bills").select("*").then((r) => r.data || []),
+      supabase.from("held_funds").select("*").then((r) => r.data || []),
     ])
 
     const profiles = profilesRes
