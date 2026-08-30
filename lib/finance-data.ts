@@ -24,6 +24,7 @@ export interface Transaction {
   type: "income" | "expense"
   transfer_pair_id?: string
   fee_pair_id?: string
+  group_id?: string
   is_fee?: boolean
   note?: string
   description: string
@@ -77,6 +78,7 @@ export interface Bill {
   account_id: string
   destination_account_id?: string
   category_id?: string
+  parent_bill_id?: string
   amount_cents: number
   amount: number
   fee_amount_cents: number
@@ -90,6 +92,18 @@ export interface Bill {
   account_name?: string
   destination_account_name?: string
   category_name?: string
+}
+
+export interface AppNotification {
+  id: string
+  user_id?: string
+  type: "warning" | "info" | "success"
+  reference_id?: string
+  title?: string
+  message: string
+  time?: string
+  is_read: boolean
+  created_at?: string
 }
 
 // Local Storage Fallback Keys
@@ -345,6 +359,7 @@ function useFinanceDataInternal() {
               type: t.type === "expense" ? "expense" : "income",
               transfer_pair_id: t.transfer_pair_id ? String(t.transfer_pair_id) : undefined,
               fee_pair_id: t.fee_pair_id ? String(t.fee_pair_id) : undefined,
+              group_id: t.group_id ? String(t.group_id) : undefined,
               is_fee: isFee,
               note: t.note,
               description: t.note || (isFee ? "Fee" : "Transaction"),
@@ -425,6 +440,7 @@ function useFinanceDataInternal() {
               account_id: String(b.account_id),
               destination_account_id: b.destination_account_id ? String(b.destination_account_id) : undefined,
               category_id: b.category_id ? String(b.category_id) : undefined,
+              parent_bill_id: b.parent_bill_id ? String(b.parent_bill_id) : undefined,
               amount_cents: amtCents,
               amount: amtCents / 100,
               fee_amount_cents: feeCents,
@@ -928,6 +944,99 @@ function useFinanceDataInternal() {
     }
   }, [accounts, categories, fetchData])
 
+  const createSplitExpenseTransaction = useCallback(async (data: {
+    totalAmount: number
+    accountId: string
+    date: string
+    note?: string
+    splits: Array<{ categoryId: string; amount: number }>
+  }) => {
+    if (!data.accountId) throw new Error("Please select an account.")
+    if (!data.splits || data.splits.length === 0) throw new Error("Please add at least one category split.")
+
+    const totalCents = Math.round(data.totalAmount * 100)
+    const sumSplitCents = data.splits.reduce((sum, s) => sum + Math.round((s.amount || 0) * 100), 0)
+    if (totalCents !== sumSplitCents) {
+      throw new Error(`Total amount does not match split sum. Remainder: ${((totalCents - sumSplitCents) / 100).toFixed(2)}`)
+    }
+
+    const groupId = generateUUID()
+    const dateStr = data.date || new Date().toISOString().split("T")[0]
+    const noteStr = data.note?.trim() || ""
+
+    if (isSupabaseConfigured && supabase) {
+      const userId = await resolveCurrentUserId()
+      if (!userId) throw new Error("User authentication required.")
+
+      let resolvedAccountId = data.accountId
+      if (!isValidUUID(resolvedAccountId)) {
+        resolvedAccountId = (await ensureSystemAccount(userId, data.accountId, accounts)) || data.accountId
+      }
+
+      const rows = []
+      for (const split of data.splits) {
+        let resolvedCatId: string | null = split.categoryId
+        if (resolvedCatId && !isValidUUID(resolvedCatId)) {
+          const localCat = categories.find((c) => c.id === split.categoryId)
+          resolvedCatId = (await ensureSystemCategory(userId, localCat?.name || split.categoryId, "expense")) || null
+        }
+
+        rows.push({
+          id: generateUUID(),
+          user_id: userId,
+          account_id: resolvedAccountId,
+          category_id: (resolvedCatId && isValidUUID(resolvedCatId)) ? resolvedCatId : null,
+          amount_cents: Math.round(split.amount * 100),
+          type: "expense",
+          group_id: groupId,
+          note: noteStr ? `Split: ${noteStr}` : "Expense Divider",
+          date: dateStr,
+        })
+      }
+
+      let { error } = await supabase.from("transactions").insert(rows)
+      if (error) {
+        if (error.message?.includes("group_id") || error.code === "42703") {
+          const fallbackRows = rows.map(({ group_id, ...rest }) => rest)
+          const { error: fallbackErr } = await supabase.from("transactions").insert(fallbackRows)
+          if (fallbackErr) throw new Error(fallbackErr.message || "Failed to save split transactions.")
+        } else {
+          throw new Error(error.message || "Failed to save split transactions.")
+        }
+      }
+
+      await fetchData()
+      return groupId
+    } else {
+      const srcAcc = accounts.find((a) => a.id === data.accountId)
+      const newTxs: Transaction[] = data.splits.map((split) => {
+        const cat = categories.find((c) => c.id === split.categoryId)
+        return {
+          id: generateUUID(),
+          account_id: data.accountId,
+          category_id: split.categoryId,
+          amount_cents: Math.round(split.amount * 100),
+          amount: split.amount,
+          type: "expense",
+          group_id: groupId,
+          note: noteStr ? `Split: ${noteStr}` : "Expense Divider",
+          description: noteStr ? `Split: ${noteStr}` : "Expense Divider",
+          date: dateStr,
+          created_at: new Date().toISOString(),
+          account_name: srcAcc?.name,
+          category_name: cat?.name || "General",
+        }
+      })
+
+      setTransactions((prev) => {
+        const updated = [...newTxs, ...prev]
+        saveLocal(STORAGE_TRANSACTIONS_KEY, updated)
+        return updated
+      })
+      return groupId
+    }
+  }, [accounts, categories, fetchData])
+
   const updateTransaction = useCallback(async (
     transactionId: string,
     updateData: {
@@ -1184,6 +1293,31 @@ function useFinanceDataInternal() {
     } else {
       setHeldFunds((prev) => {
         const updated = prev.filter((h) => h.id !== heldFundId)
+        saveLocal(STORAGE_HELD_FUNDS_KEY, updated)
+        return updated
+      })
+    }
+  }, [fetchData])
+
+  const renameHeldFund = useCallback(async (heldFundId: string, newName: string) => {
+    const trimmed = newName.trim()
+    if (!trimmed) throw new Error("Please enter a valid name.")
+    if (isSupabaseConfigured && supabase) {
+      const userId = await resolveCurrentUserId()
+      if (!userId) throw new Error("User authentication required.")
+
+      if (isValidUUID(heldFundId)) {
+        const { error } = await supabase
+          .from("held_funds")
+          .update({ name: trimmed })
+          .eq("id", heldFundId)
+          .eq("user_id", userId)
+        if (error) throw new Error(error.message || "Failed to rename held fund.")
+      }
+      await fetchData()
+    } else {
+      setHeldFunds((prev) => {
+        const updated = prev.map((h) => (h.id === heldFundId ? { ...h, name: trimmed } : h))
         saveLocal(STORAGE_HELD_FUNDS_KEY, updated)
         return updated
       })
@@ -1709,6 +1843,231 @@ function useFinanceDataInternal() {
     }
   }, [bills, createTransaction, fetchData])
 
+  const updateBill = useCallback(async (
+    billId: string,
+    updates: {
+      name?: string
+      type?: "income" | "expense" | "transfer"
+      account_id?: string
+      destination_account_id?: string
+      category_id?: string
+      amount?: number
+      fee_amount?: number
+      fee_type?: "flat" | "percentage" | "instapay"
+      due_date?: string
+      recurrence?: "one-off" | "daily" | "monthly" | "custom"
+      recurrence_days?: number
+    },
+    applyToAllFuture = false
+  ) => {
+    const currentBill = bills.find((b) => b.id === billId)
+    if (!currentBill) throw new Error("Bill not found.")
+
+    const updatePayload: any = {}
+    if (updates.name !== undefined) updatePayload.name = updates.name.trim()
+    if (updates.type !== undefined) updatePayload.type = updates.type
+    if (updates.account_id !== undefined) updatePayload.account_id = updates.account_id
+    if (updates.destination_account_id !== undefined) updatePayload.destination_account_id = updates.destination_account_id || null
+    if (updates.category_id !== undefined) updatePayload.category_id = updates.category_id || null
+    if (updates.amount !== undefined) updatePayload.amount_cents = Math.round(updates.amount * 100)
+    if (updates.fee_amount !== undefined) updatePayload.fee_amount_cents = Math.round(updates.fee_amount * 100)
+    if (updates.fee_type !== undefined) updatePayload.fee_type = updates.fee_type || null
+    if (updates.due_date !== undefined) updatePayload.due_date = updates.due_date
+    if (updates.recurrence !== undefined) updatePayload.recurrence = updates.recurrence
+    if (updates.recurrence_days !== undefined) updatePayload.recurrence_days = updates.recurrence_days || null
+
+    if (isSupabaseConfigured && supabase) {
+      const userId = await resolveCurrentUserId()
+      if (!userId) throw new Error("User authentication required.")
+
+      if (applyToAllFuture) {
+        const parentId = currentBill.parent_bill_id || currentBill.id
+        const todayStr = new Date().toISOString().split("T")[0]
+
+        // 1. Update this bill row
+        await supabase.from("bills").update(updatePayload).eq("id", billId).eq("user_id", userId)
+
+        // 2. Update future occurrences sharing parent_bill_id
+        const futurePayload = { ...updatePayload }
+        delete futurePayload.due_date
+
+        try {
+          await supabase
+            .from("bills")
+            .update(futurePayload)
+            .eq("user_id", userId)
+            .eq("parent_bill_id", parentId)
+            .gte("due_date", todayStr)
+            .eq("is_completed", false)
+        } catch (err) {
+          console.warn("Error updating future bill recurrences:", err)
+        }
+      } else {
+        const { error } = await supabase
+          .from("bills")
+          .update(updatePayload)
+          .eq("id", billId)
+          .eq("user_id", userId)
+        if (error) throw new Error(error.message || "Failed to update bill.")
+      }
+
+      await fetchData()
+    } else {
+      setBills((prev) => {
+        const updated = prev.map((b) => (b.id === billId ? {
+          ...b,
+          ...updates,
+          amount_cents: updates.amount !== undefined ? Math.round(updates.amount * 100) : b.amount_cents,
+          amount: updates.amount !== undefined ? updates.amount : b.amount,
+          fee_amount_cents: updates.fee_amount !== undefined ? Math.round(updates.fee_amount * 100) : b.fee_amount_cents,
+          fee_amount: updates.fee_amount !== undefined ? updates.fee_amount : b.fee_amount,
+        } : b))
+        saveLocal(STORAGE_BILLS_KEY, updated)
+        return updated
+      })
+    }
+  }, [bills, fetchData])
+
+  // ─────────────────────────────────────────────────────────────────
+  // PERSISTENT NOTIFICATIONS SYSTEM (Feature 6)
+  // ─────────────────────────────────────────────────────────────────
+
+  const [notifications, setNotifications] = useState<AppNotification[]>([])
+
+  const fetchNotifications = useCallback(async () => {
+    const todayStr = new Date().toISOString().split("T")[0]
+    const today = new Date(todayStr)
+    const dismissedLocal: string[] = typeof window !== "undefined"
+      ? JSON.parse(localStorage.getItem("spendly_dismissed_notifications") || "[]")
+      : []
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const userId = await resolveCurrentUserId()
+        if (userId) {
+          // 1. Check bills due within 3 days and sync to notifications table
+          const upcomingBills = bills.filter((b) => !b.is_completed)
+          for (const b of upcomingBills) {
+            const due = new Date(b.due_date)
+            const diffDays = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+            if (diffDays >= 0 && diffDays <= 3) {
+              if (isValidUUID(b.id)) {
+                const { data: existing } = await supabase
+                  .from("notifications")
+                  .select("id")
+                  .eq("user_id", userId)
+                  .eq("reference_id", b.id)
+                  .maybeSingle()
+
+                if (!existing) {
+                  await supabase.from("notifications").insert({
+                    id: generateUUID(),
+                    user_id: userId,
+                    type: "warning",
+                    reference_id: b.id,
+                    message: `${b.name} is due in ${diffDays === 0 ? "today" : diffDays + " days"} — EGP ${(b.amount || 0).toFixed(2)}`,
+                    is_read: false,
+                  })
+                }
+              }
+            }
+          }
+
+          // 2. Fetch unread notifications
+          const { data: notifData } = await supabase
+            .from("notifications")
+            .select("*")
+            .eq("user_id", userId)
+            .eq("is_read", false)
+            .order("created_at", { ascending: false })
+
+          if (notifData) {
+            const mapped: AppNotification[] = notifData
+              .filter((n) => !dismissedLocal.includes(n.id) && !dismissedLocal.includes(n.reference_id || ""))
+              .map((n) => ({
+                id: n.id,
+                user_id: n.user_id,
+                type: n.type as any,
+                reference_id: n.reference_id,
+                title: n.type === "warning" ? "Bill Reminder" : "Notification",
+                message: n.message,
+                time: n.created_at ? new Date(n.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Today",
+                is_read: Boolean(n.is_read),
+                created_at: n.created_at,
+              }))
+            setNotifications(mapped)
+            return
+          }
+        }
+      } catch (err) {
+        console.warn("Error fetching Supabase notifications:", err)
+      }
+    }
+
+    // Fallback: derive from upcoming bills
+    const derived: AppNotification[] = []
+    bills.forEach((b) => {
+      if (!b.is_completed) {
+        const due = new Date(b.due_date)
+        const diffDays = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+        const notifId = `bill_${b.id}`
+        if (diffDays >= 0 && diffDays <= 3 && !dismissedLocal.includes(notifId) && !dismissedLocal.includes(b.id)) {
+          derived.push({
+            id: notifId,
+            type: "warning",
+            reference_id: b.id,
+            title: "Bill Reminder",
+            message: `${b.name} is due in ${diffDays === 0 ? "today" : diffDays + " days"} — EGP ${(b.amount || 0).toFixed(2)}`,
+            time: diffDays === 0 ? "Today" : `In ${diffDays}d`,
+            is_read: false,
+          })
+        }
+      }
+    })
+    setNotifications(derived)
+  }, [bills])
+
+  const markNotificationAsRead = useCallback(async (notifId: string, referenceId?: string) => {
+    // 1. Save to localStorage dismissed array
+    if (typeof window !== "undefined") {
+      const dismissed: string[] = JSON.parse(localStorage.getItem("spendly_dismissed_notifications") || "[]")
+      if (!dismissed.includes(notifId)) dismissed.push(notifId)
+      if (referenceId && !dismissed.includes(referenceId)) dismissed.push(referenceId)
+      localStorage.setItem("spendly_dismissed_notifications", JSON.stringify(dismissed))
+    }
+
+    // 2. Update Supabase if valid UUID
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const userId = await resolveCurrentUserId()
+        if (userId) {
+          if (isValidUUID(notifId)) {
+            await supabase
+              .from("notifications")
+              .update({ is_read: true })
+              .eq("id", notifId)
+              .eq("user_id", userId)
+          } else if (referenceId && isValidUUID(referenceId)) {
+            await supabase
+              .from("notifications")
+              .update({ is_read: true })
+              .eq("reference_id", referenceId)
+              .eq("user_id", userId)
+          }
+        }
+      } catch (err) {
+        console.warn("Error marking notification read in Supabase:", err)
+      }
+    }
+
+    // 3. Update React state
+    setNotifications((prev) => prev.filter((n) => n.id !== notifId && n.reference_id !== notifId && (!referenceId || n.reference_id !== referenceId)))
+  }, [])
+
+  useEffect(() => {
+    fetchNotifications()
+  }, [fetchNotifications])
+
   const resetAllUserData = useCallback(async (password: string): Promise<{ success: boolean; error?: string }> => {
     if (!password || !password.trim()) {
       return { success: false, error: "Password is required to confirm data reset." }
@@ -1851,15 +2210,18 @@ function useFinanceDataInternal() {
     totalIncome,
     totalExpense,
     monthSparklineData,
+    notifications,
     createAccount,
     deleteAccount,
     createCategory,
     updateCategory,
     deleteCategory,
     createTransaction,
+    createSplitExpenseTransaction,
     updateTransaction,
     deleteTransaction,
     createHeldFund,
+    renameHeldFund,
     deleteHeldFund,
     depositToHeldFund,
     withdrawFromHeldFund,
@@ -1868,8 +2230,11 @@ function useFinanceDataInternal() {
     deleteHeldFundHistory,
     fetchHeldFundHistory,
     createBill,
+    updateBill,
     deleteBill,
     markBillAsPaid,
+    markNotificationAsRead,
+    refreshNotifications: fetchNotifications,
     resetAllUserData,
     refreshFinanceData: fetchData,
   }

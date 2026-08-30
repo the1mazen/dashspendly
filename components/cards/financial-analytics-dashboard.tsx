@@ -9,10 +9,12 @@ import {
   Bell, Check, Trash2, Edit3, Settings, ShieldCheck, DollarSign, Wallet,
   CreditCard, ArrowLeftRight, PiggyBank, Search, BarChart3,
   LogOut, CircleDot, AlertCircle, Calendar, Receipt, ChevronDown, Clock, RefreshCw, UserCheck,
-  AlertTriangle, RotateCcw, Lock, Eye, EyeOff
+  AlertTriangle, RotateCcw, Lock, Eye, EyeOff, X, Layers,
+  Utensils, Coffee, ShoppingBag, Bus, Car, Gift, HeartHandshake, Gamepad2, ShoppingCart,
+  Percent, ArrowRight, Compass
 } from "lucide-react"
 import {
-  AreaChart, Area, LineChart, Line,
+  AreaChart, Area, LineChart, Line, BarChart, Bar, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts"
 import {
@@ -23,7 +25,8 @@ import {
   Category,
   HeldFund,
   HeldFundHistory,
-  Bill
+  Bill,
+  AppNotification
 } from "@/lib/finance-data"
 import { useUserProfile } from "@/lib/user-profile"
 import { supabase, isSupabaseConfigured, resolveCurrentUserId } from "@/lib/supabase"
@@ -138,7 +141,7 @@ interface DashboardThemeContextType {
   setThemeMode: (mode: "dark" | "light") => void
 }
 
-const DashboardThemeContext = createContext<DashboardThemeContextType>({
+export const DashboardThemeContext = createContext<DashboardThemeContextType>({
   isDarkMode: true,
   isVideoEnabled: true,
   tokens: TOKENS.dark,
@@ -147,7 +150,7 @@ const DashboardThemeContext = createContext<DashboardThemeContextType>({
   setThemeMode: () => {},
 })
 
-const useDashboardTheme = () => useContext(DashboardThemeContext)
+export const useDashboardTheme = () => useContext(DashboardThemeContext)
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const
 
@@ -378,15 +381,6 @@ function getCurrencySymbol(curr?: string) {
 
 // ─── Component: Notification Panel ────────────────────────────────
 
-interface NotificationItem {
-  id: number | string
-  type: "info" | "warning" | "success"
-  title: string
-  message: string
-  time: string
-  read: boolean
-}
-
 function NotificationPanel({
   isOpen,
   onClose,
@@ -396,8 +390,8 @@ function NotificationPanel({
 }: {
   isOpen: boolean
   onClose: () => void
-  notifications: NotificationItem[]
-  onMarkAsRead: (id: number | string) => void
+  notifications: AppNotification[]
+  onMarkAsRead: (id: string, refId?: string) => void
   onClearAll: () => void
 }) {
   const { tokens } = useDashboardTheme()
@@ -407,54 +401,65 @@ function NotificationPanel({
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-end p-4 pt-20 sm:pr-8 bg-black/40 backdrop-blur-sm">
       <div
-        className="w-full max-w-sm rounded-3xl p-5 border shadow-2xl backdrop-blur-2xl transition-all"
+        className="w-full max-w-sm rounded-3xl p-5 border shadow-2xl backdrop-blur-2xl transition-all max-h-[85vh] flex flex-col"
         style={{
           background: tokens.cardGradient,
           borderColor: tokens.border,
           boxShadow: tokens.cardShadow,
         }}
       >
-        <div className="flex items-center justify-between pb-3 border-b" style={{ borderColor: tokens.borderNested }}>
+        <div className="flex items-center justify-between pb-3 border-b shrink-0" style={{ borderColor: tokens.borderNested }}>
           <div className="flex items-center gap-2">
             <Bell className="size-4 text-white" />
-            <h3 className="text-sm font-bold font-display text-white">Notifications</h3>
+            <h3 className="text-sm font-bold font-display text-white">Notifications ({notifications.length})</h3>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={onClearAll}
-              className="text-[11px] font-semibold text-white/70 hover:text-white transition-colors cursor-pointer"
-            >
-              Clear all
-            </button>
+            {notifications.length > 0 && (
+              <button
+                onClick={onClearAll}
+                className="text-[11px] font-semibold text-white/70 hover:text-white transition-colors cursor-pointer"
+              >
+                Clear all
+              </button>
+            )}
             <button
               onClick={onClose}
-              className="text-xs text-white/60 hover:text-white p-1 cursor-pointer"
+              className="size-7 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 text-white cursor-pointer"
             >
               ✕
             </button>
           </div>
         </div>
 
-        <div className="flex flex-col gap-2.5 mt-3 max-h-[360px] overflow-y-auto pr-1">
+        <div className="flex flex-col gap-2.5 mt-3 overflow-y-auto pr-1">
           {notifications.length === 0 ? (
-            <p className="text-xs text-white/50 text-center py-6">No notifications</p>
+            <p className="text-xs text-white/50 text-center py-8">No unread notifications</p>
           ) : (
             notifications.map((n) => (
               <div
                 key={n.id}
-                onClick={() => onMarkAsRead(n.id)}
-                className="p-3 rounded-2xl border transition-all cursor-pointer hover:bg-white/5 relative"
+                className="p-3 rounded-2xl border transition-all hover:bg-white/5 relative group flex items-start justify-between gap-2"
                 style={{
-                  backgroundColor: n.read ? "rgba(16, 8, 36, 0.3)" : tokens.nestedSurface,
+                  backgroundColor: tokens.nestedSurface,
                   borderColor: tokens.borderNested,
                 }}
               >
-                {!n.read && (
-                  <span className="absolute top-3 right-3 size-2 rounded-full bg-[#FEF08A] shadow-[0_0_8px_#FEF08A]" />
-                )}
-                <p className="text-xs font-bold text-white font-sans">{n.title}</p>
-                <p className="text-[11px] text-white/70 font-sans mt-0.5">{n.message}</p>
-                <p className="text-[9.5px] text-white/40 font-mono mt-1.5">{n.time}</p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="size-2 rounded-full bg-[#FEF08A] shadow-[0_0_8px_#FEF08A] shrink-0" />
+                    <p className="text-xs font-bold text-white font-sans truncate">{n.title || "Bill Alert"}</p>
+                  </div>
+                  <p className="text-[11px] text-white/80 font-sans mt-1 leading-snug">{n.message}</p>
+                  <p className="text-[9.5px] text-white/40 font-mono mt-1.5">{n.time || "Recent"}</p>
+                </div>
+
+                <button
+                  onClick={() => onMarkAsRead(n.id, n.reference_id)}
+                  className="opacity-60 hover:opacity-100 p-1 rounded-lg hover:bg-white/10 text-white/60 hover:text-white cursor-pointer transition-all shrink-0"
+                  title="Dismiss notification"
+                >
+                  <X className="size-3.5" />
+                </button>
               </div>
             ))
           )}
@@ -464,7 +469,7 @@ function NotificationPanel({
   )
 }
 
-// ─── Modal: Add Transaction (with Feature 1 Fee & InstaPay System) ────
+// ─── Modal: Add Transaction (with Feature 1 Fee & Feature 2 Expense Divider) ────
 
 function AddTransactionModal({
   isOpen,
@@ -473,12 +478,12 @@ function AddTransactionModal({
   isOpen: boolean
   onClose: () => void
 }) {
-  const { accounts, categories, createTransaction } = useFinanceData()
+  const { accounts, categories, createTransaction, createSplitExpenseTransaction } = useFinanceData()
   const { profile } = useUserProfile()
   const { tokens } = useDashboardTheme()
   const currencySymbol = getCurrencySymbol(profile.currency)
 
-  const [newType, setNewType] = useState<"expense" | "income" | "transfer">("expense")
+  const [newType, setNewType] = useState<"income" | "expense" | "expense_divider" | "transfer">("expense")
   const [newAmount, setNewAmount] = useState("")
   const [newAccountId, setNewAccountId] = useState("")
   const [newDestAccountId, setNewDestAccountId] = useState("")
@@ -486,6 +491,12 @@ function AddTransactionModal({
   const [newCustomCategory, setNewCustomCategory] = useState("")
   const [newDate, setNewDate] = useState(new Date().toISOString().split("T")[0])
   const [newNote, setNewNote] = useState("")
+
+  // Feature 2: High Expense Divider Splits
+  const [splitRows, setSplitRows] = useState<Array<{ id: string; categoryId: string; amount: string }>>([
+    { id: "split-1", categoryId: "", amount: "" },
+    { id: "split-2", categoryId: "", amount: "" },
+  ])
   
   // Feature 1: Optional Fee System & InstaPay Toggle
   const [feeMode, setFeeMode] = useState<"none" | "manual" | "instapay">("none")
@@ -501,13 +512,24 @@ function AddTransactionModal({
     }
   }, [accounts, newAccountId])
 
+  // Live remainder calculation for Expense Divider
+  const { totalPrincipal, totalAllocated, remainingToAllocate } = useMemo(() => {
+    const principal = parseFloat(newAmount) || 0
+    const allocated = splitRows.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0)
+    const rem = Math.round((principal - allocated) * 100) / 100
+    return {
+      totalPrincipal: principal,
+      totalAllocated: allocated,
+      remainingToAllocate: rem,
+    }
+  }, [newAmount, splitRows])
+
   // Live fee calculation
   const calculatedFeeAmount = useMemo(() => {
     const principal = parseFloat(newAmount) || 0
-    if (principal <= 0) return 0
+    if (principal <= 0 || newType === "expense_divider") return 0
 
     if (feeMode === "instapay") {
-      // Rule: 0.1% of transaction amount, minimum EGP 0.50, maximum EGP 20.00
       const rawFee = principal * 0.001
       return Math.min(20.0, Math.max(0.5, rawFee))
     }
@@ -522,7 +544,25 @@ function AddTransactionModal({
     }
 
     return 0
-  }, [feeMode, manualFeeType, manualFeeValue, newAmount])
+  }, [feeMode, manualFeeType, manualFeeValue, newAmount, newType])
+
+  const handleAddSplitRow = () => {
+    setSplitRows((prev) => [
+      ...prev,
+      { id: `split-${Date.now()}-${Math.random()}`, categoryId: "", amount: "" },
+    ])
+  }
+
+  const handleRemoveSplitRow = (id: string) => {
+    if (splitRows.length <= 1) return
+    setSplitRows((prev) => prev.filter((r) => r.id !== id))
+  }
+
+  const handleUpdateSplitRow = (id: string, field: "categoryId" | "amount", value: string) => {
+    setSplitRows((prev) =>
+      prev.map((r) => (r.id === id ? { ...r, [field]: value } : r))
+    )
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -534,18 +574,46 @@ function AddTransactionModal({
       if (isNaN(amt) || amt <= 0) throw new Error("Please enter a valid amount.")
       if (!newAccountId) throw new Error("Please select an account.")
 
-      await createTransaction({
-        account_id: newAccountId,
-        destination_account_id: newType === "transfer" ? newDestAccountId : undefined,
-        category_id: newCategoryId === "custom" ? undefined : newCategoryId || undefined,
-        category_name: newCategoryId === "custom" ? newCustomCategory : undefined,
-        amount: amt,
-        type: newType,
-        note: newNote,
-        date: newDate,
-        fee_amount: calculatedFeeAmount > 0 ? calculatedFeeAmount : undefined,
-        fee_type: feeMode === "none" ? undefined : (feeMode === "instapay" ? "instapay" : manualFeeType),
-      })
+      if (newType === "expense_divider") {
+        if (Math.abs(remainingToAllocate) > 0.001) {
+          throw new Error(
+            `Remaining to allocate must be exactly ${currencySymbol}0.00. Current remainder: ${currencySymbol}${remainingToAllocate.toFixed(2)}`
+          )
+        }
+
+        const validSplits = splitRows.map((r) => ({
+          categoryId: r.categoryId,
+          amount: parseFloat(r.amount) || 0,
+        }))
+
+        if (validSplits.some((s) => !s.categoryId)) {
+          throw new Error("Please select a category for each split row.")
+        }
+        if (validSplits.some((s) => s.amount <= 0)) {
+          throw new Error("All split row amounts must be greater than 0.")
+        }
+
+        await createSplitExpenseTransaction({
+          totalAmount: amt,
+          accountId: newAccountId,
+          date: newDate,
+          note: newNote,
+          splits: validSplits,
+        })
+      } else {
+        await createTransaction({
+          account_id: newAccountId,
+          destination_account_id: newType === "transfer" ? newDestAccountId : undefined,
+          category_id: newCategoryId === "custom" ? undefined : newCategoryId || undefined,
+          category_name: newCategoryId === "custom" ? newCustomCategory : undefined,
+          amount: amt,
+          type: newType,
+          note: newNote,
+          date: newDate,
+          fee_amount: calculatedFeeAmount > 0 ? calculatedFeeAmount : undefined,
+          fee_type: feeMode === "none" ? undefined : (feeMode === "instapay" ? "instapay" : manualFeeType),
+        })
+      }
 
       // Reset form
       setNewAmount("")
@@ -553,6 +621,10 @@ function AddTransactionModal({
       setNewCustomCategory("")
       setFeeMode("none")
       setManualFeeValue("")
+      setSplitRows([
+        { id: "split-1", categoryId: "", amount: "" },
+        { id: "split-2", categoryId: "", amount: "" },
+      ])
       onClose()
     } catch (err: any) {
       setErrorMsg(err.message || "Failed to record transaction.")
@@ -579,7 +651,7 @@ function AddTransactionModal({
         <div className="flex items-center justify-between pb-4 border-b" style={{ borderColor: tokens.border }}>
           <div>
             <h3 className="text-lg font-bold font-display text-white">Record Transaction</h3>
-            <p className="text-xs font-sans text-white/70 mt-0.5">Post an expense, deposit, or account transfer</p>
+            <p className="text-xs font-sans text-white/70 mt-0.5">Post an expense, income, split divider, or transfer</p>
           </div>
           <button
             onClick={onClose}
@@ -602,33 +674,38 @@ function AddTransactionModal({
             <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1.5 font-sans text-white/75">
               Type
             </label>
-            <div className="grid grid-cols-3 gap-1.5 p-1 border rounded-xl" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
-              {(["expense", "income", "transfer"] as const).map((t) => (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1 border rounded-xl" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+              {[
+                { id: "income", label: "Income" },
+                { id: "expense", label: "Expense" },
+                { id: "expense_divider", label: "Expense Divider" },
+                { id: "transfer", label: "Transfer" },
+              ].map((t) => (
                 <button
-                  key={t}
+                  key={t.id}
                   type="button"
                   onClick={() => {
-                    setNewType(t)
-                    if (t === "income") setFeeMode("none")
+                    setNewType(t.id as any)
+                    if (t.id === "income" || t.id === "expense_divider") setFeeMode("none")
                   }}
-                  className="py-2 rounded-lg text-xs font-semibold capitalize transition-all font-sans cursor-pointer"
+                  className="py-2 px-1 text-center rounded-lg text-xs font-semibold capitalize transition-all font-sans cursor-pointer truncate"
                   style={{
-                    background: newType === t ? tokens.dashboardActivePill : "transparent",
-                    color: newType === t ? "#120824" : "rgba(255, 255, 255, 0.75)",
-                    fontWeight: newType === t ? "bold" : "normal",
+                    background: newType === t.id ? tokens.dashboardActivePill : "transparent",
+                    color: newType === t.id ? "#120824" : "rgba(255, 255, 255, 0.75)",
+                    fontWeight: newType === t.id ? "bold" : "normal",
                   }}
                 >
-                  {t}
+                  {t.label}
                 </button>
               ))}
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* Amount */}
+            {/* Amount / Total Expense Amount */}
             <div>
               <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
-                Amount ({currencySymbol.trim()})
+                {newType === "expense_divider" ? "Total Expense Amount" : "Amount"} ({currencySymbol.trim()})
               </label>
               <input
                 type="number"
@@ -657,7 +734,7 @@ function AddTransactionModal({
             </div>
 
             {/* Source Account */}
-            <div>
+            <div className={newType === "expense_divider" ? "sm:col-span-2" : ""}>
               <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
                 {newType === "transfer" ? "From Account" : "Account"}
               </label>
@@ -676,7 +753,7 @@ function AddTransactionModal({
               </select>
             </div>
 
-            {/* Destination Account or Category */}
+            {/* Destination Account or Category (Hidden for Expense Divider) */}
             {newType === "transfer" ? (
               <div>
                 <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
@@ -697,7 +774,7 @@ function AddTransactionModal({
                   ))}
                 </select>
               </div>
-            ) : (
+            ) : newType !== "expense_divider" ? (
               <div>
                 <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
                   Category
@@ -717,10 +794,10 @@ function AddTransactionModal({
                   <option value="custom" className="bg-[#1E0C38] text-[#A7F3D0]">+ Custom Category</option>
                 </select>
               </div>
-            )}
+            ) : null}
           </div>
 
-          {newCategoryId === "custom" && newType !== "transfer" && (
+          {newCategoryId === "custom" && newType !== "transfer" && newType !== "expense_divider" && (
             <div>
               <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
                 Custom Category Name
@@ -733,6 +810,80 @@ function AddTransactionModal({
                 className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none"
                 style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
               />
+            </div>
+          )}
+
+          {/* FEATURE 2: HIGH EXPENSE DIVIDER CATEGORY SPLIT ROWS */}
+          {newType === "expense_divider" && (
+            <div className="p-4 rounded-2xl border space-y-3" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold font-display text-white flex items-center gap-1.5">
+                  <Layers className="size-3.5 text-purple-300" />
+                  Category Allocations
+                </span>
+                <button
+                  type="button"
+                  onClick={handleAddSplitRow}
+                  className="px-2.5 py-1 rounded-lg text-xs font-bold text-[#120824] flex items-center gap-1 cursor-pointer transition-all shadow-sm"
+                  style={{ background: tokens.dashboardActivePill }}
+                >
+                  <Plus className="size-3" /> Add Category
+                </button>
+              </div>
+
+              {/* Dynamic split rows */}
+              <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                {splitRows.map((row, idx) => (
+                  <div key={row.id} className="flex items-center gap-2">
+                    <select
+                      value={row.categoryId}
+                      onChange={(e) => handleUpdateSplitRow(row.id, "categoryId", e.target.value)}
+                      required
+                      className="flex-1 px-3 py-2 border rounded-xl text-xs font-sans text-white focus:outline-none bg-[#1E0C38]/80"
+                      style={{ borderColor: tokens.borderNested }}
+                    >
+                      <option value="" className="bg-[#1E0C38] text-white">Select Category</option>
+                      {categories.map((c) => (
+                        <option key={c.id} value={c.id} className="bg-[#1E0C38] text-white">
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+
+                    <div className="w-28 relative">
+                      <input
+                        type="number"
+                        step="0.01"
+                        required
+                        placeholder="Amount"
+                        value={row.amount}
+                        onChange={(e) => handleUpdateSplitRow(row.id, "amount", e.target.value)}
+                        className="w-full px-2.5 py-2 border rounded-xl text-xs font-mono text-white focus:outline-none bg-[#1E0C38]/80 text-right"
+                        style={{ borderColor: tokens.borderNested }}
+                      />
+                    </div>
+
+                    {splitRows.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSplitRow(row.id)}
+                        className="p-2 rounded-xl text-white/40 hover:text-red-400 hover:bg-red-500/10 cursor-pointer transition-all"
+                        title="Remove row"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Running Remainder Banner */}
+              <div className="pt-2.5 border-t border-white/10 flex items-center justify-between text-xs font-mono">
+                <span className="text-white/60">Allocated: {currencySymbol}{totalAllocated.toFixed(2)}</span>
+                <span className={`font-bold ${Math.abs(remainingToAllocate) <= 0.001 ? "text-emerald-300" : "text-amber-300"}`}>
+                  Remaining to allocate: {currencySymbol}{remainingToAllocate.toFixed(2)}
+                </span>
+              </div>
             </div>
           )}
 
@@ -868,11 +1019,11 @@ function AddTransactionModal({
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || (newType === "expense_divider" && Math.abs(remainingToAllocate) > 0.001)}
               className="px-6 py-2.5 rounded-xl text-xs font-bold transition-all font-sans shadow-lg cursor-pointer hover:scale-[1.02] text-[#120824] disabled:opacity-50"
               style={{ background: tokens.dashboardActivePill }}
             >
-              {isSubmitting ? "Recording..." : "Save Transaction"}
+              {isSubmitting ? "Recording..." : newType === "expense_divider" ? "Save Split Transaction" : "Save Transaction"}
             </button>
           </div>
         </form>
@@ -1372,6 +1523,837 @@ function ResetDataModal({
                     <span>Wipe & Reset Everything</span>
                   </>
                 )}
+              </button>
+            </div>
+          </form>
+        )}
+      </motion.div>
+    </div>
+  )
+}
+
+// ─── Modal: Month Close-Out Summary (Feature 3) ──────────────────
+
+function MonthSummaryModal({
+  isOpen,
+  onClose,
+}: {
+  isOpen: boolean
+  onClose: () => void
+}) {
+  const { transactions, accounts } = useFinanceData()
+  const { profile } = useUserProfile()
+  const { tokens } = useDashboardTheme()
+  const currencySymbol = getCurrencySymbol(profile.currency)
+
+  const [selectedAccountId, setSelectedAccountId] = useState<string>("all")
+
+  // Current calendar month boundaries
+  const now = new Date()
+  const currentYear = now.getFullYear()
+  const currentMonth = now.getMonth()
+  const monthName = now.toLocaleString("default", { month: "long" })
+  
+  const startCurrentMonthStr = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-01`
+  const lastDayCurrentMonth = new Date(currentYear, currentMonth + 1, 0).getDate()
+  const endCurrentMonthStr = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${String(lastDayCurrentMonth).padStart(2, "0")}`
+
+  // Last calendar month boundaries
+  const prevDate = new Date(currentYear, currentMonth - 1, 1)
+  const prevYear = prevDate.getFullYear()
+  const prevMonth = prevDate.getMonth()
+  const prevMonthName = prevDate.toLocaleString("default", { month: "long" })
+
+  const startPrevMonthStr = `${prevYear}-${String(prevMonth + 1).padStart(2, "0")}-01`
+  const lastDayPrevMonth = new Date(prevYear, prevMonth + 1, 0).getDate()
+  const endPrevMonthStr = `${prevYear}-${String(prevMonth + 1).padStart(2, "0")}-${String(lastDayPrevMonth).padStart(2, "0")}`
+
+  // Filter transactions by account & date
+  const filteredCurrentTxs = useMemo(() => {
+    return transactions.filter((t) => {
+      if (selectedAccountId !== "all" && t.account_id !== selectedAccountId) return false
+      return t.date >= startCurrentMonthStr && t.date <= endCurrentMonthStr
+    })
+  }, [transactions, selectedAccountId, startCurrentMonthStr, endCurrentMonthStr])
+
+  const filteredPrevTxs = useMemo(() => {
+    return transactions.filter((t) => {
+      if (selectedAccountId !== "all" && t.account_id !== selectedAccountId) return false
+      return t.date >= startPrevMonthStr && t.date <= endPrevMonthStr
+    })
+  }, [transactions, selectedAccountId, startPrevMonthStr, endPrevMonthStr])
+
+  // Current month metrics
+  const currentIncome = useMemo(() => {
+    return filteredCurrentTxs
+      .filter((t) => t.type === "income" && !t.is_fee)
+      .reduce((sum, t) => sum + t.amount, 0)
+  }, [filteredCurrentTxs])
+
+  const currentExpense = useMemo(() => {
+    return filteredCurrentTxs
+      .filter((t) => t.type === "expense")
+      .reduce((sum, t) => sum + t.amount, 0)
+  }, [filteredCurrentTxs])
+
+  const currentNet = currentIncome - currentExpense
+  const savingsRate = currentIncome > 0 ? (currentNet / currentIncome) * 100 : 0
+
+  // Previous month metrics
+  const prevIncome = useMemo(() => {
+    return filteredPrevTxs
+      .filter((t) => t.type === "income" && !t.is_fee)
+      .reduce((sum, t) => sum + t.amount, 0)
+  }, [filteredPrevTxs])
+
+  const prevExpense = useMemo(() => {
+    return filteredPrevTxs
+      .filter((t) => t.type === "expense")
+      .reduce((sum, t) => sum + t.amount, 0)
+  }, [filteredPrevTxs])
+
+  const prevNet = prevIncome - prevExpense
+
+  // Percentage changes
+  const calcChangePct = (curr: number, prev: number) => {
+    if (prev === 0) return curr > 0 ? "+100%" : "0%"
+    const diff = ((curr - prev) / Math.abs(prev)) * 100
+    const sign = diff >= 0 ? "+" : ""
+    return `${sign}${diff.toFixed(1)}%`
+  }
+
+  // Biggest single transaction
+  const biggestTx = useMemo(() => {
+    if (filteredCurrentTxs.length === 0) return null
+    return [...filteredCurrentTxs].sort((a, b) => b.amount - a.amount)[0]
+  }, [filteredCurrentTxs])
+
+  // Top spending categories and chart data
+  const categoryChartData = useMemo(() => {
+    const map = new Map<string, number>()
+    filteredCurrentTxs
+      .filter((t) => t.type === "expense")
+      .forEach((t) => {
+        const name = t.category_name || "General"
+        map.set(name, (map.get(name) || 0) + t.amount)
+      })
+
+    return Array.from(map.entries())
+      .map(([name, amount]) => ({ name, amount }))
+      .sort((a, b) => b.amount - a.amount)
+  }, [filteredCurrentTxs])
+
+  if (!isOpen) return null
+
+  const COLORS = ["#A7F3D0", "#FEF08A", "#C084FC", "#38BDF8", "#FB7185", "#F472B6", "#FBBF24"]
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="w-full max-w-2xl rounded-3xl p-6 sm:p-7 border shadow-2xl backdrop-blur-2xl relative overflow-hidden max-h-[90vh] overflow-y-auto space-y-5"
+        style={{
+          background: tokens.cardGradient,
+          borderColor: tokens.border,
+          boxShadow: tokens.cardShadow,
+        }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between pb-4 border-b" style={{ borderColor: tokens.border }}>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-lg font-bold font-display text-white">
+                {monthName} {currentYear} Summary
+              </h3>
+              <span className="px-2 py-0.5 rounded text-[9.5px] font-mono uppercase bg-white/10 text-white/80">
+                Close-Out
+              </span>
+            </div>
+            <p className="text-xs font-sans text-white/70 mt-0.5">
+              Comprehensive month close-out metrics & performance review
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="size-8 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Account Selector */}
+        <div>
+          <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1.5 font-sans text-white/75">
+            Scope by Account
+          </label>
+          <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            <button
+              onClick={() => setSelectedAccountId("all")}
+              className="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all font-sans cursor-pointer shrink-0"
+              style={{
+                background: selectedAccountId === "all" ? tokens.dashboardActivePill : "rgba(255, 255, 255, 0.08)",
+                color: selectedAccountId === "all" ? "#120824" : "rgba(255, 255, 255, 0.8)",
+              }}
+            >
+              All Accounts
+            </button>
+            {accounts.map((acc) => (
+              <button
+                key={acc.id}
+                onClick={() => setSelectedAccountId(acc.id)}
+                className="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all font-sans cursor-pointer shrink-0"
+                style={{
+                  background: selectedAccountId === acc.id ? tokens.dashboardActivePill : "rgba(255, 255, 255, 0.08)",
+                  color: selectedAccountId === acc.id ? "#120824" : "rgba(255, 255, 255, 0.8)",
+                }}
+              >
+                {acc.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Core KPI Metrics */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="p-3.5 rounded-2xl border" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+            <span className="text-[10px] uppercase font-semibold text-white/60 block">Total Income</span>
+            <p className="text-base font-bold font-mono text-emerald-400 mt-0.5">
+              +{currencySymbol}{currentIncome.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-2xl border" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+            <span className="text-[10px] uppercase font-semibold text-white/60 block">Total Expenses</span>
+            <p className="text-base font-bold font-mono text-rose-400 mt-0.5">
+              -{currencySymbol}{currentExpense.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-2xl border" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+            <span className="text-[10px] uppercase font-semibold text-white/60 block">Net Balance</span>
+            <p className={`text-base font-bold font-mono mt-0.5 ${currentNet >= 0 ? "text-cyan-300" : "text-amber-300"}`}>
+              {currencySymbol}{currentNet.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-2xl border" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+            <span className="text-[10px] uppercase font-semibold text-white/60 block">Savings Rate</span>
+            <p className="text-base font-bold font-mono text-purple-300 mt-0.5">
+              {savingsRate.toFixed(1)}%
+            </p>
+          </div>
+        </div>
+
+        {/* Month vs Previous Month Comparison */}
+        <div className="p-4 rounded-2xl border space-y-3" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+          <h4 className="text-xs font-bold uppercase tracking-wider text-white/70">
+            Comparison vs Previous Month ({prevMonthName})
+          </h4>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Income Comp */}
+            <div className="p-3 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] text-white/50 block uppercase">Income</span>
+                <span className="text-xs font-mono font-bold text-white">
+                  {currencySymbol}{currentIncome.toFixed(0)} vs {currencySymbol}{prevIncome.toFixed(0)}
+                </span>
+              </div>
+              <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded ${
+                currentIncome >= prevIncome ? "bg-emerald-500/20 text-emerald-300" : "bg-rose-500/20 text-rose-300"
+              }`}>
+                {calcChangePct(currentIncome, prevIncome)}
+              </span>
+            </div>
+
+            {/* Expense Comp */}
+            <div className="p-3 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] text-white/50 block uppercase">Expenses</span>
+                <span className="text-xs font-mono font-bold text-white">
+                  {currencySymbol}{currentExpense.toFixed(0)} vs {currencySymbol}{prevExpense.toFixed(0)}
+                </span>
+              </div>
+              <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded ${
+                currentExpense <= prevExpense ? "bg-emerald-500/20 text-emerald-300" : "bg-rose-500/20 text-rose-300"
+              }`}>
+                {calcChangePct(currentExpense, prevExpense)}
+              </span>
+            </div>
+
+            {/* Net Comp */}
+            <div className="p-3 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between">
+              <div>
+                <span className="text-[10px] text-white/50 block uppercase">Net Profit</span>
+                <span className="text-xs font-mono font-bold text-white">
+                  {currencySymbol}{currentNet.toFixed(0)} vs {currencySymbol}{prevNet.toFixed(0)}
+                </span>
+              </div>
+              <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded ${
+                currentNet >= prevNet ? "bg-emerald-500/20 text-emerald-300" : "bg-amber-500/20 text-amber-300"
+              }`}>
+                {calcChangePct(currentNet, prevNet)}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Biggest Single Transaction */}
+        {biggestTx && (
+          <div className="p-4 rounded-2xl border flex items-center justify-between" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+            <div className="flex items-center gap-3">
+              <div className="size-9 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center font-bold text-amber-300">
+                <Receipt className="size-4.5" />
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-semibold text-white/60 block">Biggest Single Transaction</span>
+                <p className="text-xs font-bold text-white font-sans">{biggestTx.description}</p>
+                <p className="text-[10px] text-white/50 font-mono">{biggestTx.category_name} • {biggestTx.date}</p>
+              </div>
+            </div>
+            <span className="text-sm font-bold font-mono text-rose-300">
+              -{currencySymbol}{biggestTx.amount.toFixed(2)}
+            </span>
+          </div>
+        )}
+
+        {/* Spending Per Category Chart */}
+        <div className="p-4 rounded-2xl border space-y-3" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+          <h4 className="text-xs font-bold uppercase tracking-wider text-white/70">
+            Spending by Category ({monthName})
+          </h4>
+          {categoryChartData.length === 0 ? (
+            <p className="text-xs text-white/50 text-center py-6">No expenses recorded for this period.</p>
+          ) : (
+            <div className="h-44 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={categoryChartData} margin={{ top: 10, right: 10, left: -20, bottom: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" vertical={false} />
+                  <XAxis
+                    dataKey="name"
+                    stroke="rgba(255,255,255,0.6)"
+                    fontSize={10}
+                    tickLine={false}
+                    interval={0}
+                    angle={-15}
+                    textAnchor="end"
+                  />
+                  <YAxis stroke="rgba(255,255,255,0.6)" fontSize={10} tickLine={false} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#160b29",
+                      borderColor: "rgba(255,255,255,0.15)",
+                      borderRadius: "12px",
+                      fontSize: "11px",
+                      color: "#FFFFFF",
+                    }}
+                    formatter={(val: any) => [`${currencySymbol}${Number(val || 0).toFixed(2)}`, "Spent"]}
+                  />
+                  <Bar dataKey="amount" radius={[6, 6, 0, 0]}>
+                    {categoryChartData.map((_, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </div>
+
+        {/* Close Button */}
+        <div className="flex items-center justify-end pt-3 border-t" style={{ borderColor: tokens.border }}>
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-5 py-2.5 rounded-xl text-xs font-bold text-[#120824] shadow-lg cursor-pointer"
+            style={{ background: tokens.dashboardActivePill }}
+          >
+            Done
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+// ─── Modal: Category Suggestions (Feature 5) ───────────────────────
+
+const FIXED_CATEGORY_SUGGESTIONS = [
+  { name: "Restaurants", icon: Utensils },
+  { name: "Cafés", icon: Coffee },
+  { name: "Groceries", icon: ShoppingCart },
+  { name: "Subscriptions", icon: Calendar },
+  { name: "Bills", icon: Receipt },
+  { name: "Public Transportation", icon: Bus },
+  { name: "Private Transportation", icon: Car },
+  { name: "Gifts", icon: Gift },
+  { name: "Giving", icon: HeartHandshake },
+  { name: "Games", icon: Gamepad2 },
+  { name: "Shopping", icon: ShoppingBag },
+]
+
+function CategorySuggestionsModal({
+  isOpen,
+  onClose,
+}: {
+  isOpen: boolean
+  onClose: () => void
+}) {
+  const { categories, createCategory } = useFinanceData()
+  const { profile } = useUserProfile()
+  const { tokens } = useDashboardTheme()
+  const currencySymbol = getCurrencySymbol(profile.currency)
+
+  const [budgetInputs, setBudgetInputs] = useState<{ [key: string]: string }>({})
+  const [addingName, setAddingName] = useState<string | null>(null)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+  // Filter out suggestions already present in user's categories
+  const availableSuggestions = useMemo(() => {
+    const existingNames = new Set(categories.map((c) => c.name.trim().toLowerCase()))
+    return FIXED_CATEGORY_SUGGESTIONS.filter((s) => !existingNames.has(s.name.toLowerCase()))
+  }, [categories])
+
+  if (!isOpen) return null
+
+  const handleAddSuggestion = async (suggestionName: string) => {
+    setAddingName(suggestionName)
+    setErrorMsg(null)
+    try {
+      const budgetVal = budgetInputs[suggestionName]
+      const parsedBudget = budgetVal ? parseFloat(budgetVal) : undefined
+
+      await createCategory({
+        name: suggestionName,
+        type: "expense",
+        budget: parsedBudget && parsedBudget > 0 ? parsedBudget : undefined,
+        currency: profile.currency || "EGP",
+      })
+
+      // Clear input
+      setBudgetInputs((prev) => {
+        const next = { ...prev }
+        delete next[suggestionName]
+        return next
+      })
+    } catch (err: any) {
+      setErrorMsg(err?.message || "Failed to add category suggestion.")
+    } finally {
+      setAddingName(null)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="w-full max-w-xl rounded-3xl p-6 sm:p-7 border shadow-2xl backdrop-blur-2xl relative overflow-hidden max-h-[90vh] overflow-y-auto space-y-4"
+        style={{
+          background: tokens.cardGradient,
+          borderColor: tokens.border,
+          boxShadow: tokens.cardShadow,
+        }}
+      >
+        <div className="flex items-center justify-between pb-4 border-b" style={{ borderColor: tokens.border }}>
+          <div>
+            <h3 className="text-lg font-bold font-display text-white">Browse Category Suggestions</h3>
+            <p className="text-xs font-sans text-white/70 mt-0.5">Quickly add popular spending categories with optional budgets</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="size-8 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+
+        {errorMsg && (
+          <div className="p-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-200 text-xs">
+            {errorMsg}
+          </div>
+        )}
+
+        <div className="space-y-2.5 max-h-[400px] overflow-y-auto pr-1">
+          {availableSuggestions.length === 0 ? (
+            <div className="p-8 text-center text-white/60 text-xs rounded-2xl bg-white/5 border border-white/10">
+              🎉 Awesome! You have already added all the suggested categories.
+            </div>
+          ) : (
+            availableSuggestions.map((s) => {
+              const IconComp = s.icon
+              const isAdding = addingName === s.name
+
+              return (
+                <div
+                  key={s.name}
+                  className="p-3.5 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 backdrop-blur-md hover:bg-white/5 transition-all"
+                  style={{
+                    backgroundColor: tokens.nestedSurface,
+                    borderColor: tokens.borderNested,
+                  }}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="size-9 rounded-xl bg-purple-500/20 border border-purple-500/30 flex items-center justify-center text-purple-300">
+                      <IconComp className="size-4.5" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-white font-sans">{s.name}</h4>
+                      <span className="text-[10px] text-white/50 uppercase">Expense Category</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder={`Budget (${currencySymbol.trim()}) - opt`}
+                      value={budgetInputs[s.name] || ""}
+                      onChange={(e) =>
+                        setBudgetInputs((prev) => ({ ...prev, [s.name]: e.target.value }))
+                      }
+                      className="w-36 px-2.5 py-1.5 border rounded-xl text-xs font-mono text-white focus:outline-none bg-black/20"
+                      style={{ borderColor: tokens.borderNested }}
+                    />
+
+                    <button
+                      type="button"
+                      disabled={isAdding}
+                      onClick={() => handleAddSuggestion(s.name)}
+                      className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-[#120824] flex items-center gap-1 cursor-pointer transition-all shadow-md hover:scale-[1.02] disabled:opacity-50"
+                      style={{ background: tokens.dashboardActivePill }}
+                    >
+                      <Plus className="size-3.5" />
+                      <span>{isAdding ? "Adding..." : "Add"}</span>
+                    </button>
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
+
+        <div className="flex items-center justify-end pt-3 border-t" style={{ borderColor: tokens.border }}>
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-5 py-2.5 rounded-xl text-xs font-semibold text-white/70 hover:text-white cursor-pointer"
+          >
+            Close
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+// ─── Modal: Edit Bill (Feature 8) ─────────────────────────────────
+
+function EditBillModal({
+  bill,
+  isOpen,
+  onClose,
+}: {
+  bill: Bill | null
+  isOpen: boolean
+  onClose: () => void
+}) {
+  const { accounts, categories, updateBill } = useFinanceData()
+  const { profile } = useUserProfile()
+  const { tokens } = useDashboardTheme()
+  const currencySymbol = getCurrencySymbol(profile.currency)
+
+  const [name, setName] = useState(bill?.name || "")
+  const [type, setType] = useState<"income" | "expense" | "transfer">(bill?.type || "expense")
+  const [amount, setAmount] = useState(bill?.amount ? String(bill.amount) : "")
+  const [accountId, setAccountId] = useState(bill?.account_id || "")
+  const [destAccountId, setDestAccountId] = useState(bill?.destination_account_id || "")
+  const [categoryId, setCategoryId] = useState(bill?.category_id || "")
+  const [dueDate, setDueDate] = useState(bill?.due_date || "")
+  const [recurrence, setRecurrence] = useState<"one-off" | "daily" | "monthly" | "custom">(bill?.recurrence || "one-off")
+  const [recurrenceDays, setRecurrenceDays] = useState(bill?.recurrence_days ? String(bill.recurrence_days) : "30")
+  
+  // Fee
+  const [feeAmount, setFeeAmount] = useState(bill?.fee_amount ? String(bill.fee_amount) : "")
+  const [feeType, setFeeType] = useState<"flat" | "percentage" | "instapay">(bill?.fee_type || "flat")
+
+  // Recurring prompt state
+  const [promptRecurring, setPromptRecurring] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (bill) {
+      setName(bill.name)
+      setType(bill.type)
+      setAmount(String(bill.amount))
+      setAccountId(bill.account_id)
+      setDestAccountId(bill.destination_account_id || "")
+      setCategoryId(bill.category_id || "")
+      setDueDate(bill.due_date)
+      setRecurrence(bill.recurrence)
+      setRecurrenceDays(bill.recurrence_days ? String(bill.recurrence_days) : "30")
+      setFeeAmount(bill.fee_amount ? String(bill.fee_amount) : "")
+      setFeeType(bill.fee_type || "flat")
+      setPromptRecurring(false)
+      setErrorMsg(null)
+    }
+  }, [bill])
+
+  if (!isOpen || !bill) return null
+
+  const handleSave = async (applyToAllFuture: boolean) => {
+    setIsSubmitting(true)
+    setErrorMsg(null)
+    try {
+      const parsedAmount = parseFloat(amount)
+      if (isNaN(parsedAmount) || parsedAmount <= 0) throw new Error("Please enter a valid amount.")
+      if (!name.trim()) throw new Error("Please enter a name for the bill.")
+      if (!accountId) throw new Error("Please select an account.")
+
+      await updateBill(
+        bill.id,
+        {
+          name: name.trim(),
+          type,
+          amount: parsedAmount,
+          account_id: accountId,
+          destination_account_id: type === "transfer" ? destAccountId : undefined,
+          category_id: type !== "transfer" && categoryId ? categoryId : undefined,
+          due_date: dueDate,
+          recurrence,
+          recurrence_days: recurrence === "custom" ? (parseInt(recurrenceDays) || 30) : undefined,
+          fee_amount: parseFloat(feeAmount) || 0,
+          fee_type: feeType,
+        },
+        applyToAllFuture
+      )
+
+      onClose()
+    } catch (err: any) {
+      setErrorMsg(err?.message || "Failed to update bill.")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleInitialSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (bill.recurrence !== "one-off") {
+      setPromptRecurring(true)
+    } else {
+      handleSave(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="w-full max-w-lg rounded-3xl p-6 sm:p-7 border shadow-2xl backdrop-blur-2xl relative overflow-hidden max-h-[90vh] overflow-y-auto"
+        style={{
+          background: tokens.cardGradient,
+          borderColor: tokens.border,
+          boxShadow: tokens.cardShadow,
+        }}
+      >
+        <div className="flex items-center justify-between pb-4 border-b" style={{ borderColor: tokens.border }}>
+          <div>
+            <h3 className="text-lg font-bold font-display text-white">Edit Bill / Obligation</h3>
+            <p className="text-xs font-sans text-white/70 mt-0.5">Modify due date, amount, recurrence, and accounts</p>
+          </div>
+          <button onClick={onClose} className="size-8 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 text-white cursor-pointer">✕</button>
+        </div>
+
+        {errorMsg && (
+          <div className="mt-4 p-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-200 text-xs">
+            {errorMsg}
+          </div>
+        )}
+
+        {promptRecurring ? (
+          <div className="py-6 space-y-4 text-center">
+            <h4 className="text-base font-bold text-white font-display">Update Recurring Bill</h4>
+            <p className="text-xs text-white/80 max-w-sm mx-auto leading-relaxed">
+              This is a recurring bill. Would you like to apply these changes to this occurrence only, or this and all future occurrences?
+            </p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4">
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => handleSave(false)}
+                className="w-full sm:w-auto px-4 py-2.5 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/20 text-white cursor-pointer transition-all"
+              >
+                This occurrence only
+              </button>
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => handleSave(true)}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-bold text-[#120824] shadow-lg cursor-pointer transition-all"
+                style={{ background: tokens.dashboardActivePill }}
+              >
+                {isSubmitting ? "Saving..." : "This & all future occurrences"}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={handleInitialSubmit} className="mt-5 space-y-4">
+            <div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+                Bill Title
+              </label>
+              <input
+                type="text"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
+                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+                  Amount ({currencySymbol.trim()})
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-mono text-white focus:outline-none"
+                  style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+                  Due Date
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
+                  style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+                  Type
+                </label>
+                <select
+                  value={type}
+                  onChange={(e) => setType(e.target.value as any)}
+                  className="w-full px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
+                  style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+                >
+                  <option value="expense" className="bg-[#1E0C38] text-white">Expense</option>
+                  <option value="income" className="bg-[#1E0C38] text-white">Income</option>
+                  <option value="transfer" className="bg-[#1E0C38] text-white">Transfer</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+                  Recurrence
+                </label>
+                <select
+                  value={recurrence}
+                  onChange={(e) => setRecurrence(e.target.value as any)}
+                  className="w-full px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
+                  style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+                >
+                  <option value="one-off" className="bg-[#1E0C38] text-white">One-Off</option>
+                  <option value="monthly" className="bg-[#1E0C38] text-white">Monthly</option>
+                  <option value="daily" className="bg-[#1E0C38] text-white">Daily</option>
+                  <option value="custom" className="bg-[#1E0C38] text-white">Custom Interval</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+                  Account
+                </label>
+                <select
+                  value={accountId}
+                  onChange={(e) => setAccountId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
+                  style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+                >
+                  {accounts.map((a) => (
+                    <option key={a.id} value={a.id} className="bg-[#1E0C38] text-white">
+                      {a.name} ({currencySymbol}{Number(a.balance || 0).toFixed(2)})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {type !== "transfer" ? (
+                <div>
+                  <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+                    Category
+                  </label>
+                  <select
+                    value={categoryId}
+                    onChange={(e) => setCategoryId(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
+                    style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+                  >
+                    <option value="" className="bg-[#1E0C38] text-white">General</option>
+                    {categories.map((c) => (
+                      <option key={c.id} value={c.id} className="bg-[#1E0C38] text-white">
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div>
+                  <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+                    Destination Account
+                  </label>
+                  <select
+                    value={destAccountId}
+                    onChange={(e) => setDestAccountId(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
+                    style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+                  >
+                    <option value="" className="bg-[#1E0C38] text-white">Select destination</option>
+                    {accounts.map((a) => (
+                      <option key={a.id} value={a.id} className="bg-[#1E0C38] text-white">
+                        {a.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-4 border-t" style={{ borderColor: tokens.border }}>
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2.5 rounded-xl text-xs font-semibold text-white/70 hover:text-white cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="px-5 py-2.5 rounded-xl text-xs font-bold text-[#120824] shadow-lg cursor-pointer"
+                style={{ background: tokens.dashboardActivePill }}
+              >
+                Save Changes
               </button>
             </div>
           </form>
@@ -2759,6 +3741,11 @@ function RecentTransactionsFeed({
                       <p className="text-sm font-semibold truncate font-sans text-white">
                         {tx.description}
                       </p>
+                      {tx.group_id && (
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30 shrink-0">
+                          split
+                        </span>
+                      )}
                       {tx.fee_pair_id && (
                         <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-white/10 text-white/70 shrink-0">
                           linked
@@ -2824,14 +3811,14 @@ function ActiveAccountsDeck({
   heldFunds?: HeldFund[]
   currencySymbol: string
   onNavigate?: (section: SectionId) => void
-  onAddAccount: () => void
+  onAddAccount?: () => void
 }) {
   const { tokens } = useDashboardTheme()
 
   return (
     <motion.div
       {...cardEntrance(0.18)}
-      className="rounded-3xl border p-5 lg:p-6 flex flex-col hover:scale-[1.01] transition-transform duration-300 backdrop-blur-xl"
+      className="rounded-3xl border p-5 lg:p-6 flex flex-col justify-between hover:scale-[1.01] transition-transform duration-300 backdrop-blur-xl"
       style={{
         background: tokens.cardGradient,
         borderColor: tokens.border,
@@ -2841,14 +3828,13 @@ function ActiveAccountsDeck({
       <div className="flex items-center justify-between pb-3 border-b" style={{ borderColor: tokens.border }}>
         <div>
           <h3 className="text-base font-bold font-display text-white">Active Accounts</h3>
-          <p className="text-xs font-sans text-white/70 mt-0.5">Track your linked Bank accounts</p>
+          <p className="text-xs font-sans text-white/70 mt-0.5">Primary balances & liquidity hubs</p>
         </div>
         <button
-          onClick={onAddAccount}
-          className="text-xs font-semibold px-2.5 py-1 rounded-xl transition-colors font-sans cursor-pointer text-white/80 hover:text-white flex items-center gap-1"
+          onClick={() => onNavigate?.("accounts")}
+          className="text-xs font-semibold px-2.5 py-1 rounded-xl transition-colors font-sans cursor-pointer text-white/80 hover:text-white"
         >
-          <Plus className="size-3.5" />
-          <span>Add</span>
+          View all
         </button>
       </div>
 
@@ -2863,8 +3849,7 @@ function ActiveAccountsDeck({
           return (
             <div
               key={acc.id}
-              onClick={() => onNavigate?.("accounts")}
-              className="p-4 rounded-2xl border flex flex-col justify-between transition-all duration-200 cursor-pointer hover:bg-white/5 backdrop-blur-md relative"
+              className="p-3 sm:p-3.5 rounded-2xl border transition-all duration-200 hover:bg-white/5 backdrop-blur-md"
               style={{
                 backgroundColor: tokens.nestedSurface,
                 borderColor: tokens.borderNested,
@@ -2913,7 +3898,7 @@ function ActiveAccountsDeck({
   )
 }
 
-// ─── Component: Category Budget Progress Gauges ───────────────────
+// ─── Component: Category Budget Progress Gauges (Feature 7 Dynamic Colors) ───
 
 function CategoryBudgetGauges({
   categories,
@@ -2983,6 +3968,8 @@ function CategoryBudgetGauges({
         <div className="flex flex-col gap-4 mt-4">
           {displayList.map((item) => {
             const pct = Math.round(item.ratio * 100)
+            // Feature 7 color thresholds: <50% green (#4ADE80), 50-80% amber (#FACC15), >80% red (#F87171)
+            const gaugeFillColor = pct < 50 ? "#4ADE80" : pct <= 80 ? "#FACC15" : "#F87171"
 
             return (
               <div key={item.id} className="flex flex-col gap-1.5">
@@ -2993,19 +3980,27 @@ function CategoryBudgetGauges({
                       {currencySymbol}{item.spent.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       {item.budget != null ? ` / ${currencySymbol}${item.budget.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ""}
                     </span>
-                    <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border border-white/10 bg-white/10 text-white/90">
+                    <span
+                      className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border border-white/10"
+                      style={{
+                        backgroundColor: `${gaugeFillColor}20`,
+                        color: gaugeFillColor,
+                        borderColor: `${gaugeFillColor}40`,
+                      }}
+                    >
                       {item.budget != null ? `${pct}%` : "Tracked"}
                     </span>
                   </div>
                 </div>
 
-                {/* Cyan -> Green -> Yellow Progress Bar */}
+                {/* Dynamic color fill Progress Bar */}
                 <div className="h-2 w-full rounded-full overflow-hidden bg-white/10 p-[1px]">
                   <div
-                    className="h-full rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]"
+                    className="h-full rounded-full transition-all duration-500"
                     style={{
                       width: `${item.budget != null ? Math.max(4, pct) : (item.spent > 0 ? 100 : 4)}%`,
-                      background: tokens.budgetProgressGradient,
+                      backgroundColor: gaugeFillColor,
+                      boxShadow: `0 0 10px ${gaugeFillColor}60`,
                     }}
                   />
                 </div>
@@ -3050,6 +4045,7 @@ function BillsSection({ onNavigate }: { onNavigate: (s: SectionId) => void }) {
 
   const [selectedAccountId, setSelectedAccountId] = useState<string>("all")
   const [addBillOpen, setAddBillOpen] = useState(false)
+  const [editingBill, setEditingBill] = useState<Bill | null>(null)
   const [selectedBillToPay, setSelectedBillToPay] = useState<Bill | null>(null)
 
   // Filter bills by selected account
@@ -3130,7 +4126,7 @@ function BillsSection({ onNavigate }: { onNavigate: (s: SectionId) => void }) {
     return (
       <div
         key={b.id}
-        className={`p-4 rounded-2xl border flex items-center justify-between gap-3 backdrop-blur-md transition-all hover:bg-white/5 ${
+        className={`p-4 rounded-2xl border flex items-center justify-between gap-3 backdrop-blur-md transition-all hover:bg-white/5 group ${
           isMuted ? "opacity-75" : ""
         }`}
         style={{
@@ -3181,13 +4177,23 @@ function BillsSection({ onNavigate }: { onNavigate: (s: SectionId) => void }) {
           >
             Mark as paid
           </button>
-          <button
-            onClick={() => deleteBill(b.id)}
-            className="p-1.5 rounded-lg hover:bg-red-500/20 text-white/50 hover:text-red-400 cursor-pointer"
-            title="Delete bill"
-          >
-            <Trash2 className="size-4" />
-          </button>
+          
+          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              onClick={() => setEditingBill(b)}
+              className="p-1.5 rounded-lg hover:bg-white/10 text-white/60 hover:text-white cursor-pointer transition-colors"
+              title="Edit bill"
+            >
+              <Edit3 className="size-4" />
+            </button>
+            <button
+              onClick={() => deleteBill(b.id)}
+              className="p-1.5 rounded-lg hover:bg-red-500/20 text-white/50 hover:text-red-400 cursor-pointer transition-colors"
+              title="Delete bill"
+            >
+              <Trash2 className="size-4" />
+            </button>
+          </div>
         </div>
       </div>
     )
@@ -3295,7 +4301,7 @@ function BillsSection({ onNavigate }: { onNavigate: (s: SectionId) => void }) {
             {overdueBills.map((b) => (
               <div
                 key={b.id}
-                className="p-4 rounded-2xl border border-red-500/40 bg-red-500/15 backdrop-blur-md flex items-center justify-between gap-3"
+                className="p-4 rounded-2xl border border-red-500/40 bg-red-500/15 backdrop-blur-md flex items-center justify-between gap-3 group"
               >
                 <div className="flex items-center gap-3">
                   <div className="size-10 rounded-xl bg-red-500/20 text-red-300 flex items-center justify-center font-bold">
@@ -3325,13 +4331,22 @@ function BillsSection({ onNavigate }: { onNavigate: (s: SectionId) => void }) {
                   >
                     Mark as paid
                   </button>
-                  <button
-                    onClick={() => deleteBill(b.id)}
-                    className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-300 cursor-pointer"
-                    title="Delete bill"
-                  >
-                    <Trash2 className="size-4" />
-                  </button>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => setEditingBill(b)}
+                      className="p-1.5 rounded-lg hover:bg-white/15 text-red-200 hover:text-white cursor-pointer transition-colors"
+                      title="Edit bill"
+                    >
+                      <Edit3 className="size-4" />
+                    </button>
+                    <button
+                      onClick={() => deleteBill(b.id)}
+                      className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-300 cursor-pointer transition-colors"
+                      title="Delete bill"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -3401,6 +4416,7 @@ function BillsSection({ onNavigate }: { onNavigate: (s: SectionId) => void }) {
 
       {/* Modals */}
       <AddBillModal isOpen={addBillOpen} onClose={() => setAddBillOpen(false)} />
+      <EditBillModal bill={editingBill} isOpen={Boolean(editingBill)} onClose={() => setEditingBill(null)} />
       <MarkBillPaidModal bill={selectedBillToPay} isOpen={Boolean(selectedBillToPay)} onClose={() => setSelectedBillToPay(null)} />
     </div>
   )
@@ -3413,6 +4429,7 @@ function AccountsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
     accounts,
     deleteAccount,
     heldFunds,
+    renameHeldFund,
     deleteHeldFund,
     deleteHeldFundHistory,
     fetchHeldFundHistory
@@ -3423,6 +4440,12 @@ function AccountsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
 
   const [addAccOpen, setAddAccOpen] = useState(false)
   const [addHeldFundOpen, setAddHeldFundOpen] = useState(false)
+
+  // Feature 1: Rename & Delete on Held Funds
+  const [renamingFundId, setRenamingFundId] = useState<string | null>(null)
+  const [renamingName, setRenamingName] = useState("")
+  const [deletingFund, setDeletingFund] = useState<HeldFund | null>(null)
+  const [isDeletingFund, setIsDeletingFund] = useState(false)
 
   // Deposit/Withdraw/Pay modal state
   const [selectedFundForAction, setSelectedFundForAction] = useState<HeldFund | null>(null)
@@ -3446,6 +4469,34 @@ function AccountsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
     const history = await fetchHeldFundHistory(hfId)
     setFundHistoryMap((prev) => ({ ...prev, [hfId]: history }))
     setHistoryLoading(false)
+  }
+
+  const handleStartRename = (hf: HeldFund) => {
+    setRenamingFundId(hf.id)
+    setRenamingName(hf.name)
+  }
+
+  const handleSaveRename = async (hfId: string) => {
+    if (!renamingName.trim()) return
+    try {
+      await renameHeldFund(hfId, renamingName.trim())
+      setRenamingFundId(null)
+    } catch (err: any) {
+      alert(err?.message || "Failed to rename held fund.")
+    }
+  }
+
+  const handleConfirmDeleteFund = async () => {
+    if (!deletingFund) return
+    setIsDeletingFund(true)
+    try {
+      await deleteHeldFund(deletingFund.id)
+      setDeletingFund(null)
+    } catch (err: any) {
+      alert(err?.message || "Failed to delete held fund.")
+    } finally {
+      setIsDeletingFund(false)
+    }
   }
 
   return (
@@ -3530,7 +4581,7 @@ function AccountsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
         </div>
       </div>
 
-      {/* ─── FEATURE 2: HELD FUNDS SYSTEM ─── */}
+      {/* ─── FEATURE 2: HELD FUNDS SYSTEM (with Rename & Delete) ─── */}
       <div className="flex flex-col gap-5 pt-4 border-t" style={{ borderColor: tokens.borderNested }}>
         <div className="flex items-center justify-between">
           <div>
@@ -3573,12 +4624,13 @@ function AccountsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
               const isPerson = hf.type === "person"
               const isExpanded = expandedFundId === hf.id
               const historyList = fundHistoryMap[hf.id] || []
+              const isRenaming = renamingFundId === hf.id
 
               return (
                 <motion.div
                   key={hf.id}
                   {...cardEntrance(0.1 + i * 0.05)}
-                  className="rounded-3xl p-5 border flex flex-col justify-between transition-all backdrop-blur-xl relative hover:scale-[1.01] transition-transform duration-300"
+                  className="rounded-3xl p-5 border flex flex-col justify-between transition-all backdrop-blur-xl relative hover:scale-[1.01] transition-transform duration-300 group"
                   style={{
                     background: tokens.cardGradient,
                     borderColor: tokens.border,
@@ -3588,7 +4640,7 @@ function AccountsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
                       <div
-                        className="size-10 rounded-2xl flex items-center justify-center font-bold shadow-md"
+                        className="size-10 rounded-2xl flex items-center justify-center font-bold shadow-md shrink-0"
                         style={{
                           backgroundColor: isPerson ? "rgba(167, 243, 208, 0.2)" : "rgba(254, 240, 138, 0.2)",
                           color: isPerson ? "#A7F3D0" : "#FEF08A",
@@ -3596,24 +4648,67 @@ function AccountsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
                       >
                         {isPerson ? <UserCheck className="size-5" /> : <PiggyBank className="size-5" />}
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-base font-bold text-white font-display">{hf.name}</h4>
-                          <span className="px-2 py-0.5 rounded text-[9.5px] font-mono uppercase bg-white/10 text-white/80">
-                            {hf.type}
-                          </span>
-                        </div>
+                      <div className="min-w-0">
+                        {isRenaming ? (
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <input
+                              type="text"
+                              autoFocus
+                              value={renamingName}
+                              onChange={(e) => setRenamingName(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") handleSaveRename(hf.id)
+                                if (e.key === "Escape") setRenamingFundId(null)
+                              }}
+                              className="px-2 py-1 rounded-lg text-xs font-bold text-white bg-black/40 border border-white/20 focus:outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleSaveRename(hf.id)}
+                              className="p-1 rounded-md bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 cursor-pointer"
+                              title="Save name"
+                            >
+                              <Check className="size-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setRenamingFundId(null)}
+                              className="p-1 rounded-md bg-white/10 text-white/60 hover:text-white cursor-pointer"
+                              title="Cancel"
+                            >
+                              <X className="size-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-base font-bold text-white font-display truncate">{hf.name}</h4>
+                            <span className="px-2 py-0.5 rounded text-[9.5px] font-mono uppercase bg-white/10 text-white/80 shrink-0">
+                              {hf.type}
+                            </span>
+                          </div>
+                        )}
                         <p className="text-xs text-white/60 font-sans mt-0.5">Linked: {hf.account_name}</p>
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => deleteHeldFund(hf.id)}
-                      className="p-1.5 rounded-lg hover:bg-red-500/20 text-white/40 hover:text-red-400 cursor-pointer transition-colors"
-                      title="Delete held fund"
-                    >
-                      <Trash2 className="size-4" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      {!isRenaming && (
+                        <button
+                          onClick={() => handleStartRename(hf)}
+                          className="p-1.5 rounded-lg hover:bg-white/10 text-white/40 hover:text-white cursor-pointer transition-colors"
+                          title="Rename held fund"
+                        >
+                          <Edit3 className="size-3.5" />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setDeletingFund(hf)}
+                        className="p-1.5 rounded-lg hover:bg-red-500/20 text-white/40 hover:text-red-400 cursor-pointer transition-colors"
+                        title="Delete held fund"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="mt-4 pt-3 border-t flex items-center justify-between" style={{ borderColor: tokens.borderNested }}>
@@ -3746,6 +4841,50 @@ function AccountsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
           </div>
         )}
       </div>
+
+      {/* Feature 1: Delete Held Fund Confirmation Modal */}
+      {deletingFund && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="w-full max-w-sm rounded-3xl p-6 border shadow-2xl backdrop-blur-2xl text-center space-y-4"
+            style={{
+              background: tokens.cardGradient,
+              borderColor: tokens.border,
+              boxShadow: tokens.cardShadow,
+            }}
+          >
+            <div className="size-12 rounded-2xl bg-red-500/20 text-red-400 mx-auto flex items-center justify-center">
+              <Trash2 className="size-6" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold font-display text-white">Delete {deletingFund.name}?</h3>
+              <p className="text-xs text-white/70 mt-1 leading-relaxed">
+                This will also delete its full transaction and audit history permanently.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-3 pt-2">
+              <button
+                type="button"
+                disabled={isDeletingFund}
+                onClick={() => setDeletingFund(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/20 text-white cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingFund}
+                onClick={handleConfirmDeleteFund}
+                className="px-5 py-2 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-700 text-white cursor-pointer shadow-lg shadow-red-600/30"
+              >
+                {isDeletingFund ? "Deleting..." : "Delete Permanently"}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       {/* Modals */}
       <AddAccountModal isOpen={addAccOpen} onClose={() => setAddAccOpen(false)} />
@@ -3933,6 +5072,7 @@ function CategoriesSection({ onNavigate }: { onNavigate: (s: SectionId) => void 
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [editingCategory, setEditingCategory] = useState<Category | null>(null)
+  const [browseSuggestionsOpen, setBrowseSuggestionsOpen] = useState(false)
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -3962,7 +5102,16 @@ function CategoriesSection({ onNavigate }: { onNavigate: (s: SectionId) => void 
 
   return (
     <div className="flex flex-col gap-6">
-      <SectionHeader title="Category Breakdown" subtitle="Manage categorization labels, budgets, and spending allowances" />
+      <SectionHeader title="Category Breakdown" subtitle="Manage categorization labels, budgets, and spending allowances">
+        <button
+          onClick={() => setBrowseSuggestionsOpen(true)}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all font-sans cursor-pointer shadow-lg hover:scale-[1.02] text-[#120824]"
+          style={{ background: tokens.dashboardActivePill }}
+        >
+          <Compass className="size-4" />
+          <span>Browse Suggestions</span>
+        </button>
+      </SectionHeader>
 
       {/* Category Creation Card */}
       <motion.div
@@ -4080,11 +5229,15 @@ function CategoriesSection({ onNavigate }: { onNavigate: (s: SectionId) => void 
         )}
       </div>
 
-      {/* Edit Category Modal */}
+      {/* Modals */}
       <EditCategoryModal
         category={editingCategory}
         isOpen={Boolean(editingCategory)}
         onClose={() => setEditingCategory(null)}
+      />
+      <CategorySuggestionsModal
+        isOpen={browseSuggestionsOpen}
+        onClose={() => setBrowseSuggestionsOpen(false)}
       />
     </div>
   )
@@ -4421,13 +5574,25 @@ function FinancialAnalyticsDashboardInner({
   initialSection?: SectionId
 }) {
   const [activeSection, setActiveSection] = useState<SectionId>(initialSection)
-  const { accounts, transactions, categories, heldFunds, bills, netWorth, totalIncome, totalExpense } = useFinanceData()
+  const {
+    accounts,
+    transactions,
+    categories,
+    heldFunds,
+    bills,
+    netWorth,
+    totalIncome,
+    totalExpense,
+    notifications,
+    markNotificationAsRead,
+  } = useFinanceData()
   const { profile, initials } = useUserProfile()
   const { isDarkMode, isVideoEnabled, tokens, toggleTheme, toggleVideo } = useDashboardTheme()
   const currencySymbol = getCurrencySymbol(profile.currency)
 
   const [addTxOpen, setAddTxOpen] = useState(false)
   const [addAccOpen, setAddAccOpen] = useState(false)
+  const [monthSummaryOpen, setMonthSummaryOpen] = useState(false)
   
   // Feature 4: Edit & Delete Modal States
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
@@ -4435,38 +5600,9 @@ function FinancialAnalyticsDashboardInner({
 
   // In-App Notification System
   const [notificationsOpen, setNotificationsOpen] = useState(false)
-  const [notifications, setNotifications] = useState<NotificationItem[]>([])
-
-  // Push bill reminders to notification bell (due within 3 days)
-  useEffect(() => {
-    const todayStr = new Date().toISOString().split("T")[0]
-    const today = new Date(todayStr)
-    const newNotifs: NotificationItem[] = []
-
-    bills.forEach((b) => {
-      if (!b.is_completed) {
-        const due = new Date(b.due_date)
-        const diffDays = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-        if (diffDays >= 0 && diffDays <= 3) {
-          newNotifs.push({
-            id: `bill_${b.id}`,
-            type: "warning",
-            title: "Bill Reminder",
-            message: `${b.name} is due in ${diffDays === 0 ? "today" : diffDays + " days"} — ${currencySymbol}${b.amount.toFixed(2)}`,
-            time: `${diffDays === 0 ? "Today" : "In " + diffDays + "d"}`,
-            read: false,
-          })
-        }
-      }
-    })
-
-    if (newNotifs.length > 0) {
-      setNotifications(newNotifs)
-    }
-  }, [bills, currencySymbol])
 
   const unreadNotifsCount = useMemo(() => {
-    return notifications.filter((n) => !n.read).length
+    return notifications.filter((n) => !n.is_read).length
   }, [notifications])
 
   return (
@@ -4522,6 +5658,16 @@ function FinancialAnalyticsDashboardInner({
 
             {/* Right Action Icons */}
             <div className="flex items-center gap-2">
+              {/* Feature 3: Month Summary Button */}
+              <button
+                onClick={() => setMonthSummaryOpen(true)}
+                className="hidden sm:flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold border border-white/15 bg-white/10 hover:bg-white/20 text-white cursor-pointer transition-all shadow-sm"
+                title="Month Close-Out Summary"
+              >
+                <Calendar className="size-3.5 text-[#FEF08A]" />
+                <span>Month Summary</span>
+              </button>
+
               {/* Notification Bell */}
               <button
                 onClick={() => setNotificationsOpen(!notificationsOpen)}
@@ -4630,6 +5776,7 @@ function FinancialAnalyticsDashboardInner({
         {/* Modals & Dialogs */}
         <AddTransactionModal isOpen={addTxOpen} onClose={() => setAddTxOpen(false)} />
         <AddAccountModal isOpen={addAccOpen} onClose={() => setAddAccOpen(false)} />
+        <MonthSummaryModal isOpen={monthSummaryOpen} onClose={() => setMonthSummaryOpen(false)} />
         <EditTransactionModal
           transaction={editingTransaction}
           isOpen={Boolean(editingTransaction)}
@@ -4644,8 +5791,12 @@ function FinancialAnalyticsDashboardInner({
           isOpen={notificationsOpen}
           onClose={() => setNotificationsOpen(false)}
           notifications={notifications}
-          onMarkAsRead={(id) => setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)))}
-          onClearAll={() => setNotifications([])}
+          onMarkAsRead={(id, refId) => markNotificationAsRead(id, refId)}
+          onClearAll={async () => {
+            for (const n of notifications) {
+              await markNotificationAsRead(n.id, n.reference_id)
+            }
+          }}
         />
       </div>
     </div>

@@ -10,6 +10,8 @@ export interface UserProfile {
   currency: string
   phone?: string
   language?: string
+  is_admin?: boolean
+  is_banned?: boolean
 }
 
 export const DEFAULT_USER_PROFILE: UserProfile = {
@@ -19,6 +21,8 @@ export const DEFAULT_USER_PROFILE: UserProfile = {
   currency: "USD",
   phone: "+1 (555) 019-2834",
   language: "English (US)",
+  is_admin: false,
+  is_banned: false,
 }
 
 const STORAGE_KEY = "spendly_user_profile"
@@ -121,6 +125,8 @@ export function useUserProfile() {
             currency,
             phone: dbProfile?.phone || userMeta.phone || local.phone || "+1 (555) 019-2834",
             language: dbProfile?.language || userMeta.language || local.language || "English (US)",
+            is_admin: Boolean(dbProfile?.is_admin || userMeta.is_admin),
+            is_banned: Boolean(dbProfile?.is_banned || userMeta.is_banned),
           }
           setProfile(supaProfile)
           saveLocalUserProfile(supaProfile)
