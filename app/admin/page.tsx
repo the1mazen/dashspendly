@@ -66,6 +66,8 @@ export default function AdminPage() {
 
   const [loading, setLoading] = useState(true)
   const [authorized, setAuthorized] = useState(false)
+  const [currentEmail, setCurrentEmail] = useState<string>("")
+  const [unauthorizedReason, setUnauthorizedReason] = useState<string | null>(null)
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [users, setUsers] = useState<AdminUser[]>([])
   const [searchQuery, setSearchQuery] = useState("")
@@ -79,12 +81,33 @@ export default function AdminPage() {
   const fetchAdminData = useCallback(async () => {
     setLoading(true)
     setErrorMsg(null)
+    setUnauthorizedReason(null)
+
     try {
-      if (!supabase) throw new Error("Supabase is not configured.")
+      if (!supabase) {
+        setUnauthorizedReason("Supabase client is not configured.")
+        setLoading(false)
+        return
+      }
 
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.access_token) {
-        router.replace("/dashboard")
+      const { data: { user } } = await supabase.auth.getUser()
+      const email = (user?.email || profile?.email || "").trim().toLowerCase()
+      setCurrentEmail(email)
+
+      if (!session?.access_token || !user) {
+        setUnauthorizedReason("You must be logged in with your administrator account to access this page.")
+        setLoading(false)
+        return
+      }
+
+      // Check client-side email & admin flag
+      const isEmailAdmin = email === adminEmail
+      const isProfileAdmin = Boolean(profile?.is_admin || user?.user_metadata?.is_admin)
+
+      if (!isEmailAdmin && !isProfileAdmin) {
+        setUnauthorizedReason(`Access restricted. Your account (${email || "Unknown"}) is not recognized as an administrator.`)
+        setLoading(false)
         return
       }
 
@@ -96,7 +119,9 @@ export default function AdminPage() {
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.error || "Unauthorized access.")
+        setUnauthorizedReason(errorData.error || "Server rejected admin access token.")
+        setLoading(false)
+        return
       }
 
       const data = await res.json()
@@ -104,23 +129,16 @@ export default function AdminPage() {
       setUsers(data.users || [])
       setAuthorized(true)
     } catch (err: any) {
-      console.error(err)
-      setErrorMsg(err.message)
-      router.replace("/dashboard")
+      console.error("Admin check error:", err)
+      setUnauthorizedReason(err?.message || "Failed to verify admin permissions.")
     } finally {
       setLoading(false)
     }
-  }, [router])
+  }, [adminEmail, profile])
 
   useEffect(() => {
-    if (profileLoading) return
-    const userEmail = (profile.email || "").trim().toLowerCase()
-    if (userEmail !== adminEmail && !profile.is_admin) {
-      router.replace("/dashboard")
-      return
-    }
     fetchAdminData()
-  }, [profile, profileLoading, adminEmail, fetchAdminData, router])
+  }, [fetchAdminData])
 
   const handleToggleBan = async (user: AdminUser) => {
     setActionLoading(user.id)
@@ -200,12 +218,65 @@ export default function AdminPage() {
     )
   })
 
-  if (loading || !authorized) {
+  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#0d0716] text-white">
+      <div className="min-h-screen flex items-center justify-center bg-[#0d0716] text-white p-4">
         <div className="flex flex-col items-center gap-3">
           <RefreshCw className="size-8 animate-spin text-purple-400" />
-          <p className="text-sm font-mono text-white/60">Verifying Admin Permissions...</p>
+          <p className="text-sm font-mono text-white/60">Verifying Administrator Permissions...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!authorized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0d0716] text-white p-4">
+        <div
+          className="w-full max-w-md rounded-3xl p-6 sm:p-8 border shadow-2xl backdrop-blur-2xl text-center space-y-5"
+          style={{
+            background: "linear-gradient(135deg, rgba(45, 15, 85, 0.85) 0%, rgba(30, 94, 69, 0.75) 100%)",
+            borderColor: "rgba(255, 255, 255, 0.15)",
+            boxShadow: "0 20px 50px rgba(0, 0, 0, 0.5)",
+          }}
+        >
+          <div className="size-14 rounded-2xl bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center justify-center mx-auto shadow-lg">
+            <ShieldAlert className="size-7" />
+          </div>
+
+          <div>
+            <h2 className="text-xl font-bold font-display text-white">Administrator Access Restricted</h2>
+            <p className="text-xs text-white/70 mt-2 leading-relaxed">
+              {unauthorizedReason || "This page is strictly reserved for the system administrator."}
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-2xl bg-black/30 border border-white/10 text-left space-y-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-white/50">Current Logged-in Account:</span>
+              <span className="font-mono font-bold text-white truncate max-w-[180px]">{currentEmail || "Guest / None"}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-white/50">Required Admin Account:</span>
+              <span className="font-mono font-bold text-[#A7F3D0]">{adminEmail}</span>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
+            <button
+              onClick={() => router.push("/dashboard")}
+              className="w-full py-2.5 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/20 text-white cursor-pointer transition-all"
+            >
+              Back to Dashboard
+            </button>
+            <button
+              onClick={() => router.push("/login?redirect=/admin")}
+              className="w-full py-2.5 rounded-xl text-xs font-bold text-[#120824] shadow-lg cursor-pointer transition-all"
+              style={{ background: "linear-gradient(90deg, #5EEAD4 0%, #A7F3D0 40%, #FEF08A 100%)" }}
+            >
+              Sign In as Admin
+            </button>
+          </div>
         </div>
       </div>
     )

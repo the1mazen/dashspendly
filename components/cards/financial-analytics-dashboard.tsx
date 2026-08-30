@@ -11,7 +11,7 @@ import {
   LogOut, CircleDot, AlertCircle, Calendar, Receipt, ChevronDown, Clock, RefreshCw, UserCheck,
   AlertTriangle, RotateCcw, Lock, Eye, EyeOff, X, Layers,
   Utensils, Coffee, ShoppingBag, Bus, Car, Gift, HeartHandshake, Gamepad2, ShoppingCart,
-  Percent, ArrowRight, Compass
+  Percent, ArrowRight, Compass, ShieldAlert
 } from "lucide-react"
 import {
   AreaChart, Area, LineChart, Line, BarChart, Bar, Cell,
@@ -5399,6 +5399,31 @@ function SettingsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
                 {isVideoEnabled ? "Pause" : "Play"}
               </button>
             </div>
+
+            {/* Admin Console Quick Link */}
+            {Boolean(profile.is_admin || profile.email?.toLowerCase() === "themazen21@gmail.com") && (
+              <div
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-2xl border transition-all"
+                style={{
+                  backgroundColor: "rgba(234, 179, 8, 0.08)",
+                  borderColor: "rgba(234, 179, 8, 0.3)",
+                }}
+              >
+                <div>
+                  <p className="text-xs font-bold text-amber-300 font-sans flex items-center gap-1.5">
+                    <ShieldAlert className="size-4" /> Root Admin Console
+                  </p>
+                  <p className="text-[10.5px] text-white/70 mt-0.5">Manage registered users, bans, security, and app-wide metrics</p>
+                </div>
+                <a
+                  href="/admin"
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-[#120824] shadow-md cursor-pointer transition-all hover:scale-[1.02] flex items-center justify-center gap-1 shrink-0 text-center"
+                  style={{ background: tokens.dashboardActivePill }}
+                >
+                  Open Admin Console &rarr;
+                </a>
+              </div>
+            )}
           </div>
 
           {/* Danger Zone: Full Data Reset */}
