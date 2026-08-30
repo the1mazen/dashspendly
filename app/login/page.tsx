@@ -60,10 +60,11 @@ export default function AuthPage() {
               localStorage.setItem("spendly_auth_user_id", user.id)
             }
 
+            const redirectParam = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("redirect") : null
             if (isAccountStep) {
               setSetupStep("account")
             } else {
-              router.replace("/dashboard")
+              router.replace(redirectParam || "/dashboard")
             }
             return
           }
@@ -90,7 +91,8 @@ export default function AuthPage() {
           if (window.location.search.includes("step=account")) {
             setSetupStep("account")
           } else {
-            router.replace("/dashboard")
+            const redirectParam = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("redirect") : null
+            router.replace(redirectParam || "/dashboard")
           }
         }
       })
@@ -456,7 +458,8 @@ export default function AuthPage() {
               if (isSignUp) {
                 setSetupStep("account")
               } else {
-                router.push("/dashboard")
+                const redirectParam = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("redirect") : null
+                router.push(redirectParam || "/dashboard")
               }
             }}
           >
