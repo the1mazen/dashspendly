@@ -46,6 +46,7 @@ interface AdminUser {
     name: string
     type: string
     currency: string
+    startingBalance?: number
     balance: number
   }>
 }
@@ -569,9 +570,16 @@ export default function AdminPage() {
                                         <span className="text-[10px] uppercase text-white/50">{acc.type}</span>
                                       </div>
                                     </div>
-                                    <span className="text-xs font-bold font-mono text-white">
-                                      {acc.currency} {acc.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                                    </span>
+                                    <div className="flex flex-col items-end text-right">
+                                      <span className="text-xs font-bold font-mono text-white">
+                                        {acc.currency} {acc.balance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                                      </span>
+                                      {acc.startingBalance != null && (
+                                        <span className="text-[9.5px] font-mono text-white/50">
+                                          Start: {acc.currency} {acc.startingBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
                                 ))}
                               </div>

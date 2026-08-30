@@ -118,7 +118,7 @@ export async function GET(req: NextRequest) {
     // 2. Fetch profiles, transactions, accounts, bills, held funds with error insulation
     const [profilesRes, txRes, accRes, billRes, hfRes] = await Promise.all([
       supabase.from("profiles").select("*").then((r) => r.data || []),
-      supabase.from("transactions").select("id, user_id, amount_cents, type, is_fee").then((r) => r.data || []),
+      supabase.from("transactions").select("id, user_id, account_id, destination_account_id, amount_cents, type, is_fee").then((r) => r.data || []),
       supabase.from("accounts").select("id, user_id, name, type, starting_balance_cents, currency").then((r) => r.data || []),
       supabase.from("bills").select("id, user_id, amount_cents, is_completed").then((r) => r.data || []),
       supabase.from("held_funds").select("id, user_id, name, balance_cents, type").then((r) => r.data || []),
@@ -182,10 +182,10 @@ export async function GET(req: NextRequest) {
 
     // Aggregate metrics per user
     const usersWithStats = Array.from(mergedUserMap.values()).map((user) => {
-      const userTxs = transactions.filter((t) => t.user_id === user.id)
-      const userAccs = accounts.filter((a) => a.user_id === user.id)
-      const userBills = bills.filter((b) => b.user_id === user.id)
-      const userHf = heldFunds.filter((h) => h.user_id === user.id)
+      const userTxs = transactions.filter((t) => String(t.user_id) === String(user.id))
+      const userAccs = accounts.filter((a) => String(a.user_id) === String(user.id))
+      const userBills = bills.filter((b) => String(b.user_id) === String(user.id))
+      const userHf = heldFunds.filter((h) => String(h.user_id) === String(user.id))
 
       const totalIncomeCents = userTxs
         .filter((t) => t.type === "income" && !t.is_fee)
@@ -200,13 +200,14 @@ export async function GET(req: NextRequest) {
       const parsedAccs = userAccs.map((a) => {
         const startCents = a.starting_balance_cents || 0
         const accTxsSum = userTxs
-          .filter((t) => t.account_id === a.id)
+          .filter((t) => String(t.account_id) === String(a.id))
           .reduce((sum, t) => sum + (t.type === "income" ? (t.amount_cents || 0) : -(t.amount_cents || 0)), 0)
         return {
           id: a.id,
           name: a.name,
           type: a.type,
           currency: a.currency || "EGP",
+          startingBalance: startCents / 100,
           balance: (startCents + accTxsSum) / 100,
         }
       })
