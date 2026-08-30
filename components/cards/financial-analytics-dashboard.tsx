@@ -5693,6 +5693,17 @@ function FinancialAnalyticsDashboardInner({
                 <span>Month Summary</span>
               </button>
 
+              {/* Dedicated Admin Console Link (Shown for Admin) */}
+              {Boolean(profile.is_admin || profile.email?.toLowerCase() === "themazen21@gmail.com") && (
+                <a
+                  href="/admin"
+                  className="size-8 rounded-full flex items-center justify-center border border-amber-500/30 bg-amber-500/20 hover:bg-amber-500/35 text-amber-300 transition-all cursor-pointer shadow-md"
+                  title="Admin Console"
+                >
+                  <ShieldAlert className="size-4" />
+                </a>
+              )}
+
               {/* Notification Bell */}
               <button
                 onClick={() => setNotificationsOpen(!notificationsOpen)}
