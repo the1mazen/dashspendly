@@ -54,11 +54,14 @@ async function verifyAdmin(req: NextRequest) {
 
   // If user matches ADMIN_EMAIL, we grant access and self-heal is_admin in profile
   if (!isProfileAdmin && userEmail === adminEmail) {
-    await supabase.from("profiles").upsert({
-      id: user.id,
-      is_admin: true,
-      email: userEmail,
-    })
+    try {
+      await supabase.from("profiles").upsert({
+        id: user.id,
+        is_admin: true,
+      })
+    } catch {
+      // Ignore if table column differences exist
+    }
   } else if (!isProfileAdmin && !isMetadataAdmin) {
     return { authorized: false, error: "User is not marked as admin." }
   }
