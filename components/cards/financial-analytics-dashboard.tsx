@@ -3769,7 +3769,7 @@ function NetWorthHeroCard({
       <div className="absolute inset-0 rounded-3xl pointer-events-none border border-white/10" />
 
       {/* Header */}
-      <div className="relative z-10 flex flex-wrap items-start justify-between gap-4">
+      <div className={`relative flex flex-wrap items-start justify-between gap-4 transition-all ${isAccountFilterOpen ? "z-30" : "z-10"}`}>
         <div>
           <div className="flex items-center gap-2 mb-2">
             <span className="size-2 rounded-full bg-[#34D399] shadow-[0_0_8px_#34D399]" />
@@ -3785,7 +3785,7 @@ function NetWorthHeroCard({
 
             {/* Account Selector Pill for Net Worth */}
             {accounts.length > 1 && (
-              <div className="relative">
+              <div className="relative z-50">
                 <button
                   type="button"
                   onClick={() => setIsAccountFilterOpen((prev) => !prev)}
@@ -3811,7 +3811,7 @@ function NetWorthHeroCard({
                     <>
                       {/* Full-screen blocking backdrop: blocks all underlying chart/canvas clicks & hovers */}
                       <div
-                        className="fixed inset-0 z-40 bg-black/25 backdrop-blur-[0.5px] cursor-default"
+                        className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[1px] cursor-default"
                         onClick={(e) => {
                           e.stopPropagation()
                           setIsAccountFilterOpen(false)
@@ -3937,25 +3937,27 @@ function NetWorthHeroCard({
       </div>
 
       {/* Trajectory Sparkline (1st of month to today) */}
-      <div className="relative z-10 mt-6 h-32 sm:h-36 w-full">
+      <div className={`relative mt-6 h-32 sm:h-36 w-full transition-opacity duration-200 ${isAccountFilterOpen ? "z-0 pointer-events-none opacity-40 select-none" : "z-10"}`}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={dynamicSparklineData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
             <XAxis hide dataKey="date" />
             <YAxis hide domain={["dataMin - 100", "dataMax + 100"]} />
-            <Tooltip
-              content={({ active, payload }) => {
-                if (!active || !payload?.length) return null
-                const day = payload[0]?.payload?.date
-                return (
-                  <div className="rounded-xl border p-2.5 text-xs shadow-2xl backdrop-blur-md bg-[#160728]/95 border-white/20 text-white">
-                    <p className="text-[10px] font-mono uppercase mb-0.5 text-white/60">Day {day}</p>
-                    <p className="text-sm font-bold font-mono text-[#FEF08A]">
-                      {currencySymbol}{Number(payload[0]?.value || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                    </p>
-                  </div>
-                )
-              }}
-            />
+            {!isAccountFilterOpen && (
+              <Tooltip
+                content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null
+                  const day = payload[0]?.payload?.date
+                  return (
+                    <div className="rounded-xl border p-2.5 text-xs shadow-2xl backdrop-blur-md bg-[#160728]/95 border-white/20 text-white">
+                      <p className="text-[10px] font-mono uppercase mb-0.5 text-white/60">Day {day}</p>
+                      <p className="text-sm font-bold font-mono text-[#FEF08A]">
+                        {currencySymbol}{Number(payload[0]?.value || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                      </p>
+                    </div>
+                  )
+                }}
+              />
+            )}
             <Line
               type="monotone"
               dataKey="value"
