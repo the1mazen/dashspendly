@@ -1354,11 +1354,34 @@ function EditTransactionModal({
             </div>
 
             <div>
-              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
-                Date
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[11px] font-semibold uppercase tracking-wider font-sans text-white/75">
+                  Date
+                </label>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setDate(new Date().toISOString().split("T")[0])}
+                    className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-white/80 transition-colors cursor-pointer"
+                  >
+                    Today
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const d = new Date()
+                      d.setDate(d.getDate() - 1)
+                      setDate(d.toISOString().split("T")[0])
+                    }}
+                    className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-white/80 transition-colors cursor-pointer"
+                  >
+                    Yesterday
+                  </button>
+                </div>
+              </div>
               <input
                 type="date"
+                required
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
                 className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none"
@@ -3782,8 +3805,18 @@ function RecentTransactionsFeed({
   onDeleteTransaction: (tx: Transaction) => void
 }) {
   const { tokens } = useDashboardTheme()
+  const { batchUpdateTransactionDates } = useFinanceData()
   const [filter, setFilter] = useState<"all" | "expense" | "income">("all")
   const [search, setSearch] = useState("")
+  const [visibleLimit, setVisibleLimit] = useState(12)
+
+  // Multi-select state
+  const [selectedTxIds, setSelectedTxIds] = useState<Set<string>>(new Set())
+  const [isBulkDateModalOpen, setIsBulkDateModalOpen] = useState(false)
+  const [bulkDate, setBulkDate] = useState(new Date().toISOString().split("T")[0])
+  const [isBulkSubmitting, setIsBulkSubmitting] = useState(false)
+  const [bulkError, setBulkError] = useState<string | null>(null)
+  const [bulkSuccessMsg, setBulkSuccessMsg] = useState<string | null>(null)
 
   const filtered = useMemo(() => {
     return transactions.filter((t) => {
@@ -3795,6 +3828,64 @@ function RecentTransactionsFeed({
       return matchesFilter && matchesSearch
     })
   }, [transactions, filter, search])
+
+  const allVisibleSelected = useMemo(() => {
+    const visibleTxs = filtered.slice(0, visibleLimit)
+    return visibleTxs.length > 0 && visibleTxs.every((t) => selectedTxIds.has(t.id))
+  }, [filtered, visibleLimit, selectedTxIds])
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedTxIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
+  const handleToggleSelectAll = () => {
+    const visibleTxs = filtered.slice(0, visibleLimit)
+    if (allVisibleSelected) {
+      // Deselect visible
+      setSelectedTxIds((prev) => {
+        const next = new Set(prev)
+        visibleTxs.forEach((t) => next.delete(t.id))
+        return next
+      })
+    } else {
+      // Select all visible
+      setSelectedTxIds((prev) => {
+        const next = new Set(prev)
+        visibleTxs.forEach((t) => next.add(t.id))
+        return next
+      })
+    }
+  }
+
+  const handleApplyBulkDate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (selectedTxIds.size === 0 || !bulkDate) return
+
+    setIsBulkSubmitting(true)
+    setBulkError(null)
+
+    try {
+      await batchUpdateTransactionDates(Array.from(selectedTxIds), bulkDate)
+      setBulkSuccessMsg(`Successfully updated date for ${selectedTxIds.size} transaction${selectedTxIds.size > 1 ? "s" : ""}!`)
+      setSelectedTxIds(new Set())
+      setTimeout(() => {
+        setIsBulkDateModalOpen(false)
+        setBulkSuccessMsg(null)
+      }, 1200)
+    } catch (err: any) {
+      setBulkError(err.message || "Failed to update transaction dates.")
+    } finally {
+      setIsBulkSubmitting(false)
+    }
+  }
 
   return (
     <motion.div
@@ -3858,24 +3949,81 @@ function RecentTransactionsFeed({
         </div>
       </div>
 
-      {/* Frosted Search Input */}
-      <div className="my-3.5 relative">
-        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-white/60" />
-        <input
-          type="text"
-          placeholder="Filter by merchant, category, or account..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full pl-10 pr-4 py-2.5 border rounded-2xl text-xs font-sans text-white focus:outline-none transition-colors backdrop-blur-md placeholder:text-white/40"
-          style={{
-            backgroundColor: tokens.nestedSurface,
-            borderColor: tokens.borderNested,
-          }}
-        />
+      {/* Frosted Search Input & Bulk Action Bar */}
+      <div className="my-3.5 space-y-2.5">
+        <div className="relative">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-white/60" />
+          <input
+            type="text"
+            placeholder="Filter by merchant, category, or account..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 border rounded-2xl text-xs font-sans text-white focus:outline-none transition-colors backdrop-blur-md placeholder:text-white/40"
+            style={{
+              backgroundColor: tokens.nestedSurface,
+              borderColor: tokens.borderNested,
+            }}
+          />
+        </div>
+
+        {/* Multi-Select Action Banner */}
+        <AnimatePresence>
+          {selectedTxIds.size > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: -6, height: 0 }}
+              animate={{ opacity: 1, y: 0, height: "auto" }}
+              exit={{ opacity: 0, y: -6, height: 0 }}
+              className="p-2.5 px-3.5 rounded-2xl border flex flex-wrap items-center justify-between gap-2.5 shadow-lg"
+              style={{
+                background: "linear-gradient(135deg, rgba(76, 29, 149, 0.85) 0%, rgba(30, 58, 138, 0.85) 100%)",
+                borderColor: "rgba(167, 139, 250, 0.4)",
+              }}
+            >
+              <div className="flex items-center gap-2 text-xs font-bold text-white">
+                <span className="px-2 py-0.5 rounded-md bg-white/20 font-mono text-[11px]">
+                  {selectedTxIds.size}
+                </span>
+                <span>transaction{selectedTxIds.size > 1 ? "s" : ""} selected</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleToggleSelectAll}
+                  className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-white/10 hover:bg-white/20 text-white/90 transition-all cursor-pointer"
+                >
+                  {allVisibleSelected ? "Deselect Visible" : "Select All Visible"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBulkDate(new Date().toISOString().split("T")[0])
+                    setIsBulkDateModalOpen(true)
+                  }}
+                  className="px-3 py-1 text-xs font-bold rounded-lg text-[#120824] flex items-center gap-1.5 transition-all shadow-sm cursor-pointer hover:scale-[1.02]"
+                  style={{ background: tokens.dashboardActivePill }}
+                >
+                  <Calendar className="size-3.5" />
+                  Change Date
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedTxIds(new Set())}
+                  className="p-1 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                  title="Clear selection"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
-      {/* Itemized Rows with Edit & Delete actions */}
-      <div className="flex flex-col gap-2 mt-1 max-h-[380px] overflow-y-auto pr-1">
+      {/* Itemized Rows with Multi-Select Checkbox, Edit & Delete actions */}
+      <div className="flex flex-col gap-2 mt-1 max-h-[420px] overflow-y-auto pr-1">
         {filtered.length === 0 ? (
           <div className="text-center py-10 text-white/60">
             <p className="text-sm font-sans font-medium">No transactions match your filter.</p>
@@ -3887,20 +4035,39 @@ function RecentTransactionsFeed({
             </button>
           </div>
         ) : (
-          filtered.slice(0, 8).map((tx) => {
+          filtered.slice(0, visibleLimit).map((tx) => {
             const isIncome = tx.type === "income"
             const isFee = Boolean(tx.is_fee || tx.category_name?.toLowerCase() === "fees")
+            const isSelected = selectedTxIds.has(tx.id)
 
             return (
               <div
                 key={tx.id}
-                className="group flex items-center justify-between p-3 sm:p-3.5 rounded-2xl border transition-all duration-200 hover:bg-white/5 backdrop-blur-md relative"
+                onClick={() => handleToggleSelect(tx.id)}
+                className={`group flex items-center justify-between p-3 sm:p-3.5 rounded-2xl border transition-all duration-200 backdrop-blur-md relative cursor-pointer ${
+                  isSelected ? "bg-purple-900/35 border-purple-400/50 shadow-sm" : "hover:bg-white/5"
+                }`}
                 style={{
-                  backgroundColor: tokens.nestedSurface,
-                  borderColor: tokens.borderNested,
+                  backgroundColor: isSelected ? undefined : tokens.nestedSurface,
+                  borderColor: isSelected ? undefined : tokens.borderNested,
                 }}
               >
                 <div className="flex items-center gap-3 min-w-0">
+                  {/* Select Checkbox */}
+                  <div
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleToggleSelect(tx.id)
+                    }}
+                    className={`size-5 rounded-lg border flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+                      isSelected
+                        ? "bg-purple-500 border-purple-400 text-white"
+                        : "bg-white/5 border-white/20 text-transparent group-hover:border-white/50"
+                    }`}
+                  >
+                    <Check className="size-3 stroke-[3]" />
+                  </div>
+
                   <div
                     className="size-10 rounded-xl flex items-center justify-center shrink-0 shadow-md border"
                     style={{
@@ -3941,7 +4108,7 @@ function RecentTransactionsFeed({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 shrink-0">
+                <div className="flex items-center gap-3 shrink-0" onClick={(e) => e.stopPropagation()}>
                   <div className="text-right">
                     <p
                       className="text-sm sm:text-base font-bold font-mono"
@@ -3949,17 +4116,17 @@ function RecentTransactionsFeed({
                     >
                       {isIncome ? "+" : "-"}{currencySymbol}{Math.abs(tx.amount).toFixed(2)}
                     </p>
-                    <p className="text-[10px] font-mono mt-0.5 text-white/50">
+                    <p className="text-[10px] font-mono mt-0.5 text-white/60">
                       {tx.date}
                     </p>
                   </div>
 
                   {/* Feature 4: Edit & Delete Actions */}
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-1 opacity-80 sm:opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={() => onEditTransaction(tx)}
                       className="p-1.5 rounded-lg hover:bg-white/15 text-white/70 hover:text-white transition-colors cursor-pointer"
-                      title="Edit transaction"
+                      title="Edit transaction (including date)"
                     >
                       <Edit3 className="size-3.5" />
                     </button>
@@ -3977,6 +4144,134 @@ function RecentTransactionsFeed({
           })
         )}
       </div>
+
+      {/* Show More / Show Less Toggle */}
+      {filtered.length > 12 && (
+        <div className="pt-3 border-t border-white/10 flex items-center justify-center">
+          {visibleLimit < filtered.length ? (
+            <button
+              onClick={() => setVisibleLimit((prev) => prev + 15)}
+              className="text-xs font-semibold text-[#A7F3D0] hover:underline cursor-pointer flex items-center gap-1"
+            >
+              Show more ({filtered.length - visibleLimit} remaining)
+            </button>
+          ) : (
+            <button
+              onClick={() => setVisibleLimit(12)}
+              className="text-xs font-semibold text-white/60 hover:text-white cursor-pointer"
+            >
+              Show less
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Bulk Change Date Modal */}
+      <AnimatePresence>
+        {isBulkDateModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-md rounded-3xl p-6 border shadow-2xl backdrop-blur-2xl relative overflow-hidden"
+              style={{
+                background: tokens.cardGradient,
+                borderColor: tokens.border,
+                boxShadow: tokens.cardShadow,
+              }}
+            >
+              <div className="flex items-center justify-between pb-3.5 border-b" style={{ borderColor: tokens.border }}>
+                <div className="flex items-center gap-2">
+                  <Calendar className="size-4.5 text-[#FEF08A]" />
+                  <h3 className="text-base font-bold font-display text-white">Change Transaction Date</h3>
+                </div>
+                <button
+                  onClick={() => setIsBulkDateModalOpen(false)}
+                  className="size-7 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 text-white cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {bulkError && (
+                <div className="mt-3.5 p-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-200 text-xs flex items-center gap-2">
+                  <AlertCircle className="size-4 shrink-0 text-red-400" />
+                  <span>{bulkError}</span>
+                </div>
+              )}
+
+              {bulkSuccessMsg && (
+                <div className="mt-3.5 p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-xs flex items-center gap-2">
+                  <CheckCircle2 className="size-4 shrink-0 text-emerald-400" />
+                  <span>{bulkSuccessMsg}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleApplyBulkDate} className="mt-4 space-y-4">
+                <div>
+                  <p className="text-xs text-white/80 mb-2">
+                    Updating date for <strong className="text-white">{selectedTxIds.size}</strong> selected transaction{selectedTxIds.size > 1 ? "s" : ""}.
+                  </p>
+                  
+                  <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
+                    New Date
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={bulkDate}
+                    onChange={(e) => setBulkDate(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none"
+                    style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+                  />
+                </div>
+
+                {/* Quick Date Presets */}
+                <div className="flex items-center gap-2 pt-1">
+                  <span className="text-[10.5px] uppercase font-semibold text-white/50">Presets:</span>
+                  <button
+                    type="button"
+                    onClick={() => setBulkDate(new Date().toISOString().split("T")[0])}
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+                  >
+                    Today
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const d = new Date()
+                      d.setDate(d.getDate() - 1)
+                      setBulkDate(d.toISOString().split("T")[0])
+                    }}
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+                  >
+                    Yesterday
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-end gap-2.5 pt-3 border-t" style={{ borderColor: tokens.border }}>
+                  <button
+                    type="button"
+                    onClick={() => setIsBulkDateModalOpen(false)}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold text-white/70 hover:text-white cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isBulkSubmitting || !bulkDate}
+                    className="px-5 py-2 rounded-xl text-xs font-bold text-[#120824] shadow-md cursor-pointer hover:scale-[1.02] disabled:opacity-50 transition-all"
+                    style={{ background: tokens.dashboardActivePill }}
+                  >
+                    {isBulkSubmitting ? "Saving to Supabase..." : `Update Date (${selectedTxIds.size})`}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 }

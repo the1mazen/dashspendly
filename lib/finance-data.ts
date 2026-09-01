@@ -1057,12 +1057,12 @@ function useFinanceDataInternal() {
       if (!userId) throw new Error("User authentication required.")
 
       // Fetch the transaction first to check for linked fee
-      const { data: currentTx, error: fetchErr } = await supabase
+      const { data: currentTx } = await supabase
         .from("transactions")
         .select("*")
         .eq("id", transactionId)
         .eq("user_id", userId)
-        .single()
+        .maybeSingle()
 
       let resolvedCategoryId: string | null = null
       if (updateData.category_id && isValidUUID(updateData.category_id)) {
@@ -1087,7 +1087,7 @@ function useFinanceDataInternal() {
           category_id: resolvedCategoryId,
           amount_cents: amountCents,
           type: updateData.type,
-          note: updateData.note.trim(),
+          note: updateData.note ? updateData.note.trim() : "",
           date: dateStr,
         })
         .eq("id", transactionId)
@@ -1096,7 +1096,7 @@ function useFinanceDataInternal() {
       if (updateErr) throw new Error(updateErr.message || "Failed to update transaction.")
 
       // If there is a linked fee transaction and fee update was provided
-      if (currentTx.fee_pair_id && typeof updateData.linked_fee_amount === "number") {
+      if (currentTx?.fee_pair_id && typeof updateData.linked_fee_amount === "number") {
         const newFeeCents = Math.round(Math.abs(updateData.linked_fee_amount) * 100)
         if (newFeeCents > 0) {
           await supabase
@@ -1119,6 +1119,22 @@ function useFinanceDataInternal() {
             .neq("id", transactionId)
             .eq("user_id", userId)
         }
+      } else if (currentTx?.fee_pair_id) {
+        // Sync date on linked fee even if fee amount was not changed
+        await supabase
+          .from("transactions")
+          .update({ date: dateStr })
+          .eq("fee_pair_id", currentTx.fee_pair_id)
+          .eq("user_id", userId)
+      }
+
+      // If it's a transfer, sync the date on the paired transfer transaction too
+      if (currentTx?.transfer_pair_id) {
+        await supabase
+          .from("transactions")
+          .update({ date: dateStr })
+          .eq("transfer_pair_id", currentTx.transfer_pair_id)
+          .eq("user_id", userId)
       }
 
       await fetchData()
@@ -1140,6 +1156,62 @@ function useFinanceDataInternal() {
           }
           return t
         })
+        saveLocal(STORAGE_TRANSACTIONS_KEY, updated)
+        return updated
+      })
+    }
+  }, [accounts, categories, fetchData])
+
+  const batchUpdateTransactionDates = useCallback(async (
+    transactionIds: string[],
+    newDate: string
+  ) => {
+    if (!transactionIds || transactionIds.length === 0) return
+    const dateStr = newDate || new Date().toISOString().split("T")[0]
+
+    if (isSupabaseConfigured && supabase) {
+      const userId = await resolveCurrentUserId()
+      if (!userId) throw new Error("User authentication required.")
+
+      // 1. Update all selected transactions
+      const { data: updatedRows, error } = await supabase
+        .from("transactions")
+        .update({ date: dateStr })
+        .in("id", transactionIds)
+        .eq("user_id", userId)
+        .select("id, fee_pair_id, transfer_pair_id")
+
+      if (error) throw new Error(error.message || "Failed to update transaction dates.")
+
+      // 2. Also sync date on any linked fee_pair_id rows
+      const feePairIds = Array.from(
+        new Set((updatedRows || []).map((r) => r.fee_pair_id).filter(Boolean))
+      )
+      if (feePairIds.length > 0) {
+        await supabase
+          .from("transactions")
+          .update({ date: dateStr })
+          .in("fee_pair_id", feePairIds)
+          .eq("user_id", userId)
+      }
+
+      // 3. Also sync date on any linked transfer_pair_id rows
+      const transferPairIds = Array.from(
+        new Set((updatedRows || []).map((r) => r.transfer_pair_id).filter(Boolean))
+      )
+      if (transferPairIds.length > 0) {
+        await supabase
+          .from("transactions")
+          .update({ date: dateStr })
+          .in("transfer_pair_id", transferPairIds)
+          .eq("user_id", userId)
+      }
+
+      await fetchData()
+    } else {
+      setTransactions((prev) => {
+        const idSet = new Set(transactionIds)
+        const updated = prev.map((t) => (idSet.has(t.id) ? { ...t, date: dateStr } : t))
         saveLocal(STORAGE_TRANSACTIONS_KEY, updated)
         return updated
       })
@@ -2219,6 +2291,7 @@ function useFinanceDataInternal() {
     createTransaction,
     createSplitExpenseTransaction,
     updateTransaction,
+    batchUpdateTransactionDates,
     deleteTransaction,
     createHeldFund,
     renameHeldFund,
