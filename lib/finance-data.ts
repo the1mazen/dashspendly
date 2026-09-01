@@ -94,6 +94,59 @@ export interface Bill {
   category_name?: string
 }
 
+export interface BudgetPlanCategory {
+  id?: string
+  plan_id?: string
+  user_id?: string
+  category_id: string
+  bucket: "needs" | "wants" | "savings"
+  allocated_amount_cents: number
+  allocated_amount: number
+  category_name?: string
+}
+
+export interface BudgetPlan {
+  id: string
+  user_id?: string
+  name: string
+  total_amount_cents: number
+  total_amount: number
+  account_id?: string
+  period: "weekly" | "monthly" | "custom"
+  custom_days?: number
+  start_date: string
+  framework: "50/30/20" | "suggested"
+  is_active: boolean
+  is_repeating: boolean
+  created_at?: string
+  categories?: BudgetPlanCategory[]
+}
+
+export interface BudgetPlanHistory {
+  id: string
+  plan_id: string
+  user_id?: string
+  period_start: string
+  period_end: string
+  total_planned_cents: number
+  total_planned: number
+  total_actual_cents: number
+  total_actual: number
+  created_at?: string
+}
+
+export interface BudgetPlanCategoryHistory {
+  id: string
+  plan_history_id: string
+  user_id?: string
+  category_id: string
+  planned_amount_cents: number
+  planned_amount: number
+  actual_amount_cents: number
+  actual_amount: number
+  category_name?: string
+}
+
 export interface AppNotification {
   id: string
   user_id?: string
@@ -113,6 +166,7 @@ const STORAGE_CATEGORIES_KEY = "spendly_categories"
 const STORAGE_HELD_FUNDS_KEY = "spendly_held_funds"
 const STORAGE_HELD_HISTORY_KEY = "spendly_held_fund_history"
 const STORAGE_BILLS_KEY = "spendly_bills"
+const STORAGE_BUDGET_PLANS_KEY = "spendly_budget_plans"
 
 export function getLocal<T>(key: string): T[] {
   if (typeof window === "undefined") return []
@@ -317,6 +371,7 @@ function useFinanceDataInternal() {
   const [categories, setCategories] = useState<Category[]>(() => getLocal<Category>(STORAGE_CATEGORIES_KEY))
   const [heldFunds, setHeldFunds] = useState<HeldFund[]>(() => getLocal<HeldFund>(STORAGE_HELD_FUNDS_KEY))
   const [bills, setBills] = useState<Bill[]>(() => getLocal<Bill>(STORAGE_BILLS_KEY))
+  const [budgetPlans, setBudgetPlans] = useState<BudgetPlan[]>(() => getLocal<BudgetPlan>(STORAGE_BUDGET_PLANS_KEY))
   const [loading, setLoading] = useState(true)
 
   const fetchData = useCallback(async () => {
@@ -337,6 +392,27 @@ function useFinanceDataInternal() {
           const dbCategories = catRes.data || []
           const dbHeldFunds = hfRes.data || []
           const dbBills = billRes.data || []
+
+          // Safe query for budget_plans & budget_plan_categories
+          let dbBudgetPlans: any[] = []
+          let dbBudgetPlanCategories: any[] = []
+          try {
+            const { data: bpData } = await supabase
+              .from("budget_plans")
+              .select("*")
+              .eq("user_id", userId)
+              .order("created_at", { ascending: false })
+            if (bpData) {
+              dbBudgetPlans = bpData
+              const { data: bpcData } = await supabase
+                .from("budget_plan_categories")
+                .select("*")
+                .eq("user_id", userId)
+              if (bpcData) dbBudgetPlanCategories = bpcData
+            }
+          } catch (bpErr) {
+            console.warn("budget_plans query error / table not ready:", bpErr)
+          }
 
           const parsedTransactions: Transaction[] = dbTransactions.map((t: any) => {
             const amountCents = t.amount_cents ?? 0
@@ -457,17 +533,56 @@ function useFinanceDataInternal() {
             }
           })
 
+          const parsedBudgetPlans: BudgetPlan[] = dbBudgetPlans.map((bp: any) => {
+            const planCats = dbBudgetPlanCategories
+              .filter((c: any) => String(c.plan_id) === String(bp.id))
+              .map((c: any) => {
+                const catObj = dbCategories.find((cat: any) => String(cat.id) === String(c.category_id))
+                const allocCents = Number(c.allocated_amount_cents ?? 0)
+                return {
+                  id: String(c.id),
+                  plan_id: String(c.plan_id),
+                  user_id: c.user_id,
+                  category_id: String(c.category_id),
+                  bucket: c.bucket as "needs" | "wants" | "savings",
+                  allocated_amount_cents: allocCents,
+                  allocated_amount: allocCents / 100,
+                  category_name: catObj?.name || "Category",
+                }
+              })
+
+            const totCents = Number(bp.total_amount_cents ?? 0)
+            return {
+              id: String(bp.id),
+              user_id: bp.user_id,
+              name: bp.name,
+              total_amount_cents: totCents,
+              total_amount: totCents / 100,
+              account_id: bp.account_id ? String(bp.account_id) : undefined,
+              period: bp.period as "weekly" | "monthly" | "custom",
+              custom_days: bp.custom_days,
+              start_date: bp.start_date,
+              framework: bp.framework as "50/30/20" | "suggested",
+              is_active: Boolean(bp.is_active),
+              is_repeating: bp.is_repeating ?? true,
+              created_at: bp.created_at,
+              categories: planCats,
+            }
+          })
+
           setAccounts(parsedAccounts)
           setTransactions(parsedTransactions)
           setCategories(parsedCategories)
           setHeldFunds(parsedHeldFunds)
           setBills(parsedBills)
+          setBudgetPlans(parsedBudgetPlans)
 
           saveLocal(STORAGE_ACCOUNTS_KEY, parsedAccounts)
           saveLocal(STORAGE_TRANSACTIONS_KEY, parsedTransactions)
           saveLocal(STORAGE_CATEGORIES_KEY, parsedCategories)
           saveLocal(STORAGE_HELD_FUNDS_KEY, parsedHeldFunds)
           saveLocal(STORAGE_BILLS_KEY, parsedBills)
+          saveLocal(STORAGE_BUDGET_PLANS_KEY, parsedBudgetPlans)
 
           setLoading(false)
           return
@@ -483,6 +598,7 @@ function useFinanceDataInternal() {
     setCategories(getLocal<Category>(STORAGE_CATEGORIES_KEY))
     setHeldFunds(getLocal<HeldFund>(STORAGE_HELD_FUNDS_KEY))
     setBills(getLocal<Bill>(STORAGE_BILLS_KEY))
+    setBudgetPlans(getLocal<BudgetPlan>(STORAGE_BUDGET_PLANS_KEY))
     setLoading(false)
   }, [])
 
@@ -2045,7 +2161,47 @@ function useFinanceDataInternal() {
             }
           }
 
-          // 2. Fetch unread notifications
+          // 2. Check if any active plan's period has ended (start_date + period length < today)
+          const todayTime = today.getTime()
+          for (const p of budgetPlans) {
+            if (p.is_active && p.is_repeating && p.start_date) {
+              const endObj = new Date(p.start_date)
+              if (p.period === "weekly") {
+                endObj.setDate(endObj.getDate() + 7)
+              } else if (p.period === "monthly") {
+                endObj.setMonth(endObj.getMonth() + 1)
+              } else if (p.period === "custom") {
+                endObj.setDate(endObj.getDate() + (p.custom_days || 30))
+              }
+
+              if (todayTime >= endObj.getTime()) {
+                const notifRefId = `plan_renewal_${p.id}`
+                if (!dismissedLocal.includes(notifRefId)) {
+                  if (isValidUUID(p.id)) {
+                    const { data: existing } = await supabase
+                      .from("notifications")
+                      .select("id")
+                      .eq("user_id", userId)
+                      .eq("reference_id", notifRefId)
+                      .maybeSingle()
+
+                    if (!existing) {
+                      await supabase.from("notifications").insert({
+                        id: generateUUID(),
+                        user_id: userId,
+                        type: "info",
+                        reference_id: notifRefId,
+                        message: `Your budget plan "${p.name}" has ended. Tap to review and renew.`,
+                        is_read: false,
+                      })
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          // 3. Fetch unread notifications
           const { data: notifData } = await supabase
             .from("notifications")
             .select("*")
@@ -2076,7 +2232,7 @@ function useFinanceDataInternal() {
       }
     }
 
-    // Fallback: derive from upcoming bills
+    // Fallback: derive from upcoming bills and plans
     const derived: AppNotification[] = []
     bills.forEach((b) => {
       if (!b.is_completed) {
@@ -2096,8 +2252,33 @@ function useFinanceDataInternal() {
         }
       }
     })
+
+    budgetPlans.forEach((p) => {
+      if (p.is_active && p.is_repeating && p.start_date) {
+        const endObj = new Date(p.start_date)
+        if (p.period === "weekly") endObj.setDate(endObj.getDate() + 7)
+        else if (p.period === "monthly") endObj.setMonth(endObj.getMonth() + 1)
+        else if (p.period === "custom") endObj.setDate(endObj.getDate() + (p.custom_days || 30))
+
+        if (today.getTime() >= endObj.getTime()) {
+          const notifId = `plan_renewal_${p.id}`
+          if (!dismissedLocal.includes(notifId)) {
+            derived.push({
+              id: notifId,
+              type: "info",
+              reference_id: notifId,
+              title: "Budget Plan Ended",
+              message: `Your budget plan "${p.name}" has ended. Tap to review and renew.`,
+              time: "Today",
+              is_read: false,
+            })
+          }
+        }
+      }
+    })
+
     setNotifications(derived)
-  }, [bills])
+  }, [bills, budgetPlans])
 
   const markNotificationAsRead = useCallback(async (notifId: string, referenceId?: string) => {
     // 1. Save to localStorage dismissed array
@@ -2140,6 +2321,460 @@ function useFinanceDataInternal() {
     fetchNotifications()
   }, [fetchNotifications])
 
+  // ─────────────────────────────────────────────────────────────────
+  // BUDGET PLANS CRUD
+  // ─────────────────────────────────────────────────────────────────
+
+  const activeBudgetPlan = useMemo(() => {
+    return budgetPlans.find((p) => p.is_active) || null
+  }, [budgetPlans])
+
+  const createBudgetPlan = useCallback(async (
+    planData: {
+      name: string
+      total_amount: number
+      account_id?: string
+      period: "weekly" | "monthly" | "custom"
+      custom_days?: number
+      start_date: string
+      framework: "50/30/20" | "suggested"
+      is_repeating?: boolean
+    },
+    categoryAllocations: Array<{
+      category_id: string
+      bucket: "needs" | "wants" | "savings"
+      allocated_amount: number
+    }>,
+    activateNow: boolean
+  ): Promise<BudgetPlan> => {
+    const newPlanId = generateUUID()
+    const totalAmountCents = Math.round((planData.total_amount || 0) * 100)
+    const isRepeating = planData.is_repeating ?? true
+
+    if (isSupabaseConfigured && supabase) {
+      const userId = await resolveCurrentUserId()
+      if (!userId) {
+        throw new Error("No active user session found. Please log in.")
+      }
+
+      // Step 1: If activating now, deactivate all existing plans
+      if (activateNow) {
+        await supabase
+          .from("budget_plans")
+          .update({ is_active: false })
+          .eq("user_id", userId)
+      }
+
+      // Step 2: Insert into budget_plans
+      const { error: planError } = await supabase
+        .from("budget_plans")
+        .insert({
+          id: newPlanId,
+          user_id: userId,
+          name: planData.name.trim(),
+          total_amount_cents: totalAmountCents,
+          account_id: planData.account_id || null,
+          period: planData.period,
+          custom_days: planData.period === "custom" ? (planData.custom_days || 30) : null,
+          start_date: planData.start_date,
+          framework: planData.framework,
+          is_active: activateNow,
+          is_repeating: isRepeating,
+        })
+
+      if (planError) {
+        console.error("Budget plan insert error:", planError)
+        throw new Error(`Failed to save budget plan: ${planError.message}`)
+      }
+
+      // Step 3: Insert category allocations
+      if (categoryAllocations.length > 0) {
+        const catRows = categoryAllocations.map((c) => ({
+          id: generateUUID(),
+          plan_id: newPlanId,
+          user_id: userId,
+          category_id: c.category_id,
+          bucket: c.bucket,
+          allocated_amount_cents: Math.round(c.allocated_amount * 100),
+        }))
+
+        const { error: catAllocError } = await supabase
+          .from("budget_plan_categories")
+          .insert(catRows)
+
+        if (catAllocError) {
+          console.error("Budget plan categories insert error:", catAllocError)
+          // Rollback plan if categories fail
+          await supabase.from("budget_plans").delete().eq("id", newPlanId)
+          throw new Error(`Failed to save category allocations: ${catAllocError.message}`)
+        }
+      }
+
+      // Step 4: If activateNow, update categories table budgets
+      if (activateNow) {
+        try {
+          for (const c of categoryAllocations) {
+            if (isValidUUID(c.category_id)) {
+              await supabase
+                .from("categories")
+                .update({ budget_cents: Math.round(c.allocated_amount * 100) })
+                .eq("id", c.category_id)
+                .eq("user_id", userId)
+            }
+          }
+        } catch (catUpdErr) {
+          console.warn("Error updating category budgets:", catUpdErr)
+        }
+      }
+
+      await fetchData()
+      return {
+        id: newPlanId,
+        user_id: userId,
+        name: planData.name.trim(),
+        total_amount_cents: totalAmountCents,
+        total_amount: planData.total_amount,
+        account_id: planData.account_id,
+        period: planData.period,
+        custom_days: planData.custom_days,
+        start_date: planData.start_date,
+        framework: planData.framework,
+        is_active: activateNow,
+        is_repeating: isRepeating,
+        created_at: new Date().toISOString(),
+        categories: categoryAllocations.map((c) => ({
+          plan_id: newPlanId,
+          category_id: c.category_id,
+          bucket: c.bucket,
+          allocated_amount_cents: Math.round(c.allocated_amount * 100),
+          allocated_amount: c.allocated_amount,
+        })),
+      }
+    }
+
+    // Local fallback
+    const newPlan: BudgetPlan = {
+      id: newPlanId,
+      name: planData.name.trim(),
+      total_amount_cents: totalAmountCents,
+      total_amount: planData.total_amount,
+      account_id: planData.account_id,
+      period: planData.period,
+      custom_days: planData.custom_days,
+      start_date: planData.start_date,
+      framework: planData.framework,
+      is_active: activateNow,
+      is_repeating: isRepeating,
+      created_at: new Date().toISOString(),
+      categories: categoryAllocations.map((c) => ({
+        plan_id: newPlanId,
+        category_id: c.category_id,
+        bucket: c.bucket,
+        allocated_amount_cents: Math.round(c.allocated_amount * 100),
+        allocated_amount: c.allocated_amount,
+      })),
+    }
+
+    setBudgetPlans((prev) => {
+      const list = activateNow ? prev.map((p) => ({ ...p, is_active: false })) : prev
+      const updated = [newPlan, ...list]
+      saveLocal(STORAGE_BUDGET_PLANS_KEY, updated)
+      return updated
+    })
+
+    if (activateNow) {
+      setCategories((prev) => {
+        const allocMap = new Map(categoryAllocations.map((c) => [c.category_id, c.allocated_amount]))
+        const updated = prev.map((cat) => {
+          if (allocMap.has(cat.id)) {
+            return { ...cat, budget: allocMap.get(cat.id) }
+          }
+          return cat
+        })
+        saveLocal(STORAGE_CATEGORIES_KEY, updated)
+        return updated
+      })
+    }
+
+    return newPlan
+  }, [fetchData])
+
+  const updateBudgetPlan = useCallback(async (
+    planId: string,
+    planData: Partial<BudgetPlan>,
+    categoryAllocations: Array<{
+      category_id: string
+      bucket: "needs" | "wants" | "savings"
+      allocated_amount: number
+    }>,
+    activateNow: boolean
+  ) => {
+    const totalAmountCents = planData.total_amount !== undefined ? Math.round(planData.total_amount * 100) : undefined
+
+    if (isSupabaseConfigured && supabase) {
+      const userId = await resolveCurrentUserId()
+      if (!userId) throw new Error("No active user session found.")
+
+      if (activateNow) {
+        await supabase.from("budget_plans").update({ is_active: false }).eq("user_id", userId)
+      }
+
+      const updatePayload: any = {}
+      if (planData.name !== undefined) updatePayload.name = planData.name.trim()
+      if (totalAmountCents !== undefined) updatePayload.total_amount_cents = totalAmountCents
+      if (planData.account_id !== undefined) updatePayload.account_id = planData.account_id || null
+      if (planData.period !== undefined) updatePayload.period = planData.period
+      if (planData.custom_days !== undefined) updatePayload.custom_days = planData.custom_days || null
+      if (planData.start_date !== undefined) updatePayload.start_date = planData.start_date
+      if (planData.framework !== undefined) updatePayload.framework = planData.framework
+      if (planData.is_repeating !== undefined) updatePayload.is_repeating = planData.is_repeating
+      if (activateNow) updatePayload.is_active = true
+
+      const { error: planErr } = await supabase
+        .from("budget_plans")
+        .update(updatePayload)
+        .eq("id", planId)
+        .eq("user_id", userId)
+
+      if (planErr) throw new Error(`Failed to update budget plan: ${planErr.message}`)
+
+      // Replace category allocations
+      await supabase.from("budget_plan_categories").delete().eq("plan_id", planId).eq("user_id", userId)
+
+      if (categoryAllocations.length > 0) {
+        const catRows = categoryAllocations.map((c) => ({
+          id: generateUUID(),
+          plan_id: planId,
+          user_id: userId,
+          category_id: c.category_id,
+          bucket: c.bucket,
+          allocated_amount_cents: Math.round(c.allocated_amount * 100),
+        }))
+
+        await supabase.from("budget_plan_categories").insert(catRows)
+      }
+
+      if (activateNow) {
+        for (const c of categoryAllocations) {
+          if (isValidUUID(c.category_id)) {
+            await supabase
+              .from("categories")
+              .update({ budget_cents: Math.round(c.allocated_amount * 100) })
+              .eq("id", c.category_id)
+              .eq("user_id", userId)
+          }
+        }
+      }
+
+      await fetchData()
+      return
+    }
+
+    // Local fallback
+    setBudgetPlans((prev) => {
+      const updated = prev.map((p) => {
+        if (p.id === planId) {
+          return {
+            ...p,
+            ...planData,
+            total_amount_cents: totalAmountCents ?? p.total_amount_cents,
+            is_active: activateNow ? true : p.is_active,
+            categories: categoryAllocations.map((c) => ({
+              plan_id: planId,
+              category_id: c.category_id,
+              bucket: c.bucket,
+              allocated_amount_cents: Math.round(c.allocated_amount * 100),
+              allocated_amount: c.allocated_amount,
+            })),
+          }
+        }
+        return activateNow ? { ...p, is_active: false } : p
+      })
+      saveLocal(STORAGE_BUDGET_PLANS_KEY, updated)
+      return updated
+    })
+
+    if (activateNow) {
+      setCategories((prev) => {
+        const allocMap = new Map(categoryAllocations.map((c) => [c.category_id, c.allocated_amount]))
+        const updated = prev.map((cat) => {
+          if (allocMap.has(cat.id)) {
+            return { ...cat, budget: allocMap.get(cat.id) }
+          }
+          return cat
+        })
+        saveLocal(STORAGE_CATEGORIES_KEY, updated)
+        return updated
+      })
+    }
+  }, [fetchData])
+
+  const activateBudgetPlan = useCallback(async (planId: string) => {
+    if (isSupabaseConfigured && supabase) {
+      const userId = await resolveCurrentUserId()
+      if (!userId) throw new Error("No active user session found.")
+
+      // 1. Deactivate all plans
+      await supabase.from("budget_plans").update({ is_active: false }).eq("user_id", userId)
+
+      // 2. Activate target plan
+      const { error: actError } = await supabase
+        .from("budget_plans")
+        .update({ is_active: true })
+        .eq("id", planId)
+        .eq("user_id", userId)
+
+      if (actError) throw new Error(`Failed to activate plan: ${actError.message}`)
+
+      // 3. Fetch allocations for this plan
+      const { data: allocations } = await supabase
+        .from("budget_plan_categories")
+        .select("*")
+        .eq("plan_id", planId)
+        .eq("user_id", userId)
+
+      // 4. Update categories table budgets
+      if (allocations && allocations.length > 0) {
+        for (const a of allocations) {
+          if (isValidUUID(a.category_id)) {
+            await supabase
+              .from("categories")
+              .update({ budget_cents: a.allocated_amount_cents })
+              .eq("id", a.category_id)
+              .eq("user_id", userId)
+          }
+        }
+      }
+
+      await fetchData()
+      return
+    }
+
+    // Local fallback
+    setBudgetPlans((prev) => {
+      const targetPlan = prev.find((p) => p.id === planId)
+      const updated = prev.map((p) => ({ ...p, is_active: p.id === planId }))
+      saveLocal(STORAGE_BUDGET_PLANS_KEY, updated)
+
+      if (targetPlan?.categories) {
+        const allocMap = new Map(targetPlan.categories.map((c) => [c.category_id, c.allocated_amount]))
+        setCategories((catPrev) => {
+          const updatedCats = catPrev.map((cat) => {
+            if (allocMap.has(cat.id)) {
+              return { ...cat, budget: allocMap.get(cat.id) }
+            }
+            return cat
+          })
+          saveLocal(STORAGE_CATEGORIES_KEY, updatedCats)
+          return updatedCats
+        })
+      }
+
+      return updated
+    })
+  }, [fetchData])
+
+  const deleteBudgetPlan = useCallback(async (planId: string) => {
+    const target = budgetPlans.find((p) => p.id === planId)
+    const wasActive = target?.is_active
+
+    if (isSupabaseConfigured && supabase) {
+      const userId = await resolveCurrentUserId()
+      if (userId && isValidUUID(planId)) {
+        await supabase.from("budget_plans").delete().eq("id", planId).eq("user_id", userId)
+
+        // If it was active, reset category budgets
+        if (wasActive) {
+          await supabase.from("categories").update({ budget_cents: 0 }).eq("user_id", userId)
+        }
+      }
+      await fetchData()
+      return
+    }
+
+    setBudgetPlans((prev) => {
+      const updated = prev.filter((p) => p.id !== planId)
+      saveLocal(STORAGE_BUDGET_PLANS_KEY, updated)
+      return updated
+    })
+
+    if (wasActive) {
+      setCategories((prev) => {
+        const updated = prev.map((c) => ({ ...c, budget: 0 }))
+        saveLocal(STORAGE_CATEGORIES_KEY, updated)
+        return updated
+      })
+    }
+  }, [budgetPlans, fetchData])
+
+  const renameBudgetPlan = useCallback(async (planId: string, newName: string) => {
+    if (!newName.trim()) return
+    if (isSupabaseConfigured && supabase) {
+      const userId = await resolveCurrentUserId()
+      if (userId && isValidUUID(planId)) {
+        await supabase
+          .from("budget_plans")
+          .update({ name: newName.trim() })
+          .eq("id", planId)
+          .eq("user_id", userId)
+      }
+      await fetchData()
+      return
+    }
+
+    setBudgetPlans((prev) => {
+      const updated = prev.map((p) => (p.id === planId ? { ...p, name: newName.trim() } : p))
+      saveLocal(STORAGE_BUDGET_PLANS_KEY, updated)
+      return updated
+    })
+  }, [fetchData])
+
+  const recordPlanHistory = useCallback(async (
+    planId: string,
+    periodStart: string,
+    periodEnd: string,
+    totalPlanned: number,
+    totalActual: number,
+    categoryBreakdown: Array<{
+      category_id: string
+      planned_amount: number
+      actual_amount: number
+    }>
+  ) => {
+    if (isSupabaseConfigured && supabase) {
+      const userId = await resolveCurrentUserId()
+      if (userId && isValidUUID(planId)) {
+        const historyId = generateUUID()
+        const { data: hist, error: histErr } = await supabase
+          .from("budget_plan_history")
+          .insert({
+            id: historyId,
+            plan_id: planId,
+            user_id: userId,
+            period_start: periodStart,
+            period_end: periodEnd,
+            total_planned_cents: Math.round(totalPlanned * 100),
+            total_actual_cents: Math.round(totalActual * 100),
+          })
+          .select()
+          .single()
+
+        if (!histErr && categoryBreakdown.length > 0) {
+          const catHistRows = categoryBreakdown.map((c) => ({
+            id: generateUUID(),
+            plan_history_id: historyId,
+            user_id: userId,
+            category_id: c.category_id,
+            planned_amount_cents: Math.round(c.planned_amount * 100),
+            actual_amount_cents: Math.round(c.actual_amount * 100),
+          }))
+
+          await supabase.from("budget_plan_category_history").insert(catHistRows)
+        }
+      }
+    }
+  }, [])
+
   const resetAllUserData = useCallback(async (password: string): Promise<{ success: boolean; error?: string }> => {
     if (!password || !password.trim()) {
       return { success: false, error: "Password is required to confirm data reset." }
@@ -2177,19 +2812,27 @@ function useFinanceDataInternal() {
 
         if (userId) {
           // Delete from all tables in foreign-key safe order
-          // 1. Transactions
+          // 1. Budget Plan Category History
+          await supabase.from("budget_plan_category_history").delete().eq("user_id", userId)
+          // 2. Budget Plan History
+          await supabase.from("budget_plan_history").delete().eq("user_id", userId)
+          // 3. Budget Plan Categories
+          await supabase.from("budget_plan_categories").delete().eq("user_id", userId)
+          // 4. Budget Plans
+          await supabase.from("budget_plans").delete().eq("user_id", userId)
+          // 5. Transactions
           await supabase.from("transactions").delete().eq("user_id", userId)
-          // 2. Held fund history
+          // 6. Held fund history
           await supabase.from("held_fund_history").delete().eq("user_id", userId)
-          // 3. Held funds
+          // 7. Held funds
           await supabase.from("held_funds").delete().eq("user_id", userId)
-          // 4. Bills
+          // 8. Bills
           await supabase.from("bills").delete().eq("user_id", userId)
-          // 5. Categories
+          // 9. Categories
           await supabase.from("categories").delete().eq("user_id", userId)
-          // 6. Accounts
+          // 10. Accounts
           await supabase.from("accounts").delete().eq("user_id", userId)
-          // 7. Profiles
+          // 11. Profiles
           await supabase.from("profiles").delete().eq("id", userId)
         }
       } catch (err: any) {
@@ -2207,6 +2850,7 @@ function useFinanceDataInternal() {
     setCategories([])
     setHeldFunds([])
     setBills([])
+    setBudgetPlans([])
 
     return { success: true }
   }, [])
@@ -2277,6 +2921,8 @@ function useFinanceDataInternal() {
     categories,
     heldFunds,
     bills,
+    budgetPlans,
+    activeBudgetPlan,
     loading,
     netWorth,
     totalIncome,
@@ -2306,6 +2952,12 @@ function useFinanceDataInternal() {
     updateBill,
     deleteBill,
     markBillAsPaid,
+    createBudgetPlan,
+    updateBudgetPlan,
+    activateBudgetPlan,
+    deleteBudgetPlan,
+    renameBudgetPlan,
+    recordPlanHistory,
     markNotificationAsRead,
     refreshNotifications: fetchNotifications,
     resetAllUserData,

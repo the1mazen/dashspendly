@@ -11,7 +11,7 @@ import {
   LogOut, CircleDot, AlertCircle, Calendar, Receipt, ChevronDown, Clock, RefreshCw, UserCheck,
   AlertTriangle, RotateCcw, Lock, Eye, EyeOff, X, Layers,
   Utensils, Coffee, ShoppingBag, Bus, Car, Gift, HeartHandshake, Gamepad2, ShoppingCart,
-  Percent, ArrowRight, Compass, ShieldAlert
+  Percent, ArrowRight, Compass, ShieldAlert, Calculator, SlidersHorizontal
 } from "lucide-react"
 import {
   AreaChart, Area, LineChart, Line, BarChart, Bar, Cell,
@@ -26,10 +26,12 @@ import {
   HeldFund,
   HeldFundHistory,
   Bill,
+  BudgetPlan,
   AppNotification
 } from "@/lib/finance-data"
 import { useUserProfile } from "@/lib/user-profile"
 import { supabase, isSupabaseConfigured, resolveCurrentUserId } from "@/lib/supabase"
+import { ManagePlansModal, BudgetPlannerSection } from "./budget-planner"
 
 // ─── Design Tokens: Exact Reproduction of 2.jpeg ──────────────────
 
@@ -170,7 +172,7 @@ const NAV_ITEMS = [
   { id: "settings", label: "Settings", icon: Settings },
 ] as const
 
-type SectionId = (typeof NAV_ITEMS)[number]["id"]
+type SectionId = (typeof NAV_ITEMS)[number]["id"] | "budget_planner"
 
 // ─── Atmospheric Background Component: Dual-Slot Cinematic Environment Transition ───
 
@@ -6460,7 +6462,7 @@ function EditCategoryModal({
 }
 
 function CategoriesSection({ onNavigate }: { onNavigate: (s: SectionId) => void }) {
-  const { categories, createCategory, deleteCategory } = useFinanceData()
+  const { categories, createCategory, deleteCategory, activeBudgetPlan, budgetPlans } = useFinanceData()
   const { profile } = useUserProfile()
   const { tokens } = useDashboardTheme()
   const currencySymbol = getCurrencySymbol(profile.currency)
@@ -6473,6 +6475,7 @@ function CategoriesSection({ onNavigate }: { onNavigate: (s: SectionId) => void 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [editingCategory, setEditingCategory] = useState<Category | null>(null)
   const [browseSuggestionsOpen, setBrowseSuggestionsOpen] = useState(false)
+  const [managePlansOpen, setManagePlansOpen] = useState(false)
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -6503,14 +6506,67 @@ function CategoriesSection({ onNavigate }: { onNavigate: (s: SectionId) => void 
   return (
     <div className="flex flex-col gap-6">
       <SectionHeader title="Category Breakdown" subtitle="Manage categorization labels, budgets, and spending allowances">
-        <button
-          onClick={() => setBrowseSuggestionsOpen(true)}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all font-sans cursor-pointer shadow-lg hover:scale-[1.02] text-[#120824]"
-          style={{ background: tokens.dashboardActivePill }}
-        >
-          <Compass className="size-4" />
-          <span>Browse Suggestions</span>
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Active Plan Indicator */}
+          {activeBudgetPlan ? (
+            <div
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border backdrop-blur-md"
+              style={{
+                backgroundColor: "rgba(94, 234, 212, 0.15)",
+                borderColor: "rgba(94, 234, 212, 0.35)",
+                color: "#5EEAD4",
+              }}
+            >
+              <span className="size-2 rounded-full bg-[#34D399] shadow-[0_0_6px_#34D399]" />
+              <span>
+                Active plan: <strong className="text-white">{activeBudgetPlan.name}</strong> — {activeBudgetPlan.period === "weekly" ? "Weekly" : activeBudgetPlan.period === "monthly" ? "Monthly" : `Every ${activeBudgetPlan.custom_days || 30} days`}
+              </span>
+            </div>
+          ) : (
+            <div
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border text-white/50"
+              style={{
+                backgroundColor: "rgba(255, 255, 255, 0.05)",
+                borderColor: tokens.borderNested,
+              }}
+            >
+              <span className="size-1.5 rounded-full bg-white/30" />
+              <span>No active plan</span>
+            </div>
+          )}
+
+          {/* Manage Plans Button */}
+          <button
+            type="button"
+            onClick={() => setManagePlansOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all font-sans cursor-pointer shadow-md bg-white/10 hover:bg-white/20 text-white hover:scale-[1.02]"
+            style={{ borderColor: tokens.borderNested }}
+          >
+            <SlidersHorizontal className="size-3.5" />
+            <span>Manage Plans</span>
+          </button>
+
+          {/* Plan my budget Button */}
+          <button
+            type="button"
+            onClick={() => onNavigate("budget_planner")}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all font-sans cursor-pointer shadow-lg hover:scale-[1.02] text-[#120824]"
+            style={{ background: tokens.dashboardActivePill }}
+          >
+            <Calculator className="size-4" />
+            <span>Plan my budget</span>
+          </button>
+
+          {/* Browse Suggestions Button */}
+          <button
+            onClick={() => setBrowseSuggestionsOpen(true)}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all font-sans cursor-pointer shadow-md bg-white/5 hover:bg-white/15 text-white/80 hover:scale-[1.02]"
+            style={{ borderColor: tokens.borderNested }}
+          >
+            <Compass className="size-3.5" />
+            <span>Suggestions</span>
+          </button>
+        </div>
       </SectionHeader>
 
       {/* Category Creation Card */}
@@ -6638,6 +6694,18 @@ function CategoriesSection({ onNavigate }: { onNavigate: (s: SectionId) => void 
       <CategorySuggestionsModal
         isOpen={browseSuggestionsOpen}
         onClose={() => setBrowseSuggestionsOpen(false)}
+      />
+      <ManagePlansModal
+        isOpen={managePlansOpen}
+        onClose={() => setManagePlansOpen(false)}
+        onEditPlan={(plan) => {
+          setManagePlansOpen(false)
+          onNavigate("budget_planner")
+        }}
+        onCreateNew={() => {
+          setManagePlansOpen(false)
+          onNavigate("budget_planner")
+        }}
       />
     </div>
   )
@@ -6991,6 +7059,7 @@ const sectionComponents: Record<SectionId, React.ComponentType<{ onNavigate: (se
   accounts: AccountsSection,
   categories: CategoriesSection,
   settings: SettingsSection,
+  budget_planner: BudgetPlannerSection,
 }
 
 function FinancialAnalyticsDashboardInner({
