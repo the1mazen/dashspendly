@@ -3759,7 +3759,7 @@ function NetWorthHeroCard({
   return (
     <motion.div
       {...cardEntrance(0.05)}
-      className="relative overflow-hidden rounded-3xl p-6 sm:p-7 border backdrop-blur-xl hover:scale-[1.01] transition-transform duration-300 group"
+      className="relative rounded-3xl p-6 sm:p-7 border backdrop-blur-xl hover:scale-[1.01] transition-transform duration-300 group"
       style={{
         background: tokens.cardGradient,
         borderColor: tokens.border,
@@ -3789,7 +3789,7 @@ function NetWorthHeroCard({
                 <button
                   type="button"
                   onClick={() => setIsAccountFilterOpen((prev) => !prev)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all cursor-pointer shadow-sm hover:scale-[1.02]"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all cursor-pointer shadow-sm hover:scale-[1.02] relative z-50"
                   style={{
                     backgroundColor: isAllAccountsSelected ? "rgba(255, 255, 255, 0.08)" : "rgba(168, 85, 247, 0.20)",
                     borderColor: isAllAccountsSelected ? tokens.borderNested : "rgba(168, 85, 247, 0.45)",
@@ -3805,37 +3805,35 @@ function NetWorthHeroCard({
                   <ChevronDown className="size-3 text-white/60" />
                 </button>
 
-                {/* Account Selection Modal Dialog */}
+                {/* Account Selection Dropdown & Full Blocking Backdrop */}
                 <AnimatePresence>
                   {isAccountFilterOpen && (
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+                    <>
+                      {/* Full-screen blocking backdrop: blocks all underlying chart/canvas clicks & hovers */}
+                      <div
+                        className="fixed inset-0 z-40 bg-black/25 backdrop-blur-[0.5px] cursor-default"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setIsAccountFilterOpen(false)
+                        }}
+                      />
+
+                      {/* Small, compact dropdown right under the button */}
                       <motion.div
-                        initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                        className="w-full max-w-sm rounded-3xl p-5 sm:p-6 border shadow-2xl backdrop-blur-2xl relative overflow-hidden"
+                        initial={{ opacity: 0, y: 6, scale: 0.96 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 6, scale: 0.96 }}
+                        transition={{ duration: 0.15 }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="absolute left-0 top-full mt-2 w-64 p-3 rounded-2xl border shadow-2xl backdrop-blur-2xl z-50 space-y-2.5"
                         style={{
-                          background: tokens.cardGradient,
-                          borderColor: tokens.border,
-                          boxShadow: tokens.cardShadow,
+                          background: "linear-gradient(135deg, rgba(28, 12, 54, 0.98) 0%, rgba(18, 8, 36, 0.98) 100%)",
+                          borderColor: "rgba(167, 139, 250, 0.4)",
+                          boxShadow: "0 20px 40px -15px rgba(0,0,0,0.8), 0 0 20px rgba(124, 58, 237, 0.2)",
                         }}
                       >
-                        <div className="flex items-center justify-between pb-3.5 border-b" style={{ borderColor: tokens.border }}>
-                          <div className="flex items-center gap-2">
-                            <Wallet className="size-4.5 text-[#FEF08A]" />
-                            <h3 className="text-base font-bold font-display text-white">Select Accounts</h3>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setIsAccountFilterOpen(false)}
-                            className="size-7 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 text-white cursor-pointer"
-                          >
-                            ✕
-                          </button>
-                        </div>
-
-                        <div className="mt-3 flex items-center justify-between text-xs text-white/70">
-                          <span>Calculate Net Worth from:</span>
+                        <div className="flex items-center justify-between pb-2 border-b border-white/10 text-xs">
+                          <span className="font-bold text-white font-display">Calculate Net Worth:</span>
                           <button
                             type="button"
                             onClick={() => {
@@ -3845,13 +3843,13 @@ function NetWorthHeroCard({
                                 setSelectedAccountIds(accounts.map((a) => a.id))
                               }
                             }}
-                            className="text-[11px] font-semibold text-[#A7F3D0] hover:underline cursor-pointer"
+                            className="text-[10.5px] font-semibold text-[#A7F3D0] hover:underline cursor-pointer"
                           >
                             {isAllAccountsSelected ? "Deselect All" : "Select All"}
                           </button>
                         </div>
 
-                        <div className="mt-3 space-y-2 max-h-60 overflow-y-auto pr-1">
+                        <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
                           {accounts.map((acc) => {
                             const isChecked = selectedSet.has(acc.id)
                             return (
@@ -3867,25 +3865,25 @@ function NetWorthHeroCard({
                                     }
                                   })
                                 }}
-                                className={`flex items-center justify-between p-3 rounded-2xl border text-sm cursor-pointer transition-all duration-150 select-none ${
+                                className={`flex items-center justify-between p-2.5 rounded-xl border text-xs cursor-pointer transition-all duration-150 select-none ${
                                   isChecked
-                                    ? "bg-purple-500/25 border-purple-400/60 text-white shadow-sm"
-                                    : "bg-white/5 border-white/10 text-white/60 hover:bg-white/10 hover:text-white/90"
+                                    ? "bg-purple-500/25 border-purple-400/50 text-white"
+                                    : "bg-white/5 border-white/5 text-white/55 hover:bg-white/10 hover:text-white"
                                 }`}
                               >
-                                <div className="flex items-center gap-3 min-w-0">
+                                <div className="flex items-center gap-2 min-w-0">
                                   <div
-                                    className={`size-5 rounded-lg border flex items-center justify-center shrink-0 transition-colors ${
+                                    className={`size-4 rounded border flex items-center justify-center shrink-0 transition-colors ${
                                       isChecked
                                         ? "bg-purple-500 border-purple-400 text-white"
-                                        : "bg-white/5 border-white/20 text-transparent"
+                                        : "bg-white/5 border-white/30 text-transparent"
                                     }`}
                                   >
-                                    <Check className="size-3 stroke-[3]" />
+                                    <Check className="size-2.5 stroke-[3]" />
                                   </div>
-                                  <span className="font-semibold truncate text-xs sm:text-sm">{acc.name}</span>
+                                  <span className="font-semibold truncate">{acc.name}</span>
                                 </div>
-                                <span className="font-mono text-xs sm:text-sm font-bold shrink-0 ml-2">
+                                <span className="font-mono text-[11px] shrink-0 ml-2">
                                   {currencySymbol}{Number(acc.balance || 0).toFixed(2)}
                                 </span>
                               </div>
@@ -3893,21 +3891,21 @@ function NetWorthHeroCard({
                           })}
                         </div>
 
-                        <div className="mt-4 pt-3 border-t flex items-center justify-between" style={{ borderColor: tokens.border }}>
-                          <span className="text-[11px] font-mono text-white/50">
-                            {selectedAccountIds.length} of {accounts.length} selected
+                        <div className="pt-2 border-t border-white/10 flex items-center justify-between">
+                          <span className="text-[10px] font-mono text-white/50">
+                            {selectedAccountIds.length}/{accounts.length} active
                           </span>
                           <button
                             type="button"
                             onClick={() => setIsAccountFilterOpen(false)}
-                            className="px-5 py-2 rounded-xl text-xs font-bold text-[#120824] shadow-md cursor-pointer hover:scale-[1.02] transition-all"
+                            className="px-3.5 py-1 text-xs font-bold rounded-lg text-[#120824] shadow-sm cursor-pointer hover:scale-[1.02] transition-all"
                             style={{ background: tokens.dashboardActivePill }}
                           >
-                            Apply Selection
+                            Done
                           </button>
                         </div>
                       </motion.div>
-                    </div>
+                    </>
                   )}
                 </AnimatePresence>
               </div>
