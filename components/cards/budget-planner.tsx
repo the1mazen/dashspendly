@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useMemo, useEffect, useCallback } from "react"
+import React, { useState, useMemo, useEffect, useCallback, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Calculator,
@@ -11,6 +11,7 @@ import {
   ArrowUpRight,
   ArrowDownLeft,
   ChevronDown,
+  ChevronUp,
   Calendar,
   DollarSign,
   Layers,
@@ -28,6 +29,11 @@ import {
   Info,
   TrendingUp,
   RefreshCw,
+  Lock,
+  RotateCcw,
+  CheckSquare,
+  Square,
+  ArrowRight,
 } from "lucide-react"
 import {
   useFinanceData,
@@ -123,7 +129,6 @@ export function ManagePlansModal({
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState("")
   const [activatingId, setActivatingId] = useState<string | null>(null)
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
 
@@ -150,12 +155,12 @@ export function ManagePlansModal({
   }
 
   const handleDelete = async (plan: BudgetPlan) => {
-    if (!confirm(`Are you sure you want to delete the plan "${plan.name}"? ${plan.is_active ? "Since this plan is currently active, all category budgets will be reset." : ""}`)) {
+    if (!confirm(`Delete '${plan.name}'? This cannot be undone.`)) {
       return
     }
     try {
       await deleteBudgetPlan(plan.id)
-      setSuccessMsg(`Plan "${plan.name}" deleted.`)
+      setSuccessMsg(`Plan '${plan.name}' was deleted.`)
       setTimeout(() => setSuccessMsg(null), 3000)
     } catch (err: any) {
       setErrorMsg(err.message || "Failed to delete plan.")
@@ -397,6 +402,145 @@ export function ManagePlansModal({
   )
 }
 
+// ─── Modal: Inline Add Category inside Budget Planner ─────────────────
+
+function AddCategoryInlineModal({
+  isOpen,
+  onClose,
+  onCategoryCreated,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  onCategoryCreated: (cat: Category) => void
+}) {
+  const { createCategory } = useFinanceData()
+  const { profile } = useUserProfile()
+  const { tokens } = useDashboardTheme()
+  const currencySymbol = getCurrencySymbol(profile.currency)
+
+  const [name, setName] = useState("")
+  const [type, setType] = useState<"expense" | "income">("expense")
+  const [budget, setBudget] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+  if (!isOpen) return null
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!name.trim()) return
+    setIsSubmitting(true)
+    setErrorMsg(null)
+    try {
+      const created = await createCategory({
+        name: name.trim(),
+        type,
+        budget: parseFloat(budget) || undefined,
+        currency: profile.currency || "EGP",
+      })
+      onCategoryCreated(created)
+      onClose()
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to create category.")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        className="w-full max-w-md rounded-3xl p-6 border shadow-2xl backdrop-blur-2xl relative"
+        style={{
+          background: tokens.cardGradient,
+          borderColor: tokens.border,
+          boxShadow: tokens.cardShadow,
+        }}
+      >
+        <div className="flex items-center justify-between pb-3 border-b mb-4" style={{ borderColor: tokens.border }}>
+          <h3 className="text-base font-bold font-display text-white">Add New Category</h3>
+          <button onClick={onClose} className="text-white/60 hover:text-white">✕</button>
+        </div>
+
+        {errorMsg && (
+          <div className="mb-3 p-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-200 text-xs">
+            {errorMsg}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-3">
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+              Category Name
+            </label>
+            <input
+              type="text"
+              required
+              placeholder="e.g. Dining Out, Utilities"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
+              style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+              Category Type
+            </label>
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value as any)}
+              className="w-full px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
+              style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+            >
+              <option value="expense" className="bg-[#1E0C38] text-white">Expense Category</option>
+              <option value="income" className="bg-[#1E0C38] text-white">Income Category</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+              Default Monthly Budget ({currencySymbol.trim()}) - Optional
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              placeholder="0.00"
+              value={budget}
+              onChange={(e) => setBudget(e.target.value)}
+              className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-mono text-white focus:outline-none"
+              style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl text-xs font-semibold text-white/70 hover:text-white"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-5 py-2 rounded-xl text-xs font-bold text-[#120824] shadow-lg cursor-pointer transition-all hover:scale-[1.02]"
+              style={{ background: tokens.dashboardActivePill }}
+            >
+              {isSubmitting ? "Creating..." : "Create Category"}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </div>
+  )
+}
+
 // ─── Main Section: Budget Planner ────────────────────────────────────
 
 export function BudgetPlannerSection({
@@ -417,23 +561,34 @@ export function BudgetPlannerSection({
     createBudgetPlan,
     updateBudgetPlan,
     recordPlanHistory,
+    refreshFinanceData,
   } = useFinanceData()
   const { profile } = useUserProfile()
   const { tokens } = useDashboardTheme()
   const currencySymbol = getCurrencySymbol(profile.currency)
 
-  // Load target plan if editing or renewing
+  // Check URL params if in browser
+  const urlPlanId = useMemo(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search)
+      return params.get("edit") || params.get("renew") || null
+    }
+    return null
+  }, [])
+
+  // Target existing plan if editing or renewing
   const existingPlan = useMemo(() => {
-    const targetId = editPlanId || renewPlanId
+    const targetId = editPlanId || renewPlanId || urlPlanId
     if (!targetId) return null
     return budgetPlans.find((p) => p.id === targetId) || null
-  }, [budgetPlans, editPlanId, renewPlanId])
+  }, [budgetPlans, editPlanId, renewPlanId, urlPlanId])
 
-  // Is this a renewal flow for a repeating plan whose period ended?
+  const isEditing = Boolean(editPlanId && existingPlan)
+
+  // Is renewal flow for an active repeating plan whose period has elapsed
   const isRenewalFlow = useMemo(() => {
     if (renewPlanId) return true
     if (existingPlan?.is_repeating) {
-      const startObj = new Date(existingPlan.start_date)
       const endObj = new Date(existingPlan.start_date)
       if (existingPlan.period === "weekly") endObj.setDate(endObj.getDate() + 7)
       else if (existingPlan.period === "monthly") endObj.setMonth(endObj.getMonth() + 1)
@@ -443,18 +598,16 @@ export function BudgetPlannerSection({
     return false
   }, [renewPlanId, existingPlan])
 
-  // SECTION 4: Performance snapshot calculation for ended/renewed plan
+  // Performance snapshot calculation for ended/renewed plan
   const lastPeriodPerformance = useMemo(() => {
     if (!existingPlan) return null
     const startStr = existingPlan.start_date
-    const startObj = new Date(startStr)
     const endObj = new Date(startStr)
     if (existingPlan.period === "weekly") endObj.setDate(endObj.getDate() + 7)
     else if (existingPlan.period === "monthly") endObj.setMonth(endObj.getMonth() + 1)
     else if (existingPlan.period === "custom") endObj.setDate(endObj.getDate() + (existingPlan.custom_days || 30))
     const endStr = endObj.toISOString().split("T")[0]
 
-    // Actual spending in this period
     const periodTxs = transactions.filter((t) => t.type === "expense" && t.date >= startStr && t.date <= endStr)
 
     const categoryBreakdown = (existingPlan.categories || []).map((alloc) => {
@@ -500,7 +653,7 @@ export function BudgetPlannerSection({
   // Carry over toggle
   const [carryOverUnspent, setCarryOverUnspent] = useState(true)
 
-  // ─── Section 1: Plan Basics State ───
+  // ─── Section 1 State: Plan Basics ───
   const [planName, setPlanName] = useState(existingPlan?.name || "Normal")
   const [budgetMode, setBudgetMode] = useState<"manual" | "account">(existingPlan?.account_id ? "account" : "manual")
   const [manualAmount, setManualAmount] = useState(existingPlan?.total_amount ? String(existingPlan.total_amount) : "5000")
@@ -509,7 +662,26 @@ export function BudgetPlannerSection({
   const [customDays, setCustomDays] = useState(existingPlan?.custom_days ? String(existingPlan.custom_days) : "14")
   const [startDate, setStartDate] = useState(new Date().toISOString().split("T")[0])
 
-  // ─── Section 2: Budget Framework State ───
+  // Change 1B: Collapsible sections (collapsed by default)
+  const [fixedCommitmentsOpen, setFixedCommitmentsOpen] = useState(false)
+  const [lookbackSettingsOpen, setLookbackSettingsOpen] = useState(false)
+  const [accountRemainingOpen, setAccountRemainingOpen] = useState(false)
+
+  // Change 1C: Advanced options toggle (collapsed by default)
+  const [advancedOptionsOpen, setAdvancedOptionsOpen] = useState(false)
+
+  // Change 4: Deselected bills state (default: all selected/checked)
+  const [deselectedBillIds, setDeselectedBillIds] = useState<string[]>(existingPlan?.deselected_bill_ids || [])
+
+  // Change 6: Selected account IDs for account remaining indicator
+  const [indicatorAccountIds, setIndicatorAccountIds] = useState<string[]>(() => {
+    if (existingPlan?.indicator_account_ids && existingPlan.indicator_account_ids.length > 0) {
+      return existingPlan.indicator_account_ids
+    }
+    return accounts.map((a) => a.id)
+  })
+
+  // ─── Section 2 State: Framework & Allocations ───
   const [framework, setFramework] = useState<"50/30/20" | "suggested">(existingPlan?.framework || "50/30/20")
   const [lookbackPeriod, setLookbackPeriod] = useState<"1m" | "3m" | "6m">("3m")
   const [categorySelectionMode, setCategorySelectionMode] = useState<"app" | "user">("app")
@@ -520,7 +692,6 @@ export function BudgetPlannerSection({
     return categories.filter((c) => c.type === "expense").map((c) => c.id)
   })
 
-  // Per-category allocations map: categoryId -> { bucket, amount }
   const [categoryAllocations, setCategoryAllocations] = useState<Record<string, { bucket: "needs" | "wants" | "savings"; amount: string }>>(() => {
     const initial: Record<string, { bucket: "needs" | "wants" | "savings"; amount: string }> = {}
     if (existingPlan?.categories && existingPlan.categories.length > 0) {
@@ -534,13 +705,21 @@ export function BudgetPlannerSection({
     return initial
   })
 
-  // ─── Section 5: Activation & Submission State ───
+  // Inline Add Category Modal state
+  const [addCategoryModalOpen, setAddCategoryModalOpen] = useState(false)
+
+  // ─── Section 5 State: Activation & Confirmation ───
   const [activateNow, setActivateNow] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
 
-  // Selected account for balance mode
+  // Change 8: Dedicated Success Screen with Countdown
+  const [planSavedSuccess, setPlanSavedSuccess] = useState(false)
+  const [countdown, setCountdown] = useState(3)
+  const countdownIntervalRef = useRef<any>(null)
+
+  // Current selected account for balance mode
   const currentSelectedAccount = useMemo(() => {
     return accounts.find((a) => a.id === selectedAccountId) || accounts[0]
   }, [accounts, selectedAccountId])
@@ -579,31 +758,39 @@ export function BudgetPlannerSection({
     return bills.filter((b) => !b.is_completed && b.due_date >= startDate && b.due_date <= periodEndDate)
   }, [bills, startDate, periodEndDate])
 
-  const fixedExpenses = useMemo(() => {
+  // Change 4: Compute active/selected fixed bills excluding deselected ones
+  const activeFixedExpenses = useMemo(() => {
     return periodBills
-      .filter((b) => b.type === "expense")
+      .filter((b) => b.type === "expense" && !deselectedBillIds.includes(b.id))
       .reduce((sum, b) => sum + (b.amount + (b.fee_amount || 0)), 0)
-  }, [periodBills])
+  }, [periodBills, deselectedBillIds])
 
-  const fixedIncome = useMemo(() => {
+  const activeFixedIncome = useMemo(() => {
     return periodBills
-      .filter((b) => b.type === "income")
+      .filter((b) => b.type === "income" && !deselectedBillIds.includes(b.id))
       .reduce((sum, b) => sum + b.amount, 0)
-  }, [periodBills])
+  }, [periodBills, deselectedBillIds])
 
-  // Free money available = total budget - fixed expenses + fixed income
-  const freeMoneyAvailable = useMemo(() => {
-    return Math.max(0, Math.round((totalBudgetAmount - fixedExpenses + fixedIncome) * 100) / 100)
-  }, [totalBudgetAmount, fixedExpenses, fixedIncome])
+  // Change 2: Available to spend = total budget - active fixed expenses + active fixed income
+  const availableToSpend = useMemo(() => {
+    const calc = totalBudgetAmount - activeFixedExpenses + activeFixedIncome
+    return Math.round(calc * 100) / 100
+  }, [totalBudgetAmount, activeFixedExpenses, activeFixedIncome])
 
-  // ─── 50/30/20 Targets ───
+  // Change 3: Bills exceed budget blocker condition
+  const billsExceedBudget = useMemo(() => {
+    return activeFixedExpenses > totalBudgetAmount || availableToSpend <= 0
+  }, [activeFixedExpenses, totalBudgetAmount, availableToSpend])
+
+  // ─── 50/30/20 Targets based on Available to spend ───
   const rule503020Targets = useMemo(() => {
+    const spendable = Math.max(0, availableToSpend)
     return {
-      needs: Math.round(freeMoneyAvailable * 0.5 * 100) / 100,
-      wants: Math.round(freeMoneyAvailable * 0.3 * 100) / 100,
-      savings: Math.round(freeMoneyAvailable * 0.2 * 100) / 100,
+      needs: Math.round(spendable * 0.5 * 100) / 100,
+      wants: Math.round(spendable * 0.3 * 100) / 100,
+      savings: Math.round(spendable * 0.2 * 100) / 100,
     }
-  }, [freeMoneyAvailable])
+  }, [availableToSpend])
 
   // Expense categories list
   const expenseCategories = useMemo(() => {
@@ -612,11 +799,10 @@ export function BudgetPlannerSection({
 
   // Categories with historical spend for lookback
   const lookbackStats = useMemo(() => {
-    const now = new Date()
-    const cutoff = new Date()
     let months = 3
     if (lookbackPeriod === "1m") months = 1
     if (lookbackPeriod === "6m") months = 6
+    const cutoff = new Date()
     cutoff.setMonth(cutoff.getMonth() - months)
     const cutoffStr = cutoff.toISOString().split("T")[0]
 
@@ -628,7 +814,6 @@ export function BudgetPlannerSection({
         .filter((t) => t.category_id === cat.id)
         .reduce((sum, t) => sum + Math.abs(t.amount), 0)
       const monthlyAvg = catSpent / months
-      // Rounded to nearest 5
       const suggested = Math.max(0, Math.round(monthlyAvg / 5) * 5)
       stats[cat.id] = {
         total: catSpent,
@@ -639,24 +824,23 @@ export function BudgetPlannerSection({
     return stats
   }, [lookbackPeriod, transactions, expenseCategories])
 
-  // Filtered categories to display based on mode
+  // Displayed categories list
   const displayedCategories = useMemo(() => {
     if (categorySelectionMode === "app") {
-      // Show categories with historical spend or currently selected
       const withSpend = expenseCategories.filter((c) => (lookbackStats[c.id]?.total || 0) > 0 || selectedCatIds.includes(c.id))
       return withSpend.length > 0 ? withSpend : expenseCategories
     }
     return expenseCategories
   }, [categorySelectionMode, expenseCategories, lookbackStats, selectedCatIds])
 
-  // Initialize or re-distribute 50/30/20 or Suggested values when framework or free money changes
+  // Initialize allocations when framework or availableToSpend changes
   useEffect(() => {
     if (existingPlan && Object.keys(categoryAllocations).length > 0) return
+    if (billsExceedBudget) return
 
     const newAllocs: Record<string, { bucket: "needs" | "wants" | "savings"; amount: string }> = {}
 
     if (framework === "50/30/20") {
-      // Group active categories by bucket
       const bucketGroups: { needs: Category[]; wants: Category[]; savings: Category[] } = {
         needs: [],
         wants: [],
@@ -668,7 +852,6 @@ export function BudgetPlannerSection({
         bucketGroups[bucket].push(c)
       })
 
-      // Distribute evenly per category in each bucket
       ;(["needs", "wants", "savings"] as const).forEach((b) => {
         const target = rule503020Targets[b]
         const group = bucketGroups[b]
@@ -680,7 +863,6 @@ export function BudgetPlannerSection({
         }
       })
     } else {
-      // Suggested plan based on historical average
       displayedCategories.forEach((c) => {
         const suggested = lookbackStats[c.id]?.suggested || 0
         newAllocs[c.id] = {
@@ -691,9 +873,8 @@ export function BudgetPlannerSection({
     }
 
     setCategoryAllocations(newAllocs)
-  }, [framework, freeMoneyAvailable, displayedCategories, lookbackStats])
+  }, [framework, availableToSpend, displayedCategories, lookbackStats, billsExceedBudget])
 
-  // Update allocation field
   const handleUpdateAllocation = (catId: string, field: "bucket" | "amount", value: string) => {
     setCategoryAllocations((prev) => ({
       ...prev,
@@ -725,7 +906,7 @@ export function BudgetPlannerSection({
     return activeAllocationsList.reduce((sum, a) => sum + a.allocated_amount, 0)
   }, [activeAllocationsList])
 
-  // Allocations grouped by bucket
+  // Bucket Totals and Allocations
   const bucketTotals = useMemo(() => {
     let needs = 0
     let wants = 0
@@ -738,16 +919,66 @@ export function BudgetPlannerSection({
     return { needs, wants, savings }
   }, [activeAllocationsList])
 
+  // Change 5: Progress bar and label calculations for Needs/Wants/Savings
+  const bucketIndicators = useMemo(() => {
+    const buckets = [
+      { key: "needs", label: "Needs (50%)", subtitle: "Groceries, bills, transport, giving", target: rule503020Targets.needs, allocated: bucketTotals.needs },
+      { key: "wants", label: "Wants (30%)", subtitle: "Dining, cafés, shopping, games", target: rule503020Targets.wants, allocated: bucketTotals.wants },
+      { key: "savings", label: "Savings (20%)", subtitle: "Emergency fund, investments", target: rule503020Targets.savings, allocated: bucketTotals.savings },
+    ]
+
+    return buckets.map((b) => {
+      const fillPct = b.target > 0 ? (b.allocated / b.target) * 100 : 0
+      const isOver = b.allocated > b.target
+      const isExact = Math.abs(b.allocated - b.target) < 0.01 && b.allocated > 0
+
+      let barColor = "#4ADE80" // Below 100% green
+      if (isExact) barColor = "#D4A934" // Exactly 100% gold
+      if (isOver) barColor = "#F87171" // Over 100% red
+
+      return {
+        ...b,
+        fillPct: Math.min(100, fillPct),
+        trueFillPct: fillPct,
+        isOver,
+        isExact,
+        barColor,
+      }
+    })
+  }, [rule503020Targets, bucketTotals])
+
+  // Change 6: Account Remaining Calculations
+  const accountRemainingStats = useMemo(() => {
+    const selected = accounts.filter((a) => indicatorAccountIds.includes(a.id))
+    const totalSelectedBalance = selected.reduce((sum, a) => sum + Number(a.balance || 0), 0)
+    const totalRemaining = totalSelectedBalance - totalBudgetAmount
+
+    const accountsBreakdown = selected.map((a) => {
+      const bal = Number(a.balance || 0)
+      const projected = bal - totalBudgetAmount
+      return {
+        id: a.id,
+        name: a.name,
+        balance: bal,
+        projected,
+      }
+    })
+
+    return {
+      selectedCount: selected.length,
+      totalSelectedBalance,
+      totalRemaining,
+      accountsBreakdown,
+    }
+  }, [accounts, indicatorAccountIds, totalBudgetAmount])
+
   // ─── SECTION 3: HEALTH ASSESSMENT ───
   const planHealth = useMemo(() => {
     const tips: string[] = []
-    const isOverBudget = totalAllocated > freeMoneyAvailable
-    const remainingFree = Math.round((freeMoneyAvailable - totalAllocated) * 100) / 100
+    const isOverBudget = totalAllocated > availableToSpend
+    const remainingToSpend = Math.round((availableToSpend - totalAllocated) * 100) / 100
+    const projectedClosingBalance = Math.round((totalBudgetAmount - activeFixedExpenses + activeFixedIncome - totalAllocated) * 100) / 100
 
-    // Projected closing balance
-    const projectedClosingBalance = Math.round((totalBudgetAmount - fixedExpenses + fixedIncome - totalAllocated) * 100) / 100
-
-    // Bucket ratios
     const wantsPct = totalAllocated > 0 ? (bucketTotals.wants / totalAllocated) * 100 : 0
     const savingsPct = totalAllocated > 0 ? (bucketTotals.savings / totalAllocated) * 100 : 0
 
@@ -759,7 +990,6 @@ export function BudgetPlannerSection({
       tips.push("You currently have no savings allocation — consider setting aside at least 10–20% for future buffer.")
     }
 
-    // High single category check (> 25% of budget)
     activeAllocationsList.forEach((a) => {
       if (totalAllocated > 0 && (a.allocated_amount / totalAllocated) >= 0.25) {
         tips.push(`"${a.category_name}" takes ${( (a.allocated_amount / totalAllocated) * 100).toFixed(0)}% of your total budget.`)
@@ -767,11 +997,11 @@ export function BudgetPlannerSection({
     })
 
     if (isOverBudget) {
-      tips.push(`Warning: Your total category allocations exceed your free money by ${currencySymbol}${(totalAllocated - freeMoneyAvailable).toFixed(2)}.`)
+      tips.push(`Warning: Your total category allocations exceed your available to spend by ${currencySymbol}${(totalAllocated - availableToSpend).toFixed(2)}.`)
     }
 
     let status: "balanced" | "warning" | "over" = "balanced"
-    if (isOverBudget) {
+    if (isOverBudget || billsExceedBudget) {
       status = "over"
     } else if (wantsPct > 50 || bucketTotals.savings === 0) {
       status = "warning"
@@ -781,12 +1011,89 @@ export function BudgetPlannerSection({
       status,
       tips,
       isOverBudget,
-      remainingFree,
+      remainingToSpend,
       projectedClosingBalance,
       wantsPct,
       savingsPct,
     }
-  }, [totalAllocated, freeMoneyAvailable, totalBudgetAmount, fixedExpenses, fixedIncome, bucketTotals, activeAllocationsList, currencySymbol])
+  }, [totalAllocated, availableToSpend, totalBudgetAmount, activeFixedExpenses, activeFixedIncome, bucketTotals, activeAllocationsList, billsExceedBudget, currencySymbol])
+
+  // Change 1 Reset plan handler
+  const handleResetPlan = () => {
+    if (confirm("Reset all inputs and start over?")) {
+      setPlanName("Normal")
+      setBudgetMode("manual")
+      setManualAmount("5000")
+      setSelectedAccountId(accounts[0]?.id || "")
+      setPeriod("monthly")
+      setCustomDays("14")
+      setStartDate(new Date().toISOString().split("T")[0])
+      setDeselectedBillIds([])
+      setCategoryAllocations({})
+      setFramework("50/30/20")
+      setFixedCommitmentsOpen(false)
+      setLookbackSettingsOpen(false)
+      setAccountRemainingOpen(false)
+      setAdvancedOptionsOpen(false)
+      setErrorMsg(null)
+      setSuccessMsg(null)
+    }
+  }
+
+  // Change 4: Toggle Bill selection in Fixed Commitments
+  const handleToggleBill = (billId: string) => {
+    setDeselectedBillIds((prev) => {
+      if (prev.includes(billId)) {
+        return prev.filter((id) => id !== billId)
+      } else {
+        return [...prev, billId]
+      }
+    })
+  }
+
+  // Change 6: Toggle Account in Account Remaining Indicator
+  const handleToggleIndicatorAccount = (accId: string) => {
+    setIndicatorAccountIds((prev) => {
+      if (prev.includes(accId)) {
+        return prev.filter((id) => id !== accId)
+      } else {
+        return [...prev, accId]
+      }
+    })
+  }
+
+  // Change 7: New Category Created Handler
+  const handleNewCategoryCreated = (newCat: Category) => {
+    setSelectedCatIds((prev) => [...prev, newCat.id])
+    setCategoryAllocations((prev) => ({
+      ...prev,
+      [newCat.id]: {
+        bucket: autoAssignBucket(newCat.name),
+        amount: "0",
+      },
+    }))
+  }
+
+  // ─── Change 8: Countdown timer effect ───
+  useEffect(() => {
+    if (planSavedSuccess) {
+      setCountdown(3)
+      countdownIntervalRef.current = setInterval(() => {
+        setCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(countdownIntervalRef.current)
+            onNavigate("categories")
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
+
+      return () => {
+        if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current)
+      }
+    }
+  }, [planSavedSuccess, onNavigate])
 
   // ─── SECTION 5: CONFIRM PLAN HANDLER ───
   const handleConfirmPlan = async () => {
@@ -800,18 +1107,21 @@ export function BudgetPlannerSection({
       return
     }
 
+    if (billsExceedBudget) {
+      setErrorMsg("Your fixed bills exceed your total budget. Increase your budget or deselect bills before saving.")
+      return
+    }
+
     if (planHealth.isOverBudget) {
-      if (!confirm(`Your plan exceeds your available free money by ${currencySymbol}${(totalAllocated - freeMoneyAvailable).toFixed(2)}. Are you sure you want to save anyway?`)) {
+      if (!confirm(`Your plan exceeds your available to spend by ${currencySymbol}${(totalAllocated - availableToSpend).toFixed(2)}. Save anyway?`)) {
         return
       }
     }
 
     setIsSubmitting(true)
     setErrorMsg(null)
-    setSuccessMsg(null)
 
     try {
-      // 1. If renewal flow, record history snapshot
       if (isRenewalFlow && lastPeriodPerformance && existingPlan) {
         await recordPlanHistory(
           existingPlan.id,
@@ -827,7 +1137,6 @@ export function BudgetPlannerSection({
         )
       }
 
-      // 2. Format category allocations
       const allocationsPayload: BudgetPlanCategory[] = activeAllocationsList.map((a) => ({
         category_id: a.category_id,
         bucket: a.bucket,
@@ -835,8 +1144,7 @@ export function BudgetPlannerSection({
         allocated_amount_cents: Math.round(a.allocated_amount * 100),
       }))
 
-      // 3. Create or update plan
-      if (existingPlan && !isRenewalFlow) {
+      if (isEditing && existingPlan) {
         await updateBudgetPlan(
           existingPlan.id,
           {
@@ -848,6 +1156,8 @@ export function BudgetPlannerSection({
             start_date: startDate,
             framework,
             is_repeating: true,
+            deselected_bill_ids: deselectedBillIds,
+            indicator_account_ids: indicatorAccountIds,
           },
           allocationsPayload,
           activateNow
@@ -863,22 +1173,94 @@ export function BudgetPlannerSection({
             start_date: startDate,
             framework,
             is_repeating: true,
+            deselected_bill_ids: deselectedBillIds,
+            indicator_account_ids: indicatorAccountIds,
           },
           allocationsPayload,
           activateNow
         )
       }
 
-      setSuccessMsg(`Budget plan "${planName.trim()}" saved successfully!`)
-      setTimeout(() => {
-        onNavigate("categories")
-      }, 1200)
+      // Trigger success screen
+      setPlanSavedSuccess(true)
     } catch (err: any) {
       console.error("Budget plan save error:", err)
-      setErrorMsg(err.message || "Failed to save budget plan. Please check your connection.")
+      setErrorMsg(err.message || "Failed to save budget plan. Please check your database connection.")
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  // ─── Change 8: SUCCESS SCREEN VIEW ───
+  if (planSavedSuccess) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] max-w-2xl mx-auto w-full px-4 text-center">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.92 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5, ease: EASE_OUT }}
+          className="w-full rounded-3xl p-8 sm:p-10 border backdrop-blur-2xl space-y-6"
+          style={{
+            background: tokens.cardGradient,
+            borderColor: "rgba(94, 234, 212, 0.4)",
+            boxShadow: tokens.cardShadow,
+          }}
+        >
+          <div className="size-16 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center mx-auto text-[#5EEAD4] shadow-[0_0_20px_rgba(94,234,212,0.3)]">
+            <CheckCircle2 className="size-9 stroke-[2.5]" />
+          </div>
+
+          <div>
+            <h2 className="text-2xl sm:text-3xl font-bold font-display text-white">
+              {isEditing ? "Plan Updated Successfully!" : "Plan Confirmed & Activated!"}
+            </h2>
+            <p className="text-sm font-sans text-white/70 mt-1.5">
+              Budget plan <strong className="text-white">"{planName}"</strong> is now saved to your database.
+            </p>
+          </div>
+
+          {/* Plan Summary Chips */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-2xl border text-xs font-mono text-left" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+            <div>
+              <span className="text-white/60 block text-[10px] uppercase font-sans">Period</span>
+              <span className="text-white font-bold capitalize">{period}</span>
+            </div>
+            <div>
+              <span className="text-white/60 block text-[10px] uppercase font-sans">Total Budget</span>
+              <span className="text-white font-bold">{currencySymbol}{totalBudgetAmount.toFixed(2)}</span>
+            </div>
+            <div>
+              <span className="text-white/60 block text-[10px] uppercase font-sans">Categories</span>
+              <span className="text-white font-bold">{activeAllocationsList.length} included</span>
+            </div>
+            <div>
+              <span className="text-white/60 block text-[10px] uppercase font-sans">Framework</span>
+              <span className="text-[#5EEAD4] font-bold">{framework === "50/30/20" ? "50/30/20 Rule" : "Suggested Plan"}</span>
+            </div>
+          </div>
+
+          {/* Countdown timer */}
+          <div className="space-y-3 pt-2">
+            <p className="text-xs font-mono text-white/60">
+              Redirecting to Categories in <strong className="text-[#5EEAD4] text-sm">{countdown}</strong>...
+            </p>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current)
+                onNavigate("categories")
+              }}
+              className="w-full sm:w-auto px-8 py-3 rounded-xl text-xs font-bold transition-all font-sans cursor-pointer shadow-xl hover:scale-[1.02] text-[#120824] inline-flex items-center justify-center gap-2"
+              style={{ background: tokens.dashboardActivePill }}
+            >
+              <span>Go to Categories now</span>
+              <ArrowRight className="size-4" />
+            </button>
+          </div>
+        </motion.div>
+      </div>
+    )
   }
 
   return (
@@ -898,13 +1280,24 @@ export function BudgetPlannerSection({
           <div>
             <h2 className="text-xl sm:text-2xl font-bold font-display text-white flex items-center gap-2">
               <Calculator className="size-6 text-[#5EEAD4]" />
-              <span>Budget Planner</span>
+              <span>{isEditing ? `Edit plan: ${existingPlan?.name}` : "Budget Planner"}</span>
             </h2>
             <p className="text-xs sm:text-sm font-sans text-white/70 mt-0.5">
               Build, test, and activate structured spending plans for your finances
             </p>
           </div>
         </div>
+
+        {/* Change 1: Reset Plan Button */}
+        <button
+          type="button"
+          onClick={handleResetPlan}
+          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all font-sans cursor-pointer shadow-md bg-white/5 hover:bg-white/15 text-white/80 hover:scale-[1.02] self-start sm:self-auto"
+          style={{ borderColor: tokens.borderNested }}
+        >
+          <RotateCcw className="size-3.5" />
+          <span>Reset plan</span>
+        </button>
       </div>
 
       {errorMsg && (
@@ -914,14 +1307,7 @@ export function BudgetPlannerSection({
         </div>
       )}
 
-      {successMsg && (
-        <div className="p-4 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-xs flex items-center gap-2.5">
-          <CheckCircle2 className="size-4.5 shrink-0 text-emerald-400" />
-          <span>{successMsg}</span>
-        </div>
-      )}
-
-      {/* ─── SECTION 4: PERIOD PERFORMANCE (Shown when renewing an ended plan) ─── */}
+      {/* ─── SECTION 4: PREVIOUS PERIOD PERFORMANCE (Shown on renewal) ─── */}
       {isRenewalFlow && lastPeriodPerformance && (
         <motion.div
           {...cardEntrance(0.02)}
@@ -936,14 +1322,14 @@ export function BudgetPlannerSection({
             <div className="flex items-center gap-2">
               <Sparkles className="size-5 text-purple-300" />
               <div>
-                <h3 className="text-base font-bold font-display text-white">Last Period Performance</h3>
-                <p className="text-xs text-white/60 font-mono">
-                  {lastPeriodPerformance.periodStart} to {lastPeriodPerformance.periodEnd}
+                <h3 className="text-base font-bold font-display text-white">Previous Period Performance</h3>
+                <p className="text-xs text-white/60 font-sans mt-0.5">
+                  Review last period spending and carry over unspent budget.
                 </p>
               </div>
             </div>
-            <span className="px-2.5 py-1 rounded-full text-[10.5px] font-bold font-mono uppercase bg-purple-500/20 text-purple-300 border border-purple-500/40">
-              Plan Renewal
+            <span className="size-7 rounded-xl bg-purple-500/20 border border-purple-500/40 flex items-center justify-center font-mono font-bold text-xs text-purple-300">
+              00
             </span>
           </div>
 
@@ -1051,7 +1437,7 @@ export function BudgetPlannerSection({
         <div className="pb-3 mb-4 border-b flex items-center justify-between" style={{ borderColor: tokens.border }}>
           <div>
             <h3 className="text-base font-bold font-display text-white">1. Plan Basics</h3>
-            <p className="text-xs text-white/70 font-sans mt-0.5">Define your plan name, total allowance, period, and start date</p>
+            <p className="text-xs text-white/70 font-sans mt-0.5">Name your plan, set your total budget and period.</p>
           </div>
           <span className="size-7 rounded-xl bg-white/10 flex items-center justify-center font-mono font-bold text-xs text-[#FEF08A]">
             01
@@ -1148,109 +1534,291 @@ export function BudgetPlannerSection({
             </div>
           </div>
 
+          {/* Period Selector — Default: Weekly/Monthly, Custom in Advanced */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Period Selector */}
             <div>
               <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
                 Period Duration
               </label>
-              <div className="grid grid-cols-3 gap-1 p-1 border rounded-xl" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
-                {(["weekly", "monthly", "custom"] as const).map((p) => (
+              <div className={`grid ${advancedOptionsOpen ? "grid-cols-3" : "grid-cols-2"} gap-1 p-1 border rounded-xl`} style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+                <button
+                  type="button"
+                  onClick={() => setPeriod("weekly")}
+                  className="py-1.5 px-2 text-center rounded-lg text-xs font-semibold capitalize transition-all font-sans cursor-pointer truncate"
+                  style={{
+                    background: period === "weekly" ? tokens.dashboardActivePill : "transparent",
+                    color: period === "weekly" ? "#120824" : "rgba(255, 255, 255, 0.75)",
+                    fontWeight: period === "weekly" ? "bold" : "normal",
+                  }}
+                >
+                  Weekly
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPeriod("monthly")}
+                  className="py-1.5 px-2 text-center rounded-lg text-xs font-semibold capitalize transition-all font-sans cursor-pointer truncate"
+                  style={{
+                    background: period === "monthly" ? tokens.dashboardActivePill : "transparent",
+                    color: period === "monthly" ? "#120824" : "rgba(255, 255, 255, 0.75)",
+                    fontWeight: period === "monthly" ? "bold" : "normal",
+                  }}
+                >
+                  Monthly
+                </button>
+                {advancedOptionsOpen && (
                   <button
-                    key={p}
                     type="button"
-                    onClick={() => setPeriod(p)}
+                    onClick={() => setPeriod("custom")}
                     className="py-1.5 px-2 text-center rounded-lg text-xs font-semibold capitalize transition-all font-sans cursor-pointer truncate"
                     style={{
-                      background: period === p ? tokens.dashboardActivePill : "transparent",
-                      color: period === p ? "#120824" : "rgba(255, 255, 255, 0.75)",
-                      fontWeight: period === p ? "bold" : "normal",
+                      background: period === "custom" ? tokens.dashboardActivePill : "transparent",
+                      color: period === "custom" ? "#120824" : "rgba(255, 255, 255, 0.75)",
+                      fontWeight: period === "custom" ? "bold" : "normal",
                     }}
                   >
-                    {p}
+                    Custom
                   </button>
-                ))}
+                )}
               </div>
-
-              {period === "custom" && (
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="text-xs text-white/70 font-sans">Every</span>
-                  <input
-                    type="number"
-                    min="1"
-                    value={customDays}
-                    onChange={(e) => setCustomDays(e.target.value)}
-                    className="w-20 px-2.5 py-1.5 border rounded-lg text-xs font-mono text-white text-center focus:outline-none"
-                    style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
-                  />
-                  <span className="text-xs text-white/70 font-sans">days</span>
-                </div>
-              )}
             </div>
 
-            {/* Start Date */}
+            {/* Quick Period End Date Note */}
             <div>
               <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
-                Start Date
+                Active Cycle Range
               </label>
-              <input
-                type="date"
-                required
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none"
-                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
-              />
-              <p className="text-[10.5px] font-mono text-white/50 mt-1">
-                Period runs until {periodEndDate}
-              </p>
+              <div className="px-3.5 py-2.5 border rounded-xl text-xs font-mono text-white/80 flex items-center justify-between" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+                <span>{startDate} → {periodEndDate}</span>
+                <span className="text-[10.5px] text-white/50">({period})</span>
+              </div>
             </div>
           </div>
 
-          {/* Bills Deduction Preview */}
-          <div className="p-4 rounded-2xl border space-y-3" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-white flex items-center gap-1.5 font-display">
-                <Receipt className="size-4 text-[#FEF08A]" />
-                Fixed Commitments This Period ({startDate} to {periodEndDate})
-              </span>
-              <span className="text-[11px] font-mono text-white/60">
-                {periodBills.length} scheduled bills
-              </span>
-            </div>
+          {/* Change 1C: Advanced Options Collapsible (Custom days & Start Date) */}
+          <div className="pt-1">
+            <button
+              type="button"
+              onClick={() => setAdvancedOptionsOpen(!advancedOptionsOpen)}
+              className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white font-sans transition-colors cursor-pointer"
+            >
+              <span>{advancedOptionsOpen ? "− Hide advanced options" : "+ Advanced options (custom period & start date)"}</span>
+            </button>
 
-            {periodBills.length === 0 ? (
-              <p className="text-xs text-white/50 font-sans italic">
-                No active bills scheduled within this period.
-              </p>
-            ) : (
-              <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
-                {periodBills.map((b) => (
-                  <div key={b.id} className="flex items-center justify-between p-2 rounded-xl bg-white/5 text-xs font-mono">
-                    <span className="text-white font-sans">{b.name} ({b.due_date})</span>
-                    <span className={b.type === "income" ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>
-                      {b.type === "income" ? "+" : "-"}{currencySymbol}{b.amount.toFixed(2)}
-                    </span>
+            {advancedOptionsOpen && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3 p-4 rounded-2xl border"
+                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+              >
+                {period === "custom" && (
+                  <div>
+                    <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
+                      Custom Period Length
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="1"
+                        value={customDays}
+                        onChange={(e) => setCustomDays(e.target.value)}
+                        className="w-24 px-3 py-2 border rounded-xl text-xs font-mono text-white text-center focus:outline-none"
+                        style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+                      />
+                      <span className="text-xs text-white/70 font-sans">days per cycle</span>
+                    </div>
                   </div>
-                ))}
+                )}
+
+                <div>
+                  <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
+                    Start Date
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="w-full px-3.5 py-2 border rounded-xl text-xs font-sans text-white focus:outline-none"
+                    style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+                  />
+                </div>
+              </motion.div>
+            )}
+          </div>
+
+          {/* Change 1B & Change 4: Fixed Commitments Accordion (Starts Collapsed) */}
+          <div className="rounded-2xl border overflow-hidden transition-all" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+            <button
+              type="button"
+              onClick={() => setFixedCommitmentsOpen(!fixedCommitmentsOpen)}
+              className="w-full p-4 flex items-center justify-between text-left hover:bg-white/5 transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-2">
+                <Receipt className="size-4 text-[#FEF08A]" />
+                <span className="text-xs font-bold text-white font-display">
+                  Fixed Commitments ({periodBills.length - deselectedBillIds.length} of {periodBills.length} bills active)
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono text-rose-300 font-bold">
+                  -{currencySymbol}{activeFixedExpenses.toFixed(2)}
+                </span>
+                {fixedCommitmentsOpen ? <ChevronUp className="size-4 text-white/60" /> : <ChevronDown className="size-4 text-white/60" />}
+              </div>
+            </button>
+
+            {fixedCommitmentsOpen && (
+              <div className="p-4 pt-0 border-t border-white/10 space-y-3">
+                <p className="text-[11px] text-white/60 font-sans">
+                  Check or uncheck bills to include/exclude them from this plan's deduction.
+                </p>
+
+                {periodBills.length === 0 ? (
+                  <p className="text-xs text-white/50 font-sans italic py-2">
+                    No active bills scheduled within this period ({startDate} to {periodEndDate}).
+                  </p>
+                ) : (
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                    {periodBills.map((b) => {
+                      const isSelected = !deselectedBillIds.includes(b.id)
+                      return (
+                        <div
+                          key={b.id}
+                          onClick={() => handleToggleBill(b.id)}
+                          className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
+                            isSelected ? "bg-white/5 border-white/10" : "bg-black/20 border-white/5 opacity-40"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => handleToggleBill(b.id)}
+                              className="size-3.5 rounded accent-[#5EEAD4] cursor-pointer"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                            <span className={`text-xs font-sans text-white truncate ${!isSelected ? "line-through text-white/50" : ""}`}>
+                              {b.name} <span className="text-[10px] text-white/40 font-mono">({b.due_date})</span>
+                            </span>
+                          </div>
+                          <span className={`text-xs font-mono font-bold shrink-0 ${!isSelected ? "line-through text-white/40" : b.type === "income" ? "text-emerald-400" : "text-rose-400"}`}>
+                            {b.type === "income" ? "+" : "-"}{currencySymbol}{b.amount.toFixed(2)}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             )}
+          </div>
 
-            {/* Calculations Banner */}
-            <div className="pt-3 border-t border-white/10 grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs font-mono">
-              <div>
-                <span className="text-white/60 block text-[10.5px] uppercase">Fixed Expenses:</span>
-                <span className="text-rose-300 font-bold">-{currencySymbol}{fixedExpenses.toFixed(2)}</span>
-              </div>
-              <div>
-                <span className="text-white/60 block text-[10.5px] uppercase">Fixed Income:</span>
-                <span className="text-emerald-300 font-bold">+{currencySymbol}{fixedIncome.toFixed(2)}</span>
-              </div>
-              <div className="p-2 rounded-xl bg-emerald-500/15 border border-emerald-500/30">
-                <span className="text-emerald-200 block text-[10.5px] uppercase font-bold">Free Money Available:</span>
-                <span className="text-base font-bold text-[#5EEAD4]">{currencySymbol}{freeMoneyAvailable.toFixed(2)}</span>
-              </div>
+          {/* Change 2: Available to Spend Calculation Banner */}
+          <div className="p-4 rounded-2xl border grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs font-mono" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+            <div>
+              <span className="text-white/60 block text-[10.5px] uppercase font-sans">Active Fixed Expenses:</span>
+              <span className="text-rose-300 font-bold">-{currencySymbol}{activeFixedExpenses.toFixed(2)}</span>
             </div>
+            <div>
+              <span className="text-white/60 block text-[10.5px] uppercase font-sans">Active Fixed Income:</span>
+              <span className="text-emerald-300 font-bold">+{currencySymbol}{activeFixedIncome.toFixed(2)}</span>
+            </div>
+            <div className={`p-2.5 rounded-xl border ${billsExceedBudget ? "bg-rose-500/15 border-rose-500/30" : "bg-emerald-500/15 border-emerald-500/30"}`}>
+              <span className={`block text-[10.5px] uppercase font-bold ${billsExceedBudget ? "text-rose-300" : "text-emerald-200"}`}>
+                Available to Spend:
+              </span>
+              <span className={`text-base font-bold ${billsExceedBudget ? "text-rose-400" : "text-[#5EEAD4]"}`}>
+                {currencySymbol}{availableToSpend.toFixed(2)}
+              </span>
+            </div>
+          </div>
+
+          {/* Change 3: Bills Exceed Budget Warning Banner */}
+          {billsExceedBudget && (
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="p-4 rounded-2xl bg-rose-500/20 border border-rose-500/50 text-rose-200 text-xs flex items-center gap-3"
+            >
+              <ShieldAlert className="size-5 shrink-0 text-rose-400" />
+              <span>
+                <strong>Warning:</strong> Your fixed bills ({currencySymbol}{activeFixedExpenses.toFixed(2)}) exceed your total budget ({currencySymbol}{totalBudgetAmount.toFixed(2)}). Increase your budget or deselect some bills before continuing.
+              </span>
+            </motion.div>
+          )}
+
+          {/* Change 6: Account Remaining Indicator Accordion (Starts Collapsed) */}
+          <div className="rounded-2xl border overflow-hidden transition-all" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+            <button
+              type="button"
+              onClick={() => setAccountRemainingOpen(!accountRemainingOpen)}
+              className="w-full p-4 flex items-center justify-between text-left hover:bg-white/5 transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-2">
+                <Wallet className="size-4 text-[#5EEAD4]" />
+                <span className="text-xs font-semibold text-white font-sans">
+                  See account remaining after this plan →
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono font-bold text-white/80">
+                  {currencySymbol}{accountRemainingStats.totalRemaining.toFixed(2)}
+                </span>
+                {accountRemainingOpen ? <ChevronUp className="size-4 text-white/60" /> : <ChevronDown className="size-4 text-white/60" />}
+              </div>
+            </button>
+
+            {accountRemainingOpen && (
+              <div className="p-4 pt-0 border-t border-white/10 space-y-3">
+                <p className="text-[11px] text-white/60 font-sans">
+                  Select accounts to simulate balance impact after deducting {currencySymbol}{totalBudgetAmount.toFixed(2)}:
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1">
+                  {accounts.map((acc) => {
+                    const isSelected = indicatorAccountIds.includes(acc.id)
+                    const bal = Number(acc.balance || 0)
+                    const projected = bal - totalBudgetAmount
+
+                    return (
+                      <div
+                        key={acc.id}
+                        onClick={() => handleToggleIndicatorAccount(acc.id)}
+                        className={`p-2.5 rounded-xl border flex items-center justify-between transition-all cursor-pointer ${
+                          isSelected ? "bg-white/10 border-[#5EEAD4]/40" : "bg-black/20 border-white/5 opacity-50"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleToggleIndicatorAccount(acc.id)}
+                            className="size-3.5 rounded accent-[#5EEAD4] cursor-pointer"
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <span className="text-xs font-sans text-white font-semibold truncate">{acc.name}</span>
+                        </div>
+                        <div className="text-right font-mono text-[11px]">
+                          <span className="text-white/60 block">{currencySymbol}{bal.toFixed(2)}</span>
+                          <span className={projected >= 0 ? "text-emerald-400 font-bold" : "text-rose-400 font-bold"}>
+                            rem: {currencySymbol}{projected.toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <div className="p-3 rounded-xl bg-white/5 border border-white/10 text-xs font-mono flex items-center justify-between">
+                  <span className="text-white/70 font-sans">Total remaining across selected accounts:</span>
+                  <span className={`font-bold text-sm ${accountRemainingStats.totalRemaining >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                    {currencySymbol}{accountRemainingStats.totalRemaining.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </motion.div>
@@ -1258,17 +1826,29 @@ export function BudgetPlannerSection({
       {/* ─── SECTION 2: BUDGET FRAMEWORK & ALLOCATIONS ─── */}
       <motion.div
         {...cardEntrance(0.06)}
-        className="rounded-3xl p-6 sm:p-7 border backdrop-blur-xl transition-all"
+        className={`rounded-3xl p-6 sm:p-7 border backdrop-blur-xl transition-all relative ${
+          billsExceedBudget ? "opacity-50 pointer-events-none select-none" : ""
+        }`}
         style={{
           background: tokens.cardGradient,
           borderColor: tokens.border,
           boxShadow: tokens.cardShadow,
         }}
       >
+        {/* Blocker lock overlay banner if bills exceed budget */}
+        {billsExceedBudget && (
+          <div className="absolute inset-0 z-20 rounded-3xl bg-black/40 backdrop-blur-[2px] flex items-center justify-center p-4">
+            <div className="p-4 rounded-2xl bg-[#1E0C38]/90 border border-rose-500/50 shadow-2xl flex items-center gap-3 text-xs text-rose-200">
+              <Lock className="size-5 text-rose-400 shrink-0" />
+              <span>Section locked: Available to spend must be greater than zero to allocate category budgets.</span>
+            </div>
+          </div>
+        )}
+
         <div className="pb-3 mb-4 border-b flex items-center justify-between" style={{ borderColor: tokens.border }}>
           <div>
             <h3 className="text-base font-bold font-display text-white">2. Budget Framework & Category Allocations</h3>
-            <p className="text-xs text-white/70 font-sans mt-0.5">Distribute your {currencySymbol}{freeMoneyAvailable.toFixed(2)} free money across categories</p>
+            <p className="text-xs text-white/70 font-sans mt-0.5">Choose how to distribute your budget across categories.</p>
           </div>
           <span className="size-7 rounded-xl bg-white/10 flex items-center justify-center font-mono font-bold text-xs text-[#FEF08A]">
             02
@@ -1317,62 +1897,84 @@ export function BudgetPlannerSection({
             </button>
           </div>
 
-          {/* 50/30/20 Target Breakdown Cards */}
+          {/* Change 5: 50/30/20 Progress Indicators with Live Fill Bars & Colors */}
           {framework === "50/30/20" && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-2xl border" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
-              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
-                <span className="text-[11px] font-bold font-display uppercase tracking-wider text-emerald-300 block">
-                  Needs (50%)
-                </span>
-                <span className="text-lg font-bold font-mono text-white">
-                  {currencySymbol}{rule503020Targets.needs.toFixed(2)}
-                </span>
-                <p className="text-[10px] text-white/60 font-sans mt-0.5">Groceries, bills, transport, giving</p>
-              </div>
+              {bucketIndicators.map((bucket) => (
+                <div key={bucket.key} className="p-3.5 rounded-xl border bg-white/5 space-y-2" style={{ borderColor: tokens.borderNested }}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold font-display uppercase tracking-wider text-white">
+                      {bucket.label}
+                    </span>
+                    <span className="text-xs font-bold font-mono text-white">
+                      {currencySymbol}{bucket.target.toFixed(2)}
+                    </span>
+                  </div>
 
-              <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/30">
-                <span className="text-[11px] font-bold font-display uppercase tracking-wider text-purple-300 block">
-                  Wants (30%)
-                </span>
-                <span className="text-lg font-bold font-mono text-white">
-                  {currencySymbol}{rule503020Targets.wants.toFixed(2)}
-                </span>
-                <p className="text-[10px] text-white/60 font-sans mt-0.5">Dining, cafés, shopping, games</p>
-              </div>
+                  {/* Progress bar */}
+                  <div className="w-full h-2 rounded-full bg-black/40 overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-300"
+                      style={{
+                        width: `${bucket.fillPct}%`,
+                        backgroundColor: bucket.barColor,
+                      }}
+                    />
+                  </div>
 
-              <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30">
-                <span className="text-[11px] font-bold font-display uppercase tracking-wider text-amber-300 block">
-                  Savings (20%)
-                </span>
-                <span className="text-lg font-bold font-mono text-white">
-                  {currencySymbol}{rule503020Targets.savings.toFixed(2)}
-                </span>
-                <p className="text-[10px] text-white/60 font-sans mt-0.5">Emergency fund, investments</p>
-              </div>
+                  {/* Allocation label */}
+                  <div className="flex items-center justify-between text-[10.5px] font-mono">
+                    {bucket.isOver ? (
+                      <span className="text-[#F87171] font-bold">
+                        {currencySymbol}{(bucket.allocated - bucket.target).toFixed(2)} over budget
+                      </span>
+                    ) : (
+                      <span className="text-white/70">
+                        {currencySymbol}{bucket.allocated.toFixed(2)} allocated of {currencySymbol}{bucket.target.toFixed(2)}
+                      </span>
+                    )}
+                    <span className="text-white/50">
+                      {bucket.trueFillPct.toFixed(0)}%
+                    </span>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
-          {/* Suggested Plan Lookback Selector */}
+          {/* Change 1B: Lookback Range Collapsible for Suggested Mode */}
           {framework === "suggested" && (
-            <div className="p-4 rounded-2xl border flex flex-wrap items-center justify-between gap-3" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
-              <div>
-                <span className="text-xs font-bold text-white font-display block">Lookback History Range:</span>
-                <p className="text-[11px] text-white/60">Averages calculated from logged transactions</p>
-              </div>
-              <div className="grid grid-cols-3 gap-1 p-1 border rounded-xl bg-black/30" style={{ borderColor: tokens.borderNested }}>
-                {(["1m", "3m", "6m"] as const).map((lb) => (
-                  <button
-                    key={lb}
-                    type="button"
-                    onClick={() => setLookbackPeriod(lb)}
-                    className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
-                      lookbackPeriod === lb ? "bg-white/20 text-white font-bold" : "text-white/60 hover:text-white"
-                    }`}
-                  >
-                    {lb === "1m" ? "Last Month" : lb === "3m" ? "Last 3 Mos" : "Last 6 Mos"}
-                  </button>
-                ))}
-              </div>
+            <div className="rounded-2xl border overflow-hidden transition-all" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+              <button
+                type="button"
+                onClick={() => setLookbackSettingsOpen(!lookbackSettingsOpen)}
+                className="w-full p-3.5 flex items-center justify-between text-left hover:bg-white/5 transition-colors cursor-pointer"
+              >
+                <div>
+                  <span className="text-xs font-bold text-white font-display block">
+                    Historical Lookback: {lookbackPeriod === "1m" ? "Last Month" : lookbackPeriod === "3m" ? "Last 3 Months" : "Last 6 Months"}
+                  </span>
+                  <p className="text-[10.5px] text-white/60">Averages calculated from logged transactions</p>
+                </div>
+                {lookbackSettingsOpen ? <ChevronUp className="size-4 text-white/60" /> : <ChevronDown className="size-4 text-white/60" />}
+              </button>
+
+              {lookbackSettingsOpen && (
+                <div className="p-3.5 pt-0 border-t border-white/10 flex items-center gap-2">
+                  {(["1m", "3m", "6m"] as const).map((lb) => (
+                    <button
+                      key={lb}
+                      type="button"
+                      onClick={() => setLookbackPeriod(lb)}
+                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                        lookbackPeriod === lb ? "bg-white/20 text-white font-bold" : "text-white/60 hover:text-white"
+                      }`}
+                    >
+                      {lb === "1m" ? "Last Month" : lb === "3m" ? "Last 3 Months" : "Last 6 Months"}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -1469,18 +2071,29 @@ export function BudgetPlannerSection({
                 </div>
               )
             })}
+
+            {/* Change 7: + Add New Category Button */}
+            <button
+              type="button"
+              onClick={() => setAddCategoryModalOpen(true)}
+              className="w-full p-3 rounded-2xl border border-dashed hover:bg-white/5 text-white/70 hover:text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer"
+              style={{ borderColor: tokens.borderNested }}
+            >
+              <Plus className="size-4 text-[#5EEAD4]" />
+              <span>+ Add new category</span>
+            </button>
           </div>
 
           {/* Running Allocations Total Banner */}
           <div className="pt-3 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
             <span className="text-white/70">
-              Total Allocated: <strong className="text-white">{currencySymbol}{totalAllocated.toFixed(2)}</strong> of <strong className="text-[#5EEAD4]">{currencySymbol}{freeMoneyAvailable.toFixed(2)}</strong> available
+              Total Allocated: <strong className="text-white">{currencySymbol}{totalAllocated.toFixed(2)}</strong> of <strong className="text-[#5EEAD4]">{currencySymbol}{availableToSpend.toFixed(2)}</strong> available
             </span>
-            <span className={`font-bold ${totalAllocated <= freeMoneyAvailable ? "text-emerald-400" : "text-rose-400"}`}>
-              {totalAllocated <= freeMoneyAvailable ? (
-                `✓ ${currencySymbol}${(freeMoneyAvailable - totalAllocated).toFixed(2)} unallocated`
+            <span className={`font-bold ${totalAllocated <= availableToSpend ? "text-emerald-400" : "text-rose-400"}`}>
+              {totalAllocated <= availableToSpend ? (
+                `✓ ${currencySymbol}${(availableToSpend - totalAllocated).toFixed(2)} unallocated`
               ) : (
-                `⚠️ Exceeds by ${currencySymbol}${(totalAllocated - freeMoneyAvailable).toFixed(2)}`
+                `⚠️ Exceeds by ${currencySymbol}${(totalAllocated - availableToSpend).toFixed(2)}`
               )}
             </span>
           </div>
@@ -1500,7 +2113,7 @@ export function BudgetPlannerSection({
         <div className="pb-3 mb-4 border-b flex items-center justify-between" style={{ borderColor: tokens.border }}>
           <div>
             <h3 className="text-base font-bold font-display text-white">3. Plan Health Assessment</h3>
-            <p className="text-xs text-white/70 font-sans mt-0.5">Live simulation of your financial trajectory</p>
+            <p className="text-xs text-white/70 font-sans mt-0.5">Review trajectory, tips, and projected closing balance.</p>
           </div>
           <span className="size-7 rounded-xl bg-white/10 flex items-center justify-center font-mono font-bold text-xs text-[#FEF08A]">
             03
@@ -1546,7 +2159,7 @@ export function BudgetPlannerSection({
             <div className="p-4 rounded-2xl bg-rose-500/20 border border-rose-500/50 text-rose-200 text-xs flex items-center gap-3">
               <ShieldAlert className="size-5 shrink-0 text-rose-400" />
               <span>
-                <strong>Overspend Warning:</strong> Your plan exceeds your available free money by {currencySymbol}${(totalAllocated - freeMoneyAvailable).toFixed(2)}. Reduce category allocations before confirming.
+                <strong>Overspend Warning:</strong> Your plan exceeds your available to spend by {currencySymbol}${(totalAllocated - availableToSpend).toFixed(2)}. Reduce category allocations before confirming.
               </span>
             </div>
           )}
@@ -1566,7 +2179,7 @@ export function BudgetPlannerSection({
         <div className="pb-3 mb-4 border-b flex items-center justify-between" style={{ borderColor: tokens.border }}>
           <div>
             <h3 className="text-base font-bold font-display text-white">4. Confirm & Activate Plan</h3>
-            <p className="text-xs text-white/70 font-sans mt-0.5">Review summary and apply allocations to your categories</p>
+            <p className="text-xs text-white/70 font-sans mt-0.5">Review summary and activate your category budgets.</p>
           </div>
           <span className="size-7 rounded-xl bg-white/10 flex items-center justify-center font-mono font-bold text-xs text-[#FEF08A]">
             04
@@ -1589,8 +2202,8 @@ export function BudgetPlannerSection({
               <span className="text-white font-bold">{currencySymbol}{totalBudgetAmount.toFixed(2)}</span>
             </div>
             <div>
-              <span className="text-white/60 block text-[10.5px] uppercase font-sans">Free Money</span>
-              <span className="text-[#5EEAD4] font-bold">{currencySymbol}{freeMoneyAvailable.toFixed(2)}</span>
+              <span className="text-white/60 block text-[10.5px] uppercase font-sans">Available to Spend</span>
+              <span className="text-[#5EEAD4] font-bold">{currencySymbol}{availableToSpend.toFixed(2)}</span>
             </div>
           </div>
 
@@ -1647,9 +2260,9 @@ export function BudgetPlannerSection({
 
             <button
               type="button"
-              disabled={isSubmitting}
+              disabled={isSubmitting || billsExceedBudget}
               onClick={handleConfirmPlan}
-              className="px-6 py-3 rounded-xl text-xs font-bold transition-all font-sans cursor-pointer shadow-xl hover:scale-[1.02] text-[#120824] flex items-center gap-2"
+              className="px-6 py-3 rounded-xl text-xs font-bold transition-all font-sans cursor-pointer shadow-xl hover:scale-[1.02] text-[#120824] flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ background: tokens.dashboardActivePill }}
             >
               {isSubmitting ? (
@@ -1660,13 +2273,20 @@ export function BudgetPlannerSection({
               ) : (
                 <>
                   <Check className="size-4 stroke-[3]" />
-                  <span>Confirm Plan</span>
+                  <span>{isEditing ? "Save changes" : "Confirm Plan"}</span>
                 </>
               )}
             </button>
           </div>
         </div>
       </motion.div>
+
+      {/* Inline Add Category Modal */}
+      <AddCategoryInlineModal
+        isOpen={addCategoryModalOpen}
+        onClose={() => setAddCategoryModalOpen(false)}
+        onCategoryCreated={handleNewCategoryCreated}
+      />
     </div>
   )
 }

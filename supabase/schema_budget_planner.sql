@@ -15,8 +15,14 @@ create table if not exists public.budget_plans (
   framework text not null check (framework in ('50/30/20', 'suggested')),
   is_active boolean default false,
   is_repeating boolean default true,
+  deselected_bill_ids uuid[] default '{}',
+  indicator_account_ids uuid[] default '{}',
   created_at timestamptz default now()
 );
+
+-- Migration support for existing budget_plans table
+alter table public.budget_plans add column if not exists deselected_bill_ids uuid[] default '{}';
+alter table public.budget_plans add column if not exists indicator_account_ids uuid[] default '{}';
 
 -- 2. Category allocations per plan
 create table if not exists public.budget_plan_categories (

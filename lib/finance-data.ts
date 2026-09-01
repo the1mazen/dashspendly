@@ -118,6 +118,8 @@ export interface BudgetPlan {
   framework: "50/30/20" | "suggested"
   is_active: boolean
   is_repeating: boolean
+  deselected_bill_ids?: string[]
+  indicator_account_ids?: string[]
   created_at?: string
   categories?: BudgetPlanCategory[]
 }
@@ -565,6 +567,8 @@ function useFinanceDataInternal() {
               framework: bp.framework as "50/30/20" | "suggested",
               is_active: Boolean(bp.is_active),
               is_repeating: bp.is_repeating ?? true,
+              deselected_bill_ids: Array.isArray(bp.deselected_bill_ids) ? bp.deselected_bill_ids : [],
+              indicator_account_ids: Array.isArray(bp.indicator_account_ids) ? bp.indicator_account_ids : [],
               created_at: bp.created_at,
               categories: planCats,
             }
@@ -2339,6 +2343,8 @@ function useFinanceDataInternal() {
       start_date: string
       framework: "50/30/20" | "suggested"
       is_repeating?: boolean
+      deselected_bill_ids?: string[]
+      indicator_account_ids?: string[]
     },
     categoryAllocations: Array<{
       category_id: string
@@ -2380,6 +2386,8 @@ function useFinanceDataInternal() {
           framework: planData.framework,
           is_active: activateNow,
           is_repeating: isRepeating,
+          deselected_bill_ids: planData.deselected_bill_ids || [],
+          indicator_account_ids: planData.indicator_account_ids || [],
         })
 
       if (planError) {
@@ -2441,6 +2449,8 @@ function useFinanceDataInternal() {
         framework: planData.framework,
         is_active: activateNow,
         is_repeating: isRepeating,
+        deselected_bill_ids: planData.deselected_bill_ids || [],
+        indicator_account_ids: planData.indicator_account_ids || [],
         created_at: new Date().toISOString(),
         categories: categoryAllocations.map((c) => ({
           plan_id: newPlanId,
@@ -2465,6 +2475,8 @@ function useFinanceDataInternal() {
       framework: planData.framework,
       is_active: activateNow,
       is_repeating: isRepeating,
+      deselected_bill_ids: planData.deselected_bill_ids || [],
+      indicator_account_ids: planData.indicator_account_ids || [],
       created_at: new Date().toISOString(),
       categories: categoryAllocations.map((c) => ({
         plan_id: newPlanId,
@@ -2528,6 +2540,8 @@ function useFinanceDataInternal() {
       if (planData.start_date !== undefined) updatePayload.start_date = planData.start_date
       if (planData.framework !== undefined) updatePayload.framework = planData.framework
       if (planData.is_repeating !== undefined) updatePayload.is_repeating = planData.is_repeating
+      if (planData.deselected_bill_ids !== undefined) updatePayload.deselected_bill_ids = planData.deselected_bill_ids
+      if (planData.indicator_account_ids !== undefined) updatePayload.indicator_account_ids = planData.indicator_account_ids
       if (activateNow) updatePayload.is_active = true
 
       const { error: planErr } = await supabase
@@ -2538,7 +2552,7 @@ function useFinanceDataInternal() {
 
       if (planErr) throw new Error(`Failed to update budget plan: ${planErr.message}`)
 
-      // Replace category allocations
+      // Atomically replace category allocations
       await supabase.from("budget_plan_categories").delete().eq("plan_id", planId).eq("user_id", userId)
 
       if (categoryAllocations.length > 0) {
@@ -2681,9 +2695,12 @@ function useFinanceDataInternal() {
     if (isSupabaseConfigured && supabase) {
       const userId = await resolveCurrentUserId()
       if (userId && isValidUUID(planId)) {
+        // Delete categories first for atomicity
+        await supabase.from("budget_plan_categories").delete().eq("plan_id", planId).eq("user_id", userId)
+        // Then delete plan
         await supabase.from("budget_plans").delete().eq("id", planId).eq("user_id", userId)
 
-        // If it was active, reset category budgets
+        // If it was active, reset category budgets to 0 / null
         if (wasActive) {
           await supabase.from("categories").update({ budget_cents: 0 }).eq("user_id", userId)
         }

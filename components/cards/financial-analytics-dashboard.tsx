@@ -6461,7 +6461,13 @@ function EditCategoryModal({
   )
 }
 
-function CategoriesSection({ onNavigate }: { onNavigate: (s: SectionId) => void }) {
+function CategoriesSection({
+  onNavigate,
+  onEditPlan,
+}: {
+  onNavigate: (s: SectionId) => void
+  onEditPlan?: (plan: BudgetPlan) => void
+}) {
   const { categories, createCategory, deleteCategory, activeBudgetPlan, budgetPlans } = useFinanceData()
   const { profile } = useUserProfile()
   const { tokens } = useDashboardTheme()
@@ -6700,7 +6706,11 @@ function CategoriesSection({ onNavigate }: { onNavigate: (s: SectionId) => void 
         onClose={() => setManagePlansOpen(false)}
         onEditPlan={(plan) => {
           setManagePlansOpen(false)
-          onNavigate("budget_planner")
+          if (onEditPlan) {
+            onEditPlan(plan)
+          } else {
+            onNavigate("budget_planner")
+          }
         }}
         onCreateNew={() => {
           setManagePlansOpen(false)
@@ -7087,6 +7097,7 @@ function FinancialAnalyticsDashboardInner({
   const [addTxOpen, setAddTxOpen] = useState(false)
   const [addAccOpen, setAddAccOpen] = useState(false)
   const [monthSummaryOpen, setMonthSummaryOpen] = useState(false)
+  const [editPlanTargetId, setEditPlanTargetId] = useState<string | null>(null)
   
   // Feature 4: Edit & Delete Modal States
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
@@ -7268,6 +7279,28 @@ function FinancialAnalyticsDashboardInner({
             </div>
           ) : (
             (() => {
+              if (activeSection === "budget_planner") {
+                return (
+                  <BudgetPlannerSection
+                    onNavigate={(s) => {
+                      setEditPlanTargetId(null)
+                      setActiveSection(s)
+                    }}
+                    editPlanId={editPlanTargetId}
+                  />
+                )
+              }
+              if (activeSection === "categories") {
+                return (
+                  <CategoriesSection
+                    onNavigate={setActiveSection}
+                    onEditPlan={(plan) => {
+                      setEditPlanTargetId(plan.id)
+                      setActiveSection("budget_planner")
+                    }}
+                  />
+                )
+              }
               const SectionComponent = sectionComponents[activeSection]
               return <SectionComponent onNavigate={setActiveSection} />
             })()
