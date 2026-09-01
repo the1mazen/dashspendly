@@ -3652,21 +3652,109 @@ function MarkBillPaidModal({
 
 // ─── Component: Main Net Worth & Trajectory Hero (Features 5 & 6) ──
 
+// ─── Component: Main Net Worth & Trajectory Hero (Features 5 & 6) ──
+
 function NetWorthHeroCard({
-  netWorth,
-  totalIncome,
-  totalExpense,
+  accounts,
+  transactions,
   currencySymbol,
   onAddTransaction,
 }: {
-  netWorth: number
-  totalIncome: number
-  totalExpense: number
+  accounts: Account[]
+  transactions: Transaction[]
   currencySymbol: string
   onAddTransaction: () => void
 }) {
   const { tokens } = useDashboardTheme()
-  const { monthSparklineData } = useFinanceData()
+
+  // Account filter state for Net Worth calculation
+  const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>(() => accounts.map((a) => a.id))
+  const [isAccountFilterOpen, setIsAccountFilterOpen] = useState(false)
+
+  // Keep in sync if accounts change
+  useEffect(() => {
+    if (accounts.length > 0) {
+      setSelectedAccountIds((prev) => {
+        if (prev.length === 0) return accounts.map((a) => a.id)
+        const existingIds = new Set(accounts.map((a) => a.id))
+        const valid = prev.filter((id) => existingIds.has(id))
+        return valid.length > 0 ? valid : accounts.map((a) => a.id)
+      })
+    }
+  }, [accounts])
+
+  const selectedSet = useMemo(() => new Set(selectedAccountIds), [selectedAccountIds])
+
+  // Dynamic Net Worth calculated for only selected accounts
+  const dynamicNetWorth = useMemo(() => {
+    return accounts
+      .filter((a) => selectedSet.has(a.id))
+      .reduce((sum, a) => sum + (Number(a.balance) || 0), 0)
+  }, [accounts, selectedSet])
+
+  const isAllAccountsSelected = useMemo(() => {
+    return accounts.length > 0 && selectedAccountIds.length === accounts.length
+  }, [accounts, selectedAccountIds])
+
+  // Current month income & expenses totals (resets automatically each new calendar month)
+  const { currentMonthIncome, currentMonthExpense, currentMonthNetChange } = useMemo(() => {
+    const now = new Date()
+    const currentYear = now.getFullYear()
+    const currentMonth = String(now.getMonth() + 1).padStart(2, "0")
+    const currentYearMonth = `${currentYear}-${currentMonth}`
+
+    let inc = 0
+    let exp = 0
+
+    transactions.forEach((tx) => {
+      if (tx.date && tx.date.startsWith(currentYearMonth)) {
+        if (tx.type === "income" && !tx.is_fee) {
+          inc += Math.abs(tx.amount)
+        } else if (tx.type === "expense") {
+          exp += Math.abs(tx.amount)
+        }
+      }
+    })
+
+    return {
+      currentMonthIncome: inc,
+      currentMonthExpense: exp,
+      currentMonthNetChange: inc - exp,
+    }
+  }, [transactions])
+
+  // Minimalist Trajectory Sparkline for selected accounts (1st of month to today)
+  const dynamicSparklineData = useMemo(() => {
+    const now = new Date()
+    const currentYear = now.getFullYear()
+    const currentMonth = now.getMonth()
+    const currentDay = now.getDate()
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate()
+
+    const selectedAccTxs = transactions.filter((t) => selectedSet.has(t.account_id))
+
+    const totalSelectedStartingBalance = accounts
+      .filter((a) => selectedSet.has(a.id))
+      .reduce((sum, a) => sum + (Number(a.starting_balance_cents || 0) / 100), 0)
+
+    const points = []
+    for (let day = 1; day <= Math.min(currentDay, daysInMonth); day++) {
+      const dayStr = `${currentYear}-${String(currentMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
+      const txsUpToDay = selectedAccTxs.filter((t) => t.date && t.date <= dayStr)
+      const txSum = txsUpToDay.reduce((sum, t) => sum + (t.type === "income" ? Math.abs(t.amount) : -Math.abs(t.amount)), 0)
+
+      points.push({
+        date: String(day),
+        value: Number((totalSelectedStartingBalance + txSum).toFixed(2)),
+      })
+    }
+
+    if (points.length === 0) {
+      points.push({ date: "1", value: dynamicNetWorth })
+    }
+
+    return points
+  }, [accounts, transactions, selectedSet, dynamicNetWorth])
 
   return (
     <motion.div
@@ -3689,20 +3777,133 @@ function NetWorthHeroCard({
               TOTAL NET WORTH
             </p>
           </div>
+
           <div className="flex items-center gap-3.5 flex-wrap">
             <h1 className="text-4xl sm:text-5xl font-bold tracking-tight font-mono text-white">
-              {currencySymbol}{netWorth.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {currencySymbol}{dynamicNetWorth.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </h1>
+
+            {/* Account Selector Pill for Net Worth */}
+            {accounts.length > 1 && (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsAccountFilterOpen((prev) => !prev)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all cursor-pointer shadow-sm hover:scale-[1.02]"
+                  style={{
+                    backgroundColor: isAllAccountsSelected ? "rgba(255, 255, 255, 0.08)" : "rgba(168, 85, 247, 0.20)",
+                    borderColor: isAllAccountsSelected ? tokens.borderNested : "rgba(168, 85, 247, 0.45)",
+                    color: isAllAccountsSelected ? "rgba(255, 255, 255, 0.85)" : "#E9D5FF",
+                  }}
+                >
+                  <Wallet className="size-3.5 text-purple-300" />
+                  <span>
+                    {isAllAccountsSelected
+                      ? "All accounts selected"
+                      : `${selectedAccountIds.length} of ${accounts.length} accounts`}
+                  </span>
+                  <ChevronDown className="size-3 text-white/60" />
+                </button>
+
+                {/* Account Selection Popover */}
+                <AnimatePresence>
+                  {isAccountFilterOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 6, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 6, scale: 0.95 }}
+                      className="absolute left-0 top-full mt-2 w-64 p-3 rounded-2xl border shadow-2xl backdrop-blur-2xl z-30 space-y-2"
+                      style={{
+                        background: "linear-gradient(135deg, rgba(28, 12, 54, 0.95) 0%, rgba(18, 8, 36, 0.95) 100%)",
+                        borderColor: tokens.border,
+                        boxShadow: tokens.cardShadow,
+                      }}
+                    >
+                      <div className="flex items-center justify-between pb-2 border-b border-white/10 text-xs">
+                        <span className="font-bold text-white font-display">Calculate for:</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (isAllAccountsSelected) {
+                              setSelectedAccountIds([accounts[0].id])
+                            } else {
+                              setSelectedAccountIds(accounts.map((a) => a.id))
+                            }
+                          }}
+                          className="text-[10px] font-semibold text-[#A7F3D0] hover:underline cursor-pointer"
+                        >
+                          {isAllAccountsSelected ? "Deselect All" : "Select All"}
+                        </button>
+                      </div>
+
+                      <div className="space-y-1 max-h-44 overflow-y-auto pr-1">
+                        {accounts.map((acc) => {
+                          const isChecked = selectedSet.has(acc.id)
+                          return (
+                            <div
+                              key={acc.id}
+                              onClick={() => {
+                                setSelectedAccountIds((prev) => {
+                                  if (prev.includes(acc.id)) {
+                                    if (prev.length === 1) return prev
+                                    return prev.filter((id) => id !== acc.id)
+                                  } else {
+                                    return [...prev, acc.id]
+                                  }
+                                })
+                              }}
+                              className={`flex items-center justify-between p-2 rounded-xl border text-xs cursor-pointer transition-all ${
+                                isChecked
+                                  ? "bg-purple-500/20 border-purple-500/40 text-white"
+                                  : "bg-white/5 border-white/5 text-white/50 hover:bg-white/10"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div
+                                  className={`size-4 rounded border flex items-center justify-center shrink-0 ${
+                                    isChecked ? "bg-purple-500 border-purple-400 text-white" : "border-white/30"
+                                  }`}
+                                >
+                                  {isChecked && <Check className="size-2.5 stroke-[3]" />}
+                                </div>
+                                <span className="font-semibold truncate">{acc.name}</span>
+                              </div>
+                              <span className="font-mono text-[11px] shrink-0 ml-2">
+                                {currencySymbol}{Number(acc.balance || 0).toFixed(2)}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+
+                      <div className="pt-2 border-t border-white/10 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setIsAccountFilterOpen(false)}
+                          className="px-3 py-1 text-xs font-bold rounded-lg text-[#120824] shadow-sm cursor-pointer hover:scale-[1.02] transition-all"
+                          style={{ background: tokens.dashboardActivePill }}
+                        >
+                          Done
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
+
             <div
               className="flex items-center gap-1 text-xs font-bold font-mono px-3 py-1 rounded-full border shadow-sm backdrop-blur-md"
               style={{
-                backgroundColor: "rgba(139, 158, 43, 0.20)",
-                borderColor: "rgba(167, 243, 208, 0.40)",
-                color: "#A7F3D0",
+                backgroundColor: currentMonthNetChange >= 0 ? "rgba(52, 211, 153, 0.20)" : "rgba(251, 113, 133, 0.20)",
+                borderColor: currentMonthNetChange >= 0 ? "rgba(52, 211, 153, 0.40)" : "rgba(251, 113, 133, 0.40)",
+                color: currentMonthNetChange >= 0 ? tokens.gain : tokens.loss,
               }}
             >
-              <ArrowUpRight className="size-3 text-[#A7F3D0]" />
-              <span>+{currencySymbol}0.00 this month</span>
+              {currentMonthNetChange >= 0 ? <ArrowUpRight className="size-3" /> : <ArrowDownLeft className="size-3" />}
+              <span>
+                {currentMonthNetChange >= 0 ? "+" : "-"}{currencySymbol}{Math.abs(currentMonthNetChange).toFixed(2)} this month
+              </span>
             </div>
           </div>
         </div>
@@ -3716,10 +3917,10 @@ function NetWorthHeroCard({
         </button>
       </div>
 
-      {/* Feature 6: Clean Minimalist Trajectory Sparkline (1st of month to today) */}
+      {/* Trajectory Sparkline (1st of month to today) */}
       <div className="relative z-10 mt-6 h-32 sm:h-36 w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={monthSparklineData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
+          <LineChart data={dynamicSparklineData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
             <XAxis hide dataKey="date" />
             <YAxis hide domain={["dataMin - 100", "dataMax + 100"]} />
             <Tooltip
@@ -3749,9 +3950,9 @@ function NetWorthHeroCard({
         </ResponsiveContainer>
       </div>
 
-      {/* Feature 5: Evenly Spaced Bottom 2 Cards (Monthly Income & Monthly Expenses - Savings Rate Removed) */}
+      {/* Feature 5: Evenly Spaced Bottom 2 Cards (Current Month Income & Current Month Expenses) */}
       <div className="relative z-10 mt-4 pt-4 border-t grid grid-cols-2 gap-4" style={{ borderColor: tokens.borderNested }}>
-        {/* Monthly Income (Green) */}
+        {/* Current Month Income (Green) */}
         <div
           className="border rounded-2xl p-4 backdrop-blur-md"
           style={{
@@ -3760,14 +3961,14 @@ function NetWorthHeroCard({
           }}
         >
           <p className="text-[10.5px] font-semibold uppercase tracking-wider font-sans text-white/75">
-            MONTHLY INCOME
+            CURRENT MONTH INCOME
           </p>
           <p className="text-base sm:text-lg font-bold font-mono mt-1" style={{ color: tokens.gain }}>
-            +{currencySymbol}{totalIncome.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+            +{currencySymbol}{currentMonthIncome.toLocaleString("en-US", { minimumFractionDigits: 2 })}
           </p>
         </div>
 
-        {/* Monthly Expenses (Red/Pink) */}
+        {/* Current Month Expenses (Red/Pink) */}
         <div
           className="border rounded-2xl p-4 backdrop-blur-md"
           style={{
@@ -3776,14 +3977,482 @@ function NetWorthHeroCard({
           }}
         >
           <p className="text-[10.5px] font-semibold uppercase tracking-wider font-sans text-white/75">
-            MONTHLY EXPENSES
+            CURRENT MONTH EXPENSES
           </p>
           <p className="text-base sm:text-lg font-bold font-mono mt-1" style={{ color: tokens.loss }}>
-            -{currencySymbol}{totalExpense.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+            -{currencySymbol}{currentMonthExpense.toLocaleString("en-US", { minimumFractionDigits: 2 })}
           </p>
         </div>
       </div>
     </motion.div>
+  )
+}
+
+// ─── Modal: All Transactions Full History ─────────────────────────
+
+function AllTransactionsModal({
+  isOpen,
+  onClose,
+  transactions,
+  currencySymbol,
+  onEditTransaction,
+  onDeleteTransaction,
+}: {
+  isOpen: boolean
+  onClose: () => void
+  transactions: Transaction[]
+  currencySymbol: string
+  onEditTransaction: (tx: Transaction) => void
+  onDeleteTransaction: (tx: Transaction) => void
+}) {
+  const { tokens } = useDashboardTheme()
+  const { batchUpdateTransactionDates } = useFinanceData()
+  const [filter, setFilter] = useState<"all" | "expense" | "income">("all")
+  const [search, setSearch] = useState("")
+
+  // Multi-select state
+  const [selectedTxIds, setSelectedTxIds] = useState<Set<string>>(new Set())
+  const [isBulkDateModalOpen, setIsBulkDateModalOpen] = useState(false)
+  const [bulkDate, setBulkDate] = useState(new Date().toISOString().split("T")[0])
+  const [isBulkSubmitting, setIsBulkSubmitting] = useState(false)
+  const [bulkError, setBulkError] = useState<string | null>(null)
+  const [bulkSuccessMsg, setBulkSuccessMsg] = useState<string | null>(null)
+
+  const filtered = useMemo(() => {
+    return transactions.filter((t) => {
+      const matchesFilter = filter === "all" || t.type === filter
+      const matchesSearch =
+        t.description.toLowerCase().includes(search.toLowerCase()) ||
+        (t.category_name || "").toLowerCase().includes(search.toLowerCase()) ||
+        (t.account_name || "").toLowerCase().includes(search.toLowerCase()) ||
+        (t.note || "").toLowerCase().includes(search.toLowerCase()) ||
+        (t.date || "").includes(search)
+      return matchesFilter && matchesSearch
+    })
+  }, [transactions, filter, search])
+
+  const allSelected = useMemo(() => {
+    return filtered.length > 0 && filtered.every((t) => selectedTxIds.has(t.id))
+  }, [filtered, selectedTxIds])
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedTxIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
+  const handleToggleSelectAll = () => {
+    if (allSelected) {
+      setSelectedTxIds(new Set())
+    } else {
+      setSelectedTxIds(new Set(filtered.map((t) => t.id)))
+    }
+  }
+
+  const handleApplyBulkDate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (selectedTxIds.size === 0 || !bulkDate) return
+
+    setIsBulkSubmitting(true)
+    setBulkError(null)
+
+    try {
+      await batchUpdateTransactionDates(Array.from(selectedTxIds), bulkDate)
+      setBulkSuccessMsg(`Successfully updated date for ${selectedTxIds.size} transaction${selectedTxIds.size > 1 ? "s" : ""}!`)
+      setSelectedTxIds(new Set())
+      setTimeout(() => {
+        setIsBulkDateModalOpen(false)
+        setBulkSuccessMsg(null)
+      }, 1200)
+    } catch (err: any) {
+      setBulkError(err.message || "Failed to update transaction dates.")
+    } finally {
+      setIsBulkSubmitting(false)
+    }
+  }
+
+  if (!isOpen) return null
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/70 backdrop-blur-md">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 10 }}
+        className="w-full max-w-3xl rounded-3xl p-5 sm:p-7 border shadow-2xl backdrop-blur-2xl relative overflow-hidden max-h-[90vh] flex flex-col"
+        style={{
+          background: tokens.cardGradient,
+          borderColor: tokens.border,
+          boxShadow: tokens.cardShadow,
+        }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between pb-4 border-b shrink-0" style={{ borderColor: tokens.border }}>
+          <div className="flex items-center gap-2.5">
+            <div className="size-9 rounded-xl flex items-center justify-center bg-purple-500/20 border border-purple-500/40 text-purple-300">
+              <Receipt className="size-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-bold font-display text-white">All Transactions</h3>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-white/10 text-white/80 border border-white/10">
+                  {transactions.length} logged
+                </span>
+              </div>
+              <p className="text-xs font-sans text-white/70 mt-0.5">Complete history across all accounts</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="size-8 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Filter & Search Bar */}
+        <div className="py-3.5 space-y-2.5 shrink-0">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2.5">
+            <div className="relative flex-1">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-white/60" />
+              <input
+                type="text"
+                placeholder="Search by merchant, note, category, account, or date (YYYY-MM-DD)..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border rounded-2xl text-xs font-sans text-white focus:outline-none transition-colors backdrop-blur-md placeholder:text-white/40"
+                style={{
+                  backgroundColor: tokens.nestedSurface,
+                  borderColor: tokens.borderNested,
+                }}
+              />
+            </div>
+
+            {/* Filter Tabs */}
+            <div className="flex items-center p-1 border rounded-full self-start sm:self-auto" style={{ backgroundColor: "rgba(16, 8, 36, 0.45)", borderColor: tokens.borderNested }}>
+              {[
+                { id: "all", label: "All" },
+                { id: "expense", label: "Expenses" },
+                { id: "income", label: "Income" },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setFilter(tab.id as any)}
+                  className="px-3 py-1 text-xs font-semibold rounded-full transition-all font-sans cursor-pointer"
+                  style={{
+                    backgroundColor: filter === tab.id ? tokens.filterActivePill : "transparent",
+                    color: filter === tab.id ? tokens.filterActiveText : "rgba(255, 255, 255, 0.75)",
+                    fontWeight: filter === tab.id ? "bold" : "normal",
+                  }}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Multi-Select Action Banner inside Modal */}
+          <AnimatePresence>
+            {selectedTxIds.size > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: -6, height: 0 }}
+                animate={{ opacity: 1, y: 0, height: "auto" }}
+                exit={{ opacity: 0, y: -6, height: 0 }}
+                className="p-2.5 px-3.5 rounded-2xl border flex flex-wrap items-center justify-between gap-2.5 shadow-lg"
+                style={{
+                  background: "linear-gradient(135deg, rgba(76, 29, 149, 0.85) 0%, rgba(30, 58, 138, 0.85) 100%)",
+                  borderColor: "rgba(167, 139, 250, 0.4)",
+                }}
+              >
+                <div className="flex items-center gap-2 text-xs font-bold text-white">
+                  <span className="px-2 py-0.5 rounded-md bg-white/20 font-mono text-[11px]">
+                    {selectedTxIds.size}
+                  </span>
+                  <span>transaction{selectedTxIds.size > 1 ? "s" : ""} selected</span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleToggleSelectAll}
+                    className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-white/10 hover:bg-white/20 text-white/90 transition-all cursor-pointer"
+                  >
+                    {allSelected ? "Deselect All" : "Select All"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBulkDate(new Date().toISOString().split("T")[0])
+                      setIsBulkDateModalOpen(true)
+                    }}
+                    className="px-3 py-1 text-xs font-bold rounded-lg text-[#120824] flex items-center gap-1.5 transition-all shadow-sm cursor-pointer hover:scale-[1.02]"
+                    style={{ background: tokens.dashboardActivePill }}
+                  >
+                    <Calendar className="size-3.5" />
+                    Change Date
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTxIds(new Set())}
+                    className="p-1 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                    title="Clear selection"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Scrollable Transaction List */}
+        <div className="flex-1 overflow-y-auto pr-1 space-y-2 min-h-0">
+          {filtered.length === 0 ? (
+            <div className="text-center py-16 text-white/60">
+              <p className="text-sm font-sans font-medium">No transactions found.</p>
+            </div>
+          ) : (
+            filtered.map((tx) => {
+              const isIncome = tx.type === "income"
+              const isFee = Boolean(tx.is_fee || tx.category_name?.toLowerCase() === "fees")
+              const isSelected = selectedTxIds.has(tx.id)
+
+              return (
+                <div
+                  key={tx.id}
+                  onClick={() => handleToggleSelect(tx.id)}
+                  className={`group flex items-center justify-between p-3 sm:p-3.5 rounded-2xl border transition-all duration-200 backdrop-blur-md relative cursor-pointer ${
+                    isSelected ? "bg-purple-900/35 border-purple-400/50 shadow-sm" : "hover:bg-white/5"
+                  }`}
+                  style={{
+                    backgroundColor: isSelected ? undefined : tokens.nestedSurface,
+                    borderColor: isSelected ? undefined : tokens.borderNested,
+                  }}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    {/* Checkbox */}
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleToggleSelect(tx.id)
+                      }}
+                      className={`size-5 rounded-lg border flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+                        isSelected
+                          ? "bg-purple-500 border-purple-400 text-white"
+                          : "bg-white/5 border-white/20 text-transparent group-hover:border-white/50"
+                      }`}
+                    >
+                      <Check className="size-3 stroke-[3]" />
+                    </div>
+
+                    <div
+                      className="size-10 rounded-xl flex items-center justify-center shrink-0 shadow-md border"
+                      style={{
+                        backgroundColor: isFee
+                          ? "rgba(254, 240, 138, 0.15)"
+                          : isIncome
+                          ? "rgba(52, 211, 153, 0.20)"
+                          : "rgba(251, 113, 133, 0.20)",
+                        borderColor: isFee
+                          ? "rgba(254, 240, 138, 0.35)"
+                          : isIncome
+                          ? "rgba(52, 211, 153, 0.35)"
+                          : "rgba(251, 113, 133, 0.35)",
+                        color: isFee ? "#FEF08A" : isIncome ? tokens.gain : tokens.loss,
+                      }}
+                    >
+                      {isFee ? <Receipt className="size-4.5" /> : isIncome ? <ArrowDownLeft className="size-4.5" /> : <ArrowUpRight className="size-4.5" />}
+                    </div>
+
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold truncate font-sans text-white">
+                          {tx.description}
+                        </p>
+                        {tx.group_id && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30 shrink-0">
+                            split
+                          </span>
+                        )}
+                        {tx.fee_pair_id && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-white/10 text-white/70 shrink-0">
+                            linked
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs font-sans text-white/60 mt-0.5">
+                        {tx.category_name || "General"} • {tx.account_name || "Account"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <div className="text-right">
+                      <p
+                        className="text-sm sm:text-base font-bold font-mono"
+                        style={{ color: isIncome ? tokens.gain : tokens.loss }}
+                      >
+                        {isIncome ? "+" : "-"}{currencySymbol}{Math.abs(tx.amount).toFixed(2)}
+                      </p>
+                      <p className="text-[10px] font-mono mt-0.5 text-white/60">
+                        {tx.date}
+                      </p>
+                    </div>
+
+                    {/* Edit & Delete Actions */}
+                    <div className="flex items-center gap-1 opacity-80 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => onEditTransaction(tx)}
+                        className="p-1.5 rounded-lg hover:bg-white/15 text-white/70 hover:text-white transition-colors cursor-pointer"
+                        title="Edit transaction (including date)"
+                      >
+                        <Edit3 className="size-3.5" />
+                      </button>
+                      <button
+                        onClick={() => onDeleteTransaction(tx)}
+                        className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors cursor-pointer"
+                        title="Delete transaction"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
+
+        {/* Modal Footer */}
+        <div className="pt-3.5 mt-2 border-t flex items-center justify-between shrink-0" style={{ borderColor: tokens.border }}>
+          <span className="text-xs text-white/60 font-mono">
+            Showing {filtered.length} of {transactions.length} total transactions
+          </span>
+          <button
+            onClick={onClose}
+            className="px-5 py-2 rounded-xl text-xs font-bold text-[#120824] shadow-md cursor-pointer hover:scale-[1.02] transition-all"
+            style={{ background: tokens.dashboardActivePill }}
+          >
+            Done
+          </button>
+        </div>
+
+        {/* Bulk Change Date Modal (Child) */}
+        <AnimatePresence>
+          {isBulkDateModalOpen && (
+            <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="w-full max-w-md rounded-3xl p-6 border shadow-2xl backdrop-blur-2xl relative overflow-hidden"
+                style={{
+                  background: tokens.cardGradient,
+                  borderColor: tokens.border,
+                  boxShadow: tokens.cardShadow,
+                }}
+              >
+                <div className="flex items-center justify-between pb-3.5 border-b" style={{ borderColor: tokens.border }}>
+                  <div className="flex items-center gap-2">
+                    <Calendar className="size-4.5 text-[#FEF08A]" />
+                    <h3 className="text-base font-bold font-display text-white">Change Transaction Date</h3>
+                  </div>
+                  <button
+                    onClick={() => setIsBulkDateModalOpen(false)}
+                    className="size-7 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 text-white cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {bulkError && (
+                  <div className="mt-3.5 p-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-200 text-xs flex items-center gap-2">
+                    <AlertCircle className="size-4 shrink-0 text-red-400" />
+                    <span>{bulkError}</span>
+                  </div>
+                )}
+
+                {bulkSuccessMsg && (
+                  <div className="mt-3.5 p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-xs flex items-center gap-2">
+                    <CheckCircle2 className="size-4 shrink-0 text-emerald-400" />
+                    <span>{bulkSuccessMsg}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleApplyBulkDate} className="mt-4 space-y-4">
+                  <div>
+                    <p className="text-xs text-white/80 mb-2">
+                      Updating date for <strong className="text-white">{selectedTxIds.size}</strong> selected transaction{selectedTxIds.size > 1 ? "s" : ""}.
+                    </p>
+                    
+                    <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
+                      New Date
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={bulkDate}
+                      onChange={(e) => setBulkDate(e.target.value)}
+                      className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none"
+                      style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+                    />
+                  </div>
+
+                  {/* Quick Date Presets */}
+                  <div className="flex items-center gap-2 pt-1">
+                    <span className="text-[10.5px] uppercase font-semibold text-white/50">Presets:</span>
+                    <button
+                      type="button"
+                      onClick={() => setBulkDate(new Date().toISOString().split("T")[0])}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+                    >
+                      Today
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const d = new Date()
+                        d.setDate(d.getDate() - 1)
+                        setBulkDate(d.toISOString().split("T")[0])
+                      }}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+                    >
+                      Yesterday
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2.5 pt-3 border-t" style={{ borderColor: tokens.border }}>
+                    <button
+                      type="button"
+                      onClick={() => setIsBulkDateModalOpen(false)}
+                      className="px-4 py-2 rounded-xl text-xs font-semibold text-white/70 hover:text-white cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isBulkSubmitting || !bulkDate}
+                      className="px-5 py-2 rounded-xl text-xs font-bold text-[#120824] shadow-md cursor-pointer hover:scale-[1.02] disabled:opacity-50 transition-all"
+                      style={{ background: tokens.dashboardActivePill }}
+                    >
+                      {isBulkSubmitting ? "Updating dates..." : `Update Date (${selectedTxIds.size})`}
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+    </div>
   )
 }
 
@@ -3809,6 +4478,9 @@ function RecentTransactionsFeed({
   const [filter, setFilter] = useState<"all" | "expense" | "income">("all")
   const [search, setSearch] = useState("")
   const [visibleLimit, setVisibleLimit] = useState(12)
+
+  // Full history modal state
+  const [isAllTxModalOpen, setIsAllTxModalOpen] = useState(false)
 
   // Multi-select state
   const [selectedTxIds, setSelectedTxIds] = useState<Set<string>>(new Set())
@@ -3888,391 +4560,403 @@ function RecentTransactionsFeed({
   }
 
   return (
-    <motion.div
-      {...cardEntrance(0.12)}
-      className="rounded-3xl border p-5 lg:p-6 flex flex-col hover:scale-[1.01] transition-transform duration-300 backdrop-blur-xl"
-      style={{
-        background: tokens.cardGradient,
-        borderColor: tokens.border,
-        boxShadow: tokens.cardShadow,
-      }}
-    >
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b" style={{ borderColor: tokens.border }}>
-        <div>
-          <h3 className="text-base font-bold font-display text-white">Recent Transactions</h3>
-          <p className="text-xs font-sans mt-0.5 text-white/70">
-            Real-time feed across all connected cards & accounts
-          </p>
-        </div>
-
-        {/* Filter Tabs */}
-        <div className="flex items-center gap-1">
-          <div className="flex items-center p-1 border rounded-full" style={{ backgroundColor: "rgba(16, 8, 36, 0.45)", borderColor: tokens.borderNested }}>
-            <button
-              onClick={() => setFilter("all")}
-              className="px-3.5 py-1 text-xs font-bold rounded-full transition-all font-sans cursor-pointer"
-              style={{
-                backgroundColor: filter === "all" ? tokens.filterActivePill : "transparent",
-                color: filter === "all" ? tokens.filterActiveText : "rgba(255, 255, 255, 0.75)",
-              }}
-            >
-              All
-            </button>
-            <button
-              onClick={() => setFilter("expense")}
-              className="px-3 py-1 text-xs font-semibold rounded-full transition-all font-sans cursor-pointer text-white/75 hover:text-white"
-              style={{
-                backgroundColor: filter === "expense" ? tokens.filterActivePill : "transparent",
-                color: filter === "expense" ? tokens.filterActiveText : "rgba(255, 255, 255, 0.75)",
-              }}
-            >
-              Expenses
-            </button>
-            <button
-              onClick={() => setFilter("income")}
-              className="px-3 py-1 text-xs font-semibold rounded-full transition-all font-sans cursor-pointer text-white/75 hover:text-white"
-              style={{
-                backgroundColor: filter === "income" ? tokens.filterActivePill : "transparent",
-                color: filter === "income" ? tokens.filterActiveText : "rgba(255, 255, 255, 0.75)",
-              }}
-            >
-              Income
-            </button>
+    <>
+      <motion.div
+        {...cardEntrance(0.12)}
+        className="rounded-3xl border p-5 lg:p-6 flex flex-col hover:scale-[1.01] transition-transform duration-300 backdrop-blur-xl"
+        style={{
+          background: tokens.cardGradient,
+          borderColor: tokens.border,
+          boxShadow: tokens.cardShadow,
+        }}
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b" style={{ borderColor: tokens.border }}>
+          <div>
+            <h3 className="text-base font-bold font-display text-white">Recent Transactions</h3>
+            <p className="text-xs font-sans mt-0.5 text-white/70">
+              Real-time feed across all connected cards & accounts
+            </p>
           </div>
 
-          <button
-            onClick={() => onNavigate?.("bills")}
-            className="text-xs font-semibold px-2.5 py-1 transition-colors font-sans cursor-pointer text-white/75 hover:text-white"
-          >
-            View all
-          </button>
-        </div>
-      </div>
-
-      {/* Frosted Search Input & Bulk Action Bar */}
-      <div className="my-3.5 space-y-2.5">
-        <div className="relative">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-white/60" />
-          <input
-            type="text"
-            placeholder="Filter by merchant, category, or account..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 border rounded-2xl text-xs font-sans text-white focus:outline-none transition-colors backdrop-blur-md placeholder:text-white/40"
-            style={{
-              backgroundColor: tokens.nestedSurface,
-              borderColor: tokens.borderNested,
-            }}
-          />
-        </div>
-
-        {/* Multi-Select Action Banner */}
-        <AnimatePresence>
-          {selectedTxIds.size > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: -6, height: 0 }}
-              animate={{ opacity: 1, y: 0, height: "auto" }}
-              exit={{ opacity: 0, y: -6, height: 0 }}
-              className="p-2.5 px-3.5 rounded-2xl border flex flex-wrap items-center justify-between gap-2.5 shadow-lg"
-              style={{
-                background: "linear-gradient(135deg, rgba(76, 29, 149, 0.85) 0%, rgba(30, 58, 138, 0.85) 100%)",
-                borderColor: "rgba(167, 139, 250, 0.4)",
-              }}
-            >
-              <div className="flex items-center gap-2 text-xs font-bold text-white">
-                <span className="px-2 py-0.5 rounded-md bg-white/20 font-mono text-[11px]">
-                  {selectedTxIds.size}
-                </span>
-                <span>transaction{selectedTxIds.size > 1 ? "s" : ""} selected</span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleToggleSelectAll}
-                  className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-white/10 hover:bg-white/20 text-white/90 transition-all cursor-pointer"
-                >
-                  {allVisibleSelected ? "Deselect Visible" : "Select All Visible"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    setBulkDate(new Date().toISOString().split("T")[0])
-                    setIsBulkDateModalOpen(true)
-                  }}
-                  className="px-3 py-1 text-xs font-bold rounded-lg text-[#120824] flex items-center gap-1.5 transition-all shadow-sm cursor-pointer hover:scale-[1.02]"
-                  style={{ background: tokens.dashboardActivePill }}
-                >
-                  <Calendar className="size-3.5" />
-                  Change Date
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setSelectedTxIds(new Set())}
-                  className="p-1 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-                  title="Clear selection"
-                >
-                  <X className="size-3.5" />
-                </button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-
-      {/* Itemized Rows with Multi-Select Checkbox, Edit & Delete actions */}
-      <div className="flex flex-col gap-2 mt-1 max-h-[420px] overflow-y-auto pr-1">
-        {filtered.length === 0 ? (
-          <div className="text-center py-10 text-white/60">
-            <p className="text-sm font-sans font-medium">No transactions match your filter.</p>
-            <button
-              onClick={onAddTransaction}
-              className="mt-3 text-xs font-bold underline cursor-pointer text-[#FEF08A]"
-            >
-              + Record a new transaction
-            </button>
-          </div>
-        ) : (
-          filtered.slice(0, visibleLimit).map((tx) => {
-            const isIncome = tx.type === "income"
-            const isFee = Boolean(tx.is_fee || tx.category_name?.toLowerCase() === "fees")
-            const isSelected = selectedTxIds.has(tx.id)
-
-            return (
-              <div
-                key={tx.id}
-                onClick={() => handleToggleSelect(tx.id)}
-                className={`group flex items-center justify-between p-3 sm:p-3.5 rounded-2xl border transition-all duration-200 backdrop-blur-md relative cursor-pointer ${
-                  isSelected ? "bg-purple-900/35 border-purple-400/50 shadow-sm" : "hover:bg-white/5"
-                }`}
+          {/* Filter Tabs & View All Button */}
+          <div className="flex items-center gap-1">
+            <div className="flex items-center p-1 border rounded-full" style={{ backgroundColor: "rgba(16, 8, 36, 0.45)", borderColor: tokens.borderNested }}>
+              <button
+                onClick={() => setFilter("all")}
+                className="px-3.5 py-1 text-xs font-bold rounded-full transition-all font-sans cursor-pointer"
                 style={{
-                  backgroundColor: isSelected ? undefined : tokens.nestedSurface,
-                  borderColor: isSelected ? undefined : tokens.borderNested,
+                  backgroundColor: filter === "all" ? tokens.filterActivePill : "transparent",
+                  color: filter === "all" ? tokens.filterActiveText : "rgba(255, 255, 255, 0.75)",
                 }}
               >
-                <div className="flex items-center gap-3 min-w-0">
-                  {/* Select Checkbox */}
-                  <div
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleToggleSelect(tx.id)
-                    }}
-                    className={`size-5 rounded-lg border flex items-center justify-center transition-all cursor-pointer shrink-0 ${
-                      isSelected
-                        ? "bg-purple-500 border-purple-400 text-white"
-                        : "bg-white/5 border-white/20 text-transparent group-hover:border-white/50"
-                    }`}
-                  >
-                    <Check className="size-3 stroke-[3]" />
-                  </div>
+                All
+              </button>
+              <button
+                onClick={() => setFilter("expense")}
+                className="px-3 py-1 text-xs font-semibold rounded-full transition-all font-sans cursor-pointer text-white/75 hover:text-white"
+                style={{
+                  backgroundColor: filter === "expense" ? tokens.filterActivePill : "transparent",
+                  color: filter === "expense" ? tokens.filterActiveText : "rgba(255, 255, 255, 0.75)",
+                }}
+              >
+                Expenses
+              </button>
+              <button
+                onClick={() => setFilter("income")}
+                className="px-3 py-1 text-xs font-semibold rounded-full transition-all font-sans cursor-pointer text-white/75 hover:text-white"
+                style={{
+                  backgroundColor: filter === "income" ? tokens.filterActivePill : "transparent",
+                  color: filter === "income" ? tokens.filterActiveText : "rgba(255, 255, 255, 0.75)",
+                }}
+              >
+                Income
+              </button>
+            </div>
 
-                  <div
-                    className="size-10 rounded-xl flex items-center justify-center shrink-0 shadow-md border"
-                    style={{
-                      backgroundColor: isFee
-                        ? "rgba(254, 240, 138, 0.15)"
-                        : isIncome
-                        ? "rgba(52, 211, 153, 0.20)"
-                        : "rgba(251, 113, 133, 0.20)",
-                      borderColor: isFee
-                        ? "rgba(254, 240, 138, 0.35)"
-                        : isIncome
-                        ? "rgba(52, 211, 153, 0.35)"
-                        : "rgba(251, 113, 133, 0.35)",
-                      color: isFee ? "#FEF08A" : isIncome ? tokens.gain : tokens.loss,
-                    }}
-                  >
-                    {isFee ? <Receipt className="size-4.5" /> : isIncome ? <ArrowDownLeft className="size-4.5" /> : <ArrowUpRight className="size-4.5" />}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold truncate font-sans text-white">
-                        {tx.description}
-                      </p>
-                      {tx.group_id && (
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30 shrink-0">
-                          split
-                        </span>
-                      )}
-                      {tx.fee_pair_id && (
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-white/10 text-white/70 shrink-0">
-                          linked
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs font-sans text-white/60 mt-0.5">
-                      {tx.category_name || "General"} • {tx.account_name || "Account"}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 shrink-0" onClick={(e) => e.stopPropagation()}>
-                  <div className="text-right">
-                    <p
-                      className="text-sm sm:text-base font-bold font-mono"
-                      style={{ color: isIncome ? tokens.gain : tokens.loss }}
-                    >
-                      {isIncome ? "+" : "-"}{currencySymbol}{Math.abs(tx.amount).toFixed(2)}
-                    </p>
-                    <p className="text-[10px] font-mono mt-0.5 text-white/60">
-                      {tx.date}
-                    </p>
-                  </div>
-
-                  {/* Feature 4: Edit & Delete Actions */}
-                  <div className="flex items-center gap-1 opacity-80 sm:opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={() => onEditTransaction(tx)}
-                      className="p-1.5 rounded-lg hover:bg-white/15 text-white/70 hover:text-white transition-colors cursor-pointer"
-                      title="Edit transaction (including date)"
-                    >
-                      <Edit3 className="size-3.5" />
-                    </button>
-                    <button
-                      onClick={() => onDeleteTransaction(tx)}
-                      className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors cursor-pointer"
-                      title="Delete transaction"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )
-          })
-        )}
-      </div>
-
-      {/* Show More / Show Less Toggle */}
-      {filtered.length > 12 && (
-        <div className="pt-3 border-t border-white/10 flex items-center justify-center">
-          {visibleLimit < filtered.length ? (
             <button
-              onClick={() => setVisibleLimit((prev) => prev + 15)}
-              className="text-xs font-semibold text-[#A7F3D0] hover:underline cursor-pointer flex items-center gap-1"
+              onClick={() => setIsAllTxModalOpen(true)}
+              className="text-xs font-semibold px-2.5 py-1 transition-colors font-sans cursor-pointer text-[#A7F3D0] hover:text-white hover:underline"
             >
-              Show more ({filtered.length - visibleLimit} remaining)
+              View all
             </button>
-          ) : (
-            <button
-              onClick={() => setVisibleLimit(12)}
-              className="text-xs font-semibold text-white/60 hover:text-white cursor-pointer"
-            >
-              Show less
-            </button>
-          )}
+          </div>
         </div>
-      )}
 
-      {/* Bulk Change Date Modal */}
-      <AnimatePresence>
-        {isBulkDateModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-md rounded-3xl p-6 border shadow-2xl backdrop-blur-2xl relative overflow-hidden"
+        {/* Frosted Search Input & Bulk Action Bar */}
+        <div className="my-3.5 space-y-2.5">
+          <div className="relative">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-white/60" />
+            <input
+              type="text"
+              placeholder="Filter by merchant, category, or account..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 border rounded-2xl text-xs font-sans text-white focus:outline-none transition-colors backdrop-blur-md placeholder:text-white/40"
               style={{
-                background: tokens.cardGradient,
-                borderColor: tokens.border,
-                boxShadow: tokens.cardShadow,
+                backgroundColor: tokens.nestedSurface,
+                borderColor: tokens.borderNested,
               }}
-            >
-              <div className="flex items-center justify-between pb-3.5 border-b" style={{ borderColor: tokens.border }}>
+            />
+          </div>
+
+          {/* Multi-Select Action Banner */}
+          <AnimatePresence>
+            {selectedTxIds.size > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: -6, height: 0 }}
+                animate={{ opacity: 1, y: 0, height: "auto" }}
+                exit={{ opacity: 0, y: -6, height: 0 }}
+                className="p-2.5 px-3.5 rounded-2xl border flex flex-wrap items-center justify-between gap-2.5 shadow-lg"
+                style={{
+                  background: "linear-gradient(135deg, rgba(76, 29, 149, 0.85) 0%, rgba(30, 58, 138, 0.85) 100%)",
+                  borderColor: "rgba(167, 139, 250, 0.4)",
+                }}
+              >
+                <div className="flex items-center gap-2 text-xs font-bold text-white">
+                  <span className="px-2 py-0.5 rounded-md bg-white/20 font-mono text-[11px]">
+                    {selectedTxIds.size}
+                  </span>
+                  <span>transaction{selectedTxIds.size > 1 ? "s" : ""} selected</span>
+                </div>
+
                 <div className="flex items-center gap-2">
-                  <Calendar className="size-4.5 text-[#FEF08A]" />
-                  <h3 className="text-base font-bold font-display text-white">Change Transaction Date</h3>
-                </div>
-                <button
-                  onClick={() => setIsBulkDateModalOpen(false)}
-                  className="size-7 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 text-white cursor-pointer"
-                >
-                  ✕
-                </button>
-              </div>
-
-              {bulkError && (
-                <div className="mt-3.5 p-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-200 text-xs flex items-center gap-2">
-                  <AlertCircle className="size-4 shrink-0 text-red-400" />
-                  <span>{bulkError}</span>
-                </div>
-              )}
-
-              {bulkSuccessMsg && (
-                <div className="mt-3.5 p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-xs flex items-center gap-2">
-                  <CheckCircle2 className="size-4 shrink-0 text-emerald-400" />
-                  <span>{bulkSuccessMsg}</span>
-                </div>
-              )}
-
-              <form onSubmit={handleApplyBulkDate} className="mt-4 space-y-4">
-                <div>
-                  <p className="text-xs text-white/80 mb-2">
-                    Updating date for <strong className="text-white">{selectedTxIds.size}</strong> selected transaction{selectedTxIds.size > 1 ? "s" : ""}.
-                  </p>
-                  
-                  <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
-                    New Date
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={bulkDate}
-                    onChange={(e) => setBulkDate(e.target.value)}
-                    className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none"
-                    style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
-                  />
-                </div>
-
-                {/* Quick Date Presets */}
-                <div className="flex items-center gap-2 pt-1">
-                  <span className="text-[10.5px] uppercase font-semibold text-white/50">Presets:</span>
                   <button
                     type="button"
-                    onClick={() => setBulkDate(new Date().toISOString().split("T")[0])}
-                    className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+                    onClick={handleToggleSelectAll}
+                    className="px-2.5 py-1 text-[11px] font-semibold rounded-lg bg-white/10 hover:bg-white/20 text-white/90 transition-all cursor-pointer"
                   >
-                    Today
+                    {allVisibleSelected ? "Deselect Visible" : "Select All Visible"}
                   </button>
+
                   <button
                     type="button"
                     onClick={() => {
-                      const d = new Date()
-                      d.setDate(d.getDate() - 1)
-                      setBulkDate(d.toISOString().split("T")[0])
+                      setBulkDate(new Date().toISOString().split("T")[0])
+                      setIsBulkDateModalOpen(true)
                     }}
-                    className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+                    className="px-3 py-1 text-xs font-bold rounded-lg text-[#120824] flex items-center gap-1.5 transition-all shadow-sm cursor-pointer hover:scale-[1.02]"
+                    style={{ background: tokens.dashboardActivePill }}
                   >
-                    Yesterday
+                    <Calendar className="size-3.5" />
+                    Change Date
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTxIds(new Set())}
+                    className="p-1 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                    title="Clear selection"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Itemized Rows with Multi-Select Checkbox, Edit & Delete actions */}
+        <div className="flex flex-col gap-2 mt-1 max-h-[420px] overflow-y-auto pr-1">
+          {filtered.length === 0 ? (
+            <div className="text-center py-10 text-white/60">
+              <p className="text-sm font-sans font-medium">No transactions match your filter.</p>
+              <button
+                onClick={onAddTransaction}
+                className="mt-3 text-xs font-bold underline cursor-pointer text-[#FEF08A]"
+              >
+                + Record a new transaction
+              </button>
+            </div>
+          ) : (
+            filtered.slice(0, visibleLimit).map((tx) => {
+              const isIncome = tx.type === "income"
+              const isFee = Boolean(tx.is_fee || tx.category_name?.toLowerCase() === "fees")
+              const isSelected = selectedTxIds.has(tx.id)
+
+              return (
+                <div
+                  key={tx.id}
+                  onClick={() => handleToggleSelect(tx.id)}
+                  className={`group flex items-center justify-between p-3 sm:p-3.5 rounded-2xl border transition-all duration-200 backdrop-blur-md relative cursor-pointer ${
+                    isSelected ? "bg-purple-900/35 border-purple-400/50 shadow-sm" : "hover:bg-white/5"
+                  }`}
+                  style={{
+                    backgroundColor: isSelected ? undefined : tokens.nestedSurface,
+                    borderColor: isSelected ? undefined : tokens.borderNested,
+                  }}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    {/* Select Checkbox */}
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleToggleSelect(tx.id)
+                      }}
+                      className={`size-5 rounded-lg border flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+                        isSelected
+                          ? "bg-purple-500 border-purple-400 text-white"
+                          : "bg-white/5 border-white/20 text-transparent group-hover:border-white/50"
+                      }`}
+                    >
+                      <Check className="size-3 stroke-[3]" />
+                    </div>
+
+                    <div
+                      className="size-10 rounded-xl flex items-center justify-center shrink-0 shadow-md border"
+                      style={{
+                        backgroundColor: isFee
+                          ? "rgba(254, 240, 138, 0.15)"
+                          : isIncome
+                          ? "rgba(52, 211, 153, 0.20)"
+                          : "rgba(251, 113, 133, 0.20)",
+                        borderColor: isFee
+                          ? "rgba(254, 240, 138, 0.35)"
+                          : isIncome
+                          ? "rgba(52, 211, 153, 0.35)"
+                          : "rgba(251, 113, 133, 0.35)",
+                        color: isFee ? "#FEF08A" : isIncome ? tokens.gain : tokens.loss,
+                      }}
+                    >
+                      {isFee ? <Receipt className="size-4.5" /> : isIncome ? <ArrowDownLeft className="size-4.5" /> : <ArrowUpRight className="size-4.5" />}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold truncate font-sans text-white">
+                          {tx.description}
+                        </p>
+                        {tx.group_id && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30 shrink-0">
+                            split
+                          </span>
+                        )}
+                        {tx.fee_pair_id && (
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-mono bg-white/10 text-white/70 shrink-0">
+                            linked
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs font-sans text-white/60 mt-0.5">
+                        {tx.category_name || "General"} • {tx.account_name || "Account"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <div className="text-right">
+                      <p
+                        className="text-sm sm:text-base font-bold font-mono"
+                        style={{ color: isIncome ? tokens.gain : tokens.loss }}
+                      >
+                        {isIncome ? "+" : "-"}{currencySymbol}{Math.abs(tx.amount).toFixed(2)}
+                      </p>
+                      <p className="text-[10px] font-mono mt-0.5 text-white/60">
+                        {tx.date}
+                      </p>
+                    </div>
+
+                    {/* Feature 4: Edit & Delete Actions */}
+                    <div className="flex items-center gap-1 opacity-80 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={() => onEditTransaction(tx)}
+                        className="p-1.5 rounded-lg hover:bg-white/15 text-white/70 hover:text-white transition-colors cursor-pointer"
+                        title="Edit transaction (including date)"
+                      >
+                        <Edit3 className="size-3.5" />
+                      </button>
+                      <button
+                        onClick={() => onDeleteTransaction(tx)}
+                        className="p-1.5 rounded-lg hover:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors cursor-pointer"
+                        title="Delete transaction"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
+
+        {/* Show More / Show Less Toggle */}
+        {filtered.length > 12 && (
+          <div className="pt-3 border-t border-white/10 flex items-center justify-center">
+            {visibleLimit < filtered.length ? (
+              <button
+                onClick={() => setVisibleLimit((prev) => prev + 15)}
+                className="text-xs font-semibold text-[#A7F3D0] hover:underline cursor-pointer flex items-center gap-1"
+              >
+                Show more ({filtered.length - visibleLimit} remaining)
+              </button>
+            ) : (
+              <button
+                onClick={() => setVisibleLimit(12)}
+                className="text-xs font-semibold text-white/60 hover:text-white cursor-pointer"
+              >
+                Show less
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Bulk Change Date Modal */}
+        <AnimatePresence>
+          {isBulkDateModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="w-full max-w-md rounded-3xl p-6 border shadow-2xl backdrop-blur-2xl relative overflow-hidden"
+                style={{
+                  background: tokens.cardGradient,
+                  borderColor: tokens.border,
+                  boxShadow: tokens.cardShadow,
+                }}
+              >
+                <div className="flex items-center justify-between pb-3.5 border-b" style={{ borderColor: tokens.border }}>
+                  <div className="flex items-center gap-2">
+                    <Calendar className="size-4.5 text-[#FEF08A]" />
+                    <h3 className="text-base font-bold font-display text-white">Change Transaction Date</h3>
+                  </div>
+                  <button
+                    onClick={() => setIsBulkDateModalOpen(false)}
+                    className="size-7 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 text-white cursor-pointer"
+                  >
+                    ✕
                   </button>
                 </div>
 
-                <div className="flex items-center justify-end gap-2.5 pt-3 border-t" style={{ borderColor: tokens.border }}>
-                  <button
-                    type="button"
-                    onClick={() => setIsBulkDateModalOpen(false)}
-                    className="px-4 py-2 rounded-xl text-xs font-semibold text-white/70 hover:text-white cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isBulkSubmitting || !bulkDate}
-                    className="px-5 py-2 rounded-xl text-xs font-bold text-[#120824] shadow-md cursor-pointer hover:scale-[1.02] disabled:opacity-50 transition-all"
-                    style={{ background: tokens.dashboardActivePill }}
-                  >
-                    {isBulkSubmitting ? "Saving to Supabase..." : `Update Date (${selectedTxIds.size})`}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-    </motion.div>
+                {bulkError && (
+                  <div className="mt-3.5 p-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-200 text-xs flex items-center gap-2">
+                    <AlertCircle className="size-4 shrink-0 text-red-400" />
+                    <span>{bulkError}</span>
+                  </div>
+                )}
+
+                {bulkSuccessMsg && (
+                  <div className="mt-3.5 p-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-xs flex items-center gap-2">
+                    <CheckCircle2 className="size-4 shrink-0 text-emerald-400" />
+                    <span>{bulkSuccessMsg}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleApplyBulkDate} className="mt-4 space-y-4">
+                  <div>
+                    <p className="text-xs text-white/80 mb-2">
+                      Updating date for <strong className="text-white">{selectedTxIds.size}</strong> selected transaction{selectedTxIds.size > 1 ? "s" : ""}.
+                    </p>
+                    
+                    <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
+                      New Date
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={bulkDate}
+                      onChange={(e) => setBulkDate(e.target.value)}
+                      className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none"
+                      style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+                    />
+                  </div>
+
+                  {/* Quick Date Presets */}
+                  <div className="flex items-center gap-2 pt-1">
+                    <span className="text-[10.5px] uppercase font-semibold text-white/50">Presets:</span>
+                    <button
+                      type="button"
+                      onClick={() => setBulkDate(new Date().toISOString().split("T")[0])}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+                    >
+                      Today
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const d = new Date()
+                        d.setDate(d.getDate() - 1)
+                        setBulkDate(d.toISOString().split("T")[0])
+                      }}
+                      className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+                    >
+                      Yesterday
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2.5 pt-3 border-t" style={{ borderColor: tokens.border }}>
+                    <button
+                      type="button"
+                      onClick={() => setIsBulkDateModalOpen(false)}
+                      className="px-4 py-2 rounded-xl text-xs font-semibold text-white/70 hover:text-white cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isBulkSubmitting || !bulkDate}
+                      className="px-5 py-2 rounded-xl text-xs font-bold text-[#120824] shadow-md cursor-pointer hover:scale-[1.02] disabled:opacity-50 transition-all"
+                      style={{ background: tokens.dashboardActivePill }}
+                    >
+                      {isBulkSubmitting ? "Updating dates..." : `Update Date (${selectedTxIds.size})`}
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+      </motion.div>
+
+      {/* All Transactions Modal */}
+      <AllTransactionsModal
+        isOpen={isAllTxModalOpen}
+        onClose={() => setIsAllTxModalOpen(false)}
+        transactions={transactions}
+        currencySymbol={currencySymbol}
+        onEditTransaction={onEditTransaction}
+        onDeleteTransaction={onDeleteTransaction}
+      />
+    </>
   )
 }
 
@@ -6242,9 +6926,8 @@ function FinancialAnalyticsDashboardInner({
               {/* Left Column (Hero Card + Recent Transactions) */}
               <div className="lg:col-span-7 flex flex-col gap-5 lg:gap-6">
                 <NetWorthHeroCard
-                  netWorth={netWorth}
-                  totalIncome={totalIncome}
-                  totalExpense={totalExpense}
+                  accounts={accounts}
+                  transactions={transactions}
                   currencySymbol={currencySymbol}
                   onAddTransaction={() => setAddTxOpen(true)}
                 />
