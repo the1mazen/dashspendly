@@ -1586,118 +1586,68 @@ export function BudgetPlannerSection({
             </div>
           </div>
 
-          {/* Period Selector — Default: Weekly/Monthly, Custom in Advanced */}
+          {/* Period Selector — Weekly, Monthly, Custom */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
                 Period Duration
               </label>
-              <div className={`grid ${advancedOptionsOpen ? "grid-cols-3" : "grid-cols-2"} gap-1 p-1 border rounded-xl`} style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
-                <button
-                  type="button"
-                  onClick={() => setPeriod("weekly")}
-                  className="py-1.5 px-2 text-center rounded-lg text-xs font-semibold capitalize transition-all font-sans cursor-pointer truncate"
-                  style={{
-                    background: period === "weekly" ? tokens.dashboardActivePill : "transparent",
-                    color: period === "weekly" ? "#120824" : "rgba(255, 255, 255, 0.75)",
-                    fontWeight: period === "weekly" ? "bold" : "normal",
-                  }}
-                >
-                  Weekly
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPeriod("monthly")}
-                  className="py-1.5 px-2 text-center rounded-lg text-xs font-semibold capitalize transition-all font-sans cursor-pointer truncate"
-                  style={{
-                    background: period === "monthly" ? tokens.dashboardActivePill : "transparent",
-                    color: period === "monthly" ? "#120824" : "rgba(255, 255, 255, 0.75)",
-                    fontWeight: period === "monthly" ? "bold" : "normal",
-                  }}
-                >
-                  Monthly
-                </button>
-                {advancedOptionsOpen && (
+              <div className="grid grid-cols-3 gap-1 p-1 border rounded-xl" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+                {(["weekly", "monthly", "custom"] as const).map((p) => (
                   <button
+                    key={p}
                     type="button"
-                    onClick={() => setPeriod("custom")}
+                    onClick={() => setPeriod(p)}
                     className="py-1.5 px-2 text-center rounded-lg text-xs font-semibold capitalize transition-all font-sans cursor-pointer truncate"
                     style={{
-                      background: period === "custom" ? tokens.dashboardActivePill : "transparent",
-                      color: period === "custom" ? "#120824" : "rgba(255, 255, 255, 0.75)",
-                      fontWeight: period === "custom" ? "bold" : "normal",
+                      background: period === p ? tokens.dashboardActivePill : "transparent",
+                      color: period === p ? "#120824" : "rgba(255, 255, 255, 0.75)",
+                      fontWeight: period === p ? "bold" : "normal",
                     }}
                   >
-                    Custom
+                    {p}
                   </button>
-                )}
+                ))}
               </div>
+
+              {period === "custom" && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-2 flex items-center gap-2 p-2 rounded-xl border bg-white/5"
+                  style={{ borderColor: tokens.borderNested }}
+                >
+                  <span className="text-xs text-white/70 font-sans">Every</span>
+                  <input
+                    type="number"
+                    min="1"
+                    value={customDays}
+                    onChange={(e) => setCustomDays(e.target.value)}
+                    className="w-20 px-2.5 py-1 border rounded-lg text-xs font-mono text-white text-center focus:outline-none bg-black/40"
+                    style={{ borderColor: tokens.borderNested }}
+                  />
+                  <span className="text-xs text-white/70 font-sans">days per cycle</span>
+                </motion.div>
+              )}
             </div>
 
-            {/* Quick Period End Date Note */}
+            {/* Start Date & Active Cycle Range */}
             <div>
               <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
-                Active Cycle Range
+                Start Date
               </label>
-              <div className="px-3.5 py-2.5 border rounded-xl text-xs font-mono text-white/80 flex items-center justify-between" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
-                <span>{startDate} → {periodEndDate}</span>
-                <span className="text-[10.5px] text-white/50">({period})</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Change 1C: Advanced Options Collapsible (Custom days & Start Date) */}
-          <div className="pt-1">
-            <button
-              type="button"
-              onClick={() => setAdvancedOptionsOpen(!advancedOptionsOpen)}
-              className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white font-sans transition-colors cursor-pointer"
-            >
-              <span>{advancedOptionsOpen ? "− Hide advanced options" : "+ Advanced options (custom period & start date)"}</span>
-            </button>
-
-            {advancedOptionsOpen && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3 p-4 rounded-2xl border"
+              <input
+                type="date"
+                required
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full px-3.5 py-2.5 border rounded-xl text-xs font-sans text-white focus:outline-none"
                 style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
-              >
-                {period === "custom" && (
-                  <div>
-                    <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
-                      Custom Period Length
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        min="1"
-                        value={customDays}
-                        onChange={(e) => setCustomDays(e.target.value)}
-                        className="w-24 px-3 py-2 border rounded-xl text-xs font-mono text-white text-center focus:outline-none"
-                        style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
-                      />
-                      <span className="text-xs text-white/70 font-sans">days per cycle</span>
-                    </div>
-                  </div>
-                )}
-
-                <div>
-                  <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
-                    Start Date
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full px-3.5 py-2 border rounded-xl text-xs font-sans text-white focus:outline-none"
-                    style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
-                  />
-                </div>
-              </motion.div>
-            )}
+              />
+              <p className="text-[10.5px] font-mono text-white/50 mt-1">
+                Period cycle: {startDate} → {periodEndDate} ({period === "custom" ? `Every ${customDays || 30} days` : period})
+              </p>
+            </div>
           </div>
 
           {/* Change 1B & Change 4: Fixed Commitments Accordion (Starts Collapsed) */}
