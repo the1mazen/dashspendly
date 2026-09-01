@@ -3838,13 +3838,60 @@ function NetWorthHeroCard({
 }) {
   const { tokens } = useDashboardTheme()
 
-  // Account filter state for Net Worth calculation
-  const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>(() => accounts.map((a) => a.id))
+  // Account filter state for Net Worth calculation (persisted to localStorage)
+  const [selectedAccountIds, setSelectedAccountIds] = useState<string[]>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const stored = localStorage.getItem("spendly_networth_selected_accounts")
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const existingIds = new Set(accounts.map((a) => a.id))
+            const valid = parsed.filter((id: string) => existingIds.has(id))
+            if (valid.length > 0) return valid
+          }
+        }
+      } catch (e) {
+        console.error("Failed reading saved accounts selection", e)
+      }
+    }
+    return accounts.map((a) => a.id)
+  })
   const [isAccountFilterOpen, setIsAccountFilterOpen] = useState(false)
 
-  // Keep in sync if accounts change
+  // Persist helper
+  const updateSelectedAccounts = useCallback((newSelection: string[]) => {
+    setSelectedAccountIds(newSelection)
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("spendly_networth_selected_accounts", JSON.stringify(newSelection))
+      } catch (e) {
+        console.error("Failed saving accounts selection", e)
+      }
+    }
+  }, [])
+
+  // Keep in sync if accounts change / mount, preserving localStorage choice
   useEffect(() => {
     if (accounts.length > 0) {
+      if (typeof window !== "undefined") {
+        try {
+          const stored = localStorage.getItem("spendly_networth_selected_accounts")
+          if (stored) {
+            const parsed = JSON.parse(stored)
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              const existingIds = new Set(accounts.map((a) => a.id))
+              const valid = parsed.filter((id: string) => existingIds.has(id))
+              if (valid.length > 0) {
+                setSelectedAccountIds(valid)
+                return
+              }
+            }
+          }
+        } catch (e) {
+          console.error("Failed syncing stored accounts selection", e)
+        }
+      }
       setSelectedAccountIds((prev) => {
         if (prev.length === 0) return accounts.map((a) => a.id)
         const existingIds = new Set(accounts.map((a) => a.id))
@@ -4009,9 +4056,9 @@ function NetWorthHeroCard({
                             type="button"
                             onClick={() => {
                               if (isAllAccountsSelected) {
-                                setSelectedAccountIds([accounts[0].id])
+                                updateSelectedAccounts([accounts[0].id])
                               } else {
-                                setSelectedAccountIds(accounts.map((a) => a.id))
+                                updateSelectedAccounts(accounts.map((a) => a.id))
                               }
                             }}
                             className="text-[10.5px] font-semibold text-[#A7F3D0] hover:underline cursor-pointer"
@@ -4027,14 +4074,13 @@ function NetWorthHeroCard({
                               <div
                                 key={acc.id}
                                 onClick={() => {
-                                  setSelectedAccountIds((prev) => {
-                                    if (prev.includes(acc.id)) {
-                                      if (prev.length === 1) return prev
-                                      return prev.filter((id) => id !== acc.id)
-                                    } else {
-                                      return [...prev, acc.id]
+                                  if (selectedAccountIds.includes(acc.id)) {
+                                    if (selectedAccountIds.length > 1) {
+                                      updateSelectedAccounts(selectedAccountIds.filter((id) => id !== acc.id))
                                     }
-                                  })
+                                  } else {
+                                    updateSelectedAccounts([...selectedAccountIds, acc.id])
+                                  }
                                 }}
                                 className={`flex items-center justify-between p-2.5 rounded-xl border text-xs cursor-pointer transition-all duration-150 select-none ${
                                   isChecked
