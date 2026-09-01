@@ -837,6 +837,7 @@ export function BudgetPlannerSection({
   useEffect(() => {
     if (existingPlan && Object.keys(categoryAllocations).length > 0) return
     if (billsExceedBudget) return
+    if (categorySelectionMode === "user") return
 
     const newAllocs: Record<string, { bucket: "needs" | "wants" | "savings"; amount: string }> = {}
 
@@ -873,7 +874,58 @@ export function BudgetPlannerSection({
     }
 
     setCategoryAllocations(newAllocs)
-  }, [framework, availableToSpend, displayedCategories, lookbackStats, billsExceedBudget])
+  }, [framework, availableToSpend, displayedCategories, lookbackStats, billsExceedBudget, categorySelectionMode])
+
+  // Handlers for switching category selection mode
+  const handleSelectUserCategories = () => {
+    setCategorySelectionMode("user")
+    // Reset all written budgets to 0
+    setCategoryAllocations((prev) => {
+      const reset: Record<string, { bucket: "needs" | "wants" | "savings"; amount: string }> = {}
+      categories.forEach((cat) => {
+        reset[cat.id] = {
+          bucket: prev[cat.id]?.bucket || autoAssignBucket(cat.name),
+          amount: "0",
+        }
+      })
+      return reset
+    })
+  }
+
+  const handleSelectAppCategories = () => {
+    setCategorySelectionMode("app")
+    const newAllocs: Record<string, { bucket: "needs" | "wants" | "savings"; amount: string }> = {}
+    if (framework === "50/30/20") {
+      const bucketGroups: { needs: Category[]; wants: Category[]; savings: Category[] } = {
+        needs: [],
+        wants: [],
+        savings: [],
+      }
+      displayedCategories.forEach((c) => {
+        const bucket = autoAssignBucket(c.name)
+        bucketGroups[bucket].push(c)
+      })
+      ;(["needs", "wants", "savings"] as const).forEach((b) => {
+        const target = rule503020Targets[b]
+        const group = bucketGroups[b]
+        if (group.length > 0) {
+          const perCat = Math.round((target / group.length) / 5) * 5
+          group.forEach((cat) => {
+            newAllocs[cat.id] = { bucket: b, amount: String(perCat) }
+          })
+        }
+      })
+    } else {
+      displayedCategories.forEach((c) => {
+        const suggested = lookbackStats[c.id]?.suggested || 0
+        newAllocs[c.id] = {
+          bucket: autoAssignBucket(c.name),
+          amount: String(suggested),
+        }
+      })
+    }
+    setCategoryAllocations(newAllocs)
+  }
 
   const handleUpdateAllocation = (catId: string, field: "bucket" | "amount", value: string) => {
     setCategoryAllocations((prev) => ({
@@ -1984,7 +2036,7 @@ export function BudgetPlannerSection({
             <div className="flex items-center gap-1">
               <button
                 type="button"
-                onClick={() => setCategorySelectionMode("app")}
+                onClick={handleSelectAppCategories}
                 className={`px-2.5 py-1 text-xs rounded-lg font-semibold transition-all cursor-pointer ${
                   categorySelectionMode === "app" ? "bg-white/20 text-white font-bold" : "text-white/50 hover:text-white"
                 }`}
@@ -1993,7 +2045,7 @@ export function BudgetPlannerSection({
               </button>
               <button
                 type="button"
-                onClick={() => setCategorySelectionMode("user")}
+                onClick={handleSelectUserCategories}
                 className={`px-2.5 py-1 text-xs rounded-lg font-semibold transition-all cursor-pointer ${
                   categorySelectionMode === "user" ? "bg-white/20 text-white font-bold" : "text-white/50 hover:text-white"
                 }`}
