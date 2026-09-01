@@ -491,6 +491,7 @@ function AddTransactionModal({
   const [newCategoryId, setNewCategoryId] = useState("")
   const [newCustomCategory, setNewCustomCategory] = useState("")
   const [newDate, setNewDate] = useState(new Date().toISOString().split("T")[0])
+  const [dateMode, setDateMode] = useState<"yesterday" | "today" | "custom">("today")
   const [newNote, setNewNote] = useState("")
 
   // Feature 2: High Expense Divider Splits
@@ -844,13 +845,72 @@ function AddTransactionModal({
                   <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
                     Date
                   </label>
-                  <input
-                    type="date"
-                    value={newDate}
-                    onChange={(e) => setNewDate(e.target.value)}
-                    className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none transition-colors"
-                    style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
-                  />
+                  <div className="grid grid-cols-3 gap-1 p-1 border rounded-xl mb-1.5" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDateMode("yesterday")
+                        const d = new Date()
+                        d.setDate(d.getDate() - 1)
+                        setNewDate(d.toISOString().split("T")[0])
+                      }}
+                      className="py-1.5 px-1 text-center rounded-lg text-xs font-semibold transition-all font-sans cursor-pointer truncate"
+                      style={{
+                        background: dateMode === "yesterday" ? tokens.dashboardActivePill : "transparent",
+                        color: dateMode === "yesterday" ? "#120824" : "rgba(255, 255, 255, 0.75)",
+                        fontWeight: dateMode === "yesterday" ? "bold" : "normal",
+                      }}
+                    >
+                      Yesterday
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDateMode("today")
+                        setNewDate(new Date().toISOString().split("T")[0])
+                      }}
+                      className="py-1.5 px-1 text-center rounded-lg text-xs font-semibold transition-all font-sans cursor-pointer truncate"
+                      style={{
+                        background: dateMode === "today" ? tokens.dashboardActivePill : "transparent",
+                        color: dateMode === "today" ? "#120824" : "rgba(255, 255, 255, 0.75)",
+                        fontWeight: dateMode === "today" ? "bold" : "normal",
+                      }}
+                    >
+                      Today
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDateMode("custom")
+                      }}
+                      className="py-1.5 px-1 text-center rounded-lg text-xs font-semibold transition-all font-sans cursor-pointer truncate flex items-center justify-center gap-1"
+                      style={{
+                        background: dateMode === "custom" ? tokens.dashboardActivePill : "transparent",
+                        color: dateMode === "custom" ? "#120824" : "rgba(255, 255, 255, 0.75)",
+                        fontWeight: dateMode === "custom" ? "bold" : "normal",
+                      }}
+                    >
+                      <Calendar className="size-3" />
+                      Custom
+                    </button>
+                  </div>
+
+                  {dateMode === "custom" && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                    >
+                      <input
+                        type="date"
+                        required
+                        value={newDate}
+                        onChange={(e) => setNewDate(e.target.value)}
+                        className="w-full px-3.5 py-2 border rounded-xl text-xs font-sans text-white focus:outline-none transition-colors"
+                        style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+                      />
+                    </motion.div>
+                  )}
                 </div>
 
                 <div>
@@ -975,13 +1035,72 @@ function AddTransactionModal({
                   <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
                     Date
                   </label>
-                  <input
-                    type="date"
-                    value={newDate}
-                    onChange={(e) => setNewDate(e.target.value)}
-                    className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none transition-colors"
-                    style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
-                  />
+                  <div className="grid grid-cols-3 gap-1 p-1 border rounded-xl mb-1.5" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDateMode("yesterday")
+                        const d = new Date()
+                        d.setDate(d.getDate() - 1)
+                        setNewDate(d.toISOString().split("T")[0])
+                      }}
+                      className="py-1.5 px-1 text-center rounded-lg text-xs font-semibold transition-all font-sans cursor-pointer truncate"
+                      style={{
+                        background: dateMode === "yesterday" ? tokens.dashboardActivePill : "transparent",
+                        color: dateMode === "yesterday" ? "#120824" : "rgba(255, 255, 255, 0.75)",
+                        fontWeight: dateMode === "yesterday" ? "bold" : "normal",
+                      }}
+                    >
+                      Yesterday
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDateMode("today")
+                        setNewDate(new Date().toISOString().split("T")[0])
+                      }}
+                      className="py-1.5 px-1 text-center rounded-lg text-xs font-semibold transition-all font-sans cursor-pointer truncate"
+                      style={{
+                        background: dateMode === "today" ? tokens.dashboardActivePill : "transparent",
+                        color: dateMode === "today" ? "#120824" : "rgba(255, 255, 255, 0.75)",
+                        fontWeight: dateMode === "today" ? "bold" : "normal",
+                      }}
+                    >
+                      Today
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDateMode("custom")
+                      }}
+                      className="py-1.5 px-1 text-center rounded-lg text-xs font-semibold transition-all font-sans cursor-pointer truncate flex items-center justify-center gap-1"
+                      style={{
+                        background: dateMode === "custom" ? tokens.dashboardActivePill : "transparent",
+                        color: dateMode === "custom" ? "#120824" : "rgba(255, 255, 255, 0.75)",
+                        fontWeight: dateMode === "custom" ? "bold" : "normal",
+                      }}
+                    >
+                      <Calendar className="size-3" />
+                      Custom
+                    </button>
+                  </div>
+
+                  {dateMode === "custom" && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -4 }}
+                    >
+                      <input
+                        type="date"
+                        required
+                        value={newDate}
+                        onChange={(e) => setNewDate(e.target.value)}
+                        className="w-full px-3.5 py-2 border rounded-xl text-xs font-sans text-white focus:outline-none transition-colors"
+                        style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+                      />
+                    </motion.div>
+                  )}
                 </div>
 
                 {/* Source Account */}
@@ -1233,6 +1352,7 @@ function EditTransactionModal({
 
   const [amount, setAmount] = useState("")
   const [date, setDate] = useState("")
+  const [dateMode, setDateMode] = useState<"yesterday" | "today" | "custom">("today")
   const [accountId, setAccountId] = useState("")
   const [categoryId, setCategoryId] = useState("")
   const [note, setNote] = useState("")
@@ -1248,7 +1368,22 @@ function EditTransactionModal({
   useEffect(() => {
     if (transaction) {
       setAmount(String(Math.abs(transaction.amount)))
-      setDate(transaction.date || new Date().toISOString().split("T")[0])
+      const txDate = transaction.date || new Date().toISOString().split("T")[0]
+      setDate(txDate)
+
+      const todayStr = new Date().toISOString().split("T")[0]
+      const yesterdayObj = new Date()
+      yesterdayObj.setDate(yesterdayObj.getDate() - 1)
+      const yesterdayStr = yesterdayObj.toISOString().split("T")[0]
+
+      if (txDate === todayStr) {
+        setDateMode("today")
+      } else if (txDate === yesterdayStr) {
+        setDateMode("yesterday")
+      } else {
+        setDateMode("custom")
+      }
+
       setAccountId(transaction.account_id)
       setCategoryId(transaction.category_id || "")
       setNote(transaction.note || transaction.description || "")
@@ -1354,39 +1489,75 @@ function EditTransactionModal({
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-[11px] font-semibold uppercase tracking-wider font-sans text-white/75">
-                  Date
-                </label>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setDate(new Date().toISOString().split("T")[0])}
-                    className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-white/80 transition-colors cursor-pointer"
-                  >
-                    Today
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const d = new Date()
-                      d.setDate(d.getDate() - 1)
-                      setDate(d.toISOString().split("T")[0])
-                    }}
-                    className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-white/80 transition-colors cursor-pointer"
-                  >
-                    Yesterday
-                  </button>
-                </div>
+              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
+                Date
+              </label>
+              <div className="grid grid-cols-3 gap-1 p-1 border rounded-xl mb-1.5" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDateMode("yesterday")
+                    const d = new Date()
+                    d.setDate(d.getDate() - 1)
+                    setDate(d.toISOString().split("T")[0])
+                  }}
+                  className="py-1.5 px-1 text-center rounded-lg text-xs font-semibold transition-all font-sans cursor-pointer truncate"
+                  style={{
+                    background: dateMode === "yesterday" ? tokens.dashboardActivePill : "transparent",
+                    color: dateMode === "yesterday" ? "#120824" : "rgba(255, 255, 255, 0.75)",
+                    fontWeight: dateMode === "yesterday" ? "bold" : "normal",
+                  }}
+                >
+                  Yesterday
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDateMode("today")
+                    setDate(new Date().toISOString().split("T")[0])
+                  }}
+                  className="py-1.5 px-1 text-center rounded-lg text-xs font-semibold transition-all font-sans cursor-pointer truncate"
+                  style={{
+                    background: dateMode === "today" ? tokens.dashboardActivePill : "transparent",
+                    color: dateMode === "today" ? "#120824" : "rgba(255, 255, 255, 0.75)",
+                    fontWeight: dateMode === "today" ? "bold" : "normal",
+                  }}
+                >
+                  Today
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDateMode("custom")
+                  }}
+                  className="py-1.5 px-1 text-center rounded-lg text-xs font-semibold transition-all font-sans cursor-pointer truncate flex items-center justify-center gap-1"
+                  style={{
+                    background: dateMode === "custom" ? tokens.dashboardActivePill : "transparent",
+                    color: dateMode === "custom" ? "#120824" : "rgba(255, 255, 255, 0.75)",
+                    fontWeight: dateMode === "custom" ? "bold" : "normal",
+                  }}
+                >
+                  <Calendar className="size-3" />
+                  Custom
+                </button>
               </div>
-              <input
-                type="date"
-                required
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none"
-                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
-              />
+
+              {dateMode === "custom" && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                >
+                  <input
+                    type="date"
+                    required
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    className="w-full px-3.5 py-2 border rounded-xl text-xs font-sans text-white focus:outline-none transition-colors"
+                    style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+                  />
+                </motion.div>
+              )}
             </div>
 
             <div>
