@@ -485,6 +485,7 @@ function AddTransactionModal({
 
   const [newType, setNewType] = useState<"income" | "expense" | "expense_divider" | "transfer">("expense")
   const [newAmount, setNewAmount] = useState("")
+  const [newRemainingInAccount, setNewRemainingInAccount] = useState("")
   const [newAccountId, setNewAccountId] = useState("")
   const [newDestAccountId, setNewDestAccountId] = useState("")
   const [newCategoryId, setNewCategoryId] = useState("")
@@ -512,17 +513,49 @@ function AddTransactionModal({
     }
   }, [accounts, newAccountId])
 
-  // Live remainder calculation for Expense Divider
-  const { totalPrincipal, totalAllocated, remainingToAllocate } = useMemo(() => {
-    const principal = parseFloat(newAmount) || 0
-    const allocated = splitRows.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0)
-    const rem = Math.round((principal - allocated) * 100) / 100
-    return {
-      totalPrincipal: principal,
-      totalAllocated: allocated,
-      remainingToAllocate: rem,
+  // Selected account for balance lookups
+  const selectedAccount = useMemo(() => {
+    return accounts.find((a) => a.id === newAccountId) || accounts[0]
+  }, [accounts, newAccountId])
+
+  const selectedAccountBalance = useMemo(() => {
+    return Number(selectedAccount?.balance || 0)
+  }, [selectedAccount])
+
+  // Expense Divider formula: (Selected Account Balance - Remaining = Result)
+  const { totalPrincipal, totalAllocated, remainingToAllocate, isRemainingValid, formulaResult } = useMemo(() => {
+    if (newType === "expense_divider") {
+      const remainingEntered = parseFloat(newRemainingInAccount)
+      const hasInput = newRemainingInAccount.trim() !== "" && !isNaN(remainingEntered)
+      
+      // Formula: Selected account balance - Remaining = result
+      const calculatedResult = hasInput
+        ? Math.round((selectedAccountBalance - remainingEntered) * 100) / 100
+        : 0
+
+      const allocated = splitRows.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0)
+      const rem = Math.round((calculatedResult - allocated) * 100) / 100
+
+      return {
+        totalPrincipal: calculatedResult,
+        formulaResult: calculatedResult,
+        totalAllocated: allocated,
+        remainingToAllocate: rem,
+        isRemainingValid: hasInput && remainingEntered >= 0 && remainingEntered <= selectedAccountBalance,
+      }
+    } else {
+      const principal = parseFloat(newAmount) || 0
+      const allocated = splitRows.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0)
+      const rem = Math.round((principal - allocated) * 100) / 100
+      return {
+        totalPrincipal: principal,
+        formulaResult: principal,
+        totalAllocated: allocated,
+        remainingToAllocate: rem,
+        isRemainingValid: true,
+      }
     }
-  }, [newAmount, splitRows])
+  }, [newType, newRemainingInAccount, selectedAccountBalance, newAmount, splitRows])
 
   // Live fee calculation
   const calculatedFeeAmount = useMemo(() => {
@@ -570,14 +603,26 @@ function AddTransactionModal({
     setErrorMsg(null)
 
     try {
-      const amt = parseFloat(newAmount)
-      if (isNaN(amt) || amt <= 0) throw new Error("Please enter a valid amount.")
       if (!newAccountId) throw new Error("Please select an account.")
 
       if (newType === "expense_divider") {
+        const remainingEntered = parseFloat(newRemainingInAccount)
+        if (isNaN(remainingEntered) || remainingEntered < 0) {
+          throw new Error("Please enter how much is remaining in the selected account.")
+        }
+        if (remainingEntered > selectedAccountBalance) {
+          throw new Error(
+            `Remaining in account (${currencySymbol}${remainingEntered.toFixed(2)}) cannot be greater than the current balance (${currencySymbol}${selectedAccountBalance.toFixed(2)}).`
+          )
+        }
+        if (formulaResult <= 0) {
+          throw new Error(
+            "Calculated expense result is 0.00 or negative. Enter a remaining amount lower than the current account balance."
+          )
+        }
         if (Math.abs(remainingToAllocate) > 0.001) {
           throw new Error(
-            `Remaining to allocate must be exactly ${currencySymbol}0.00. Current remainder: ${currencySymbol}${remainingToAllocate.toFixed(2)}`
+            `You must allocate the full calculated expense (${currencySymbol}${formulaResult.toFixed(2)}) across your categories. Remaining to allocate: ${currencySymbol}${remainingToAllocate.toFixed(2)}`
           )
         }
 
@@ -594,13 +639,16 @@ function AddTransactionModal({
         }
 
         await createSplitExpenseTransaction({
-          totalAmount: amt,
+          totalAmount: formulaResult,
           accountId: newAccountId,
           date: newDate,
           note: newNote,
           splits: validSplits,
         })
       } else {
+        const amt = parseFloat(newAmount)
+        if (isNaN(amt) || amt <= 0) throw new Error("Please enter a valid amount.")
+
         await createTransaction({
           account_id: newAccountId,
           destination_account_id: newType === "transfer" ? newDestAccountId : undefined,
@@ -617,6 +665,7 @@ function AddTransactionModal({
 
       // Reset form
       setNewAmount("")
+      setNewRemainingInAccount("")
       setNewNote("")
       setNewCustomCategory("")
       setFeeMode("none")
@@ -701,206 +750,336 @@ function AddTransactionModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* Amount / Total Expense Amount */}
-            <div>
-              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
-                {newType === "expense_divider" ? "Total Expense Amount" : "Amount"} ({currencySymbol.trim()})
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                required
-                placeholder="0.00"
-                value={newAmount}
-                onChange={(e) => setNewAmount(e.target.value)}
-                className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-mono text-white focus:outline-none transition-colors"
-                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
-              />
-            </div>
+          {/* ─── EXPENSE DIVIDER MODE ─── */}
+          {newType === "expense_divider" ? (
+            <div className="space-y-4">
+              {/* Account & Remaining Inputs */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Source Account */}
+                <div>
+                  <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
+                    Selected Account
+                  </label>
+                  <select
+                    value={newAccountId}
+                    onChange={(e) => setNewAccountId(e.target.value)}
+                    required
+                    className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none cursor-pointer"
+                    style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+                  >
+                    {accounts.map((acc) => (
+                      <option key={acc.id} value={acc.id} className="bg-[#1E0C38] text-white">
+                        {acc.name} ({currencySymbol}{Number(acc.balance || 0).toFixed(2)})
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-            {/* Date */}
-            <div>
-              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
-                Date
-              </label>
-              <input
-                type="date"
-                value={newDate}
-                onChange={(e) => setNewDate(e.target.value)}
-                className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none transition-colors"
-                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
-              />
-            </div>
+                {/* Remaining in Account */}
+                <div>
+                  <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
+                    Remaining in Account ({currencySymbol.trim()})
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    placeholder={selectedAccountBalance > 0 ? `e.g. ${(selectedAccountBalance * 0.5).toFixed(2)}` : "0.00"}
+                    value={newRemainingInAccount}
+                    onChange={(e) => setNewRemainingInAccount(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-mono text-white focus:outline-none transition-colors"
+                    style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+                  />
+                </div>
+              </div>
 
-            {/* Source Account */}
-            <div className={newType === "expense_divider" ? "sm:col-span-2" : ""}>
-              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
-                {newType === "transfer" ? "From Account" : "Account"}
-              </label>
-              <select
-                value={newAccountId}
-                onChange={(e) => setNewAccountId(e.target.value)}
-                required
-                className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none cursor-pointer"
+              {/* Dynamic Formula Display Card: (Account Balance - Remaining = Result) */}
+              <div
+                className="p-3.5 rounded-2xl border space-y-2.5"
                 style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
               >
-                {accounts.map((acc) => (
-                  <option key={acc.id} value={acc.id} className="bg-[#1E0C38] text-white">
-                    {acc.name} ({currencySymbol}{Number(acc.balance || 0).toFixed(2)})
-                  </option>
-                ))}
-              </select>
-            </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-white/80 flex items-center gap-1.5 font-display">
+                    <Layers className="size-3.5 text-[#A7F3D0]" />
+                    Expense Calculation Formula
+                  </span>
+                  <span className="font-mono text-[10.5px] text-white/50">
+                    Account Balance − Remaining = Result
+                  </span>
+                </div>
 
-            {/* Destination Account or Category (Hidden for Expense Divider) */}
-            {newType === "transfer" ? (
-              <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
-                  To Account
-                </label>
-                <select
-                  value={newDestAccountId}
-                  onChange={(e) => setNewDestAccountId(e.target.value)}
-                  required
-                  className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none cursor-pointer"
-                  style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
-                >
-                  <option value="" className="bg-[#1E0C38] text-white">Select Destination</option>
-                  {accounts.map((acc) => (
-                    <option key={acc.id} value={acc.id} className="bg-[#1E0C38] text-white">
-                      {acc.name} ({currencySymbol}{Number(acc.balance || 0).toFixed(2)})
-                    </option>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="p-2 rounded-xl bg-black/25 border border-white/5">
+                    <span className="text-[9px] uppercase font-semibold text-white/50 block">Account Balance</span>
+                    <span className="text-xs sm:text-sm font-bold font-mono text-white mt-0.5 block">
+                      {currencySymbol}{selectedAccountBalance.toFixed(2)}
+                    </span>
+                  </div>
+
+                  <div className="p-2 rounded-xl bg-black/25 border border-white/5">
+                    <span className="text-[9px] uppercase font-semibold text-white/50 block">Remaining</span>
+                    <span className="text-xs sm:text-sm font-bold font-mono text-amber-300 mt-0.5 block">
+                      {newRemainingInAccount.trim() !== "" ? `${currencySymbol}${parseFloat(newRemainingInAccount || "0").toFixed(2)}` : "—"}
+                    </span>
+                  </div>
+
+                  <div className="p-2 rounded-xl bg-purple-500/20 border border-purple-500/30">
+                    <span className="text-[9px] uppercase font-semibold text-purple-200 block">Total Spent (Result)</span>
+                    <span className="text-xs sm:text-sm font-bold font-mono text-emerald-300 mt-0.5 block">
+                      {formulaResult > 0 ? `${currencySymbol}${formulaResult.toFixed(2)}` : `${currencySymbol}0.00`}
+                    </span>
+                  </div>
+                </div>
+
+                {parseFloat(newRemainingInAccount) > selectedAccountBalance && (
+                  <p className="text-[11px] text-rose-300 font-sans">
+                    ⚠️ Remaining amount cannot exceed selected account balance ({currencySymbol}{selectedAccountBalance.toFixed(2)}).
+                  </p>
+                )}
+              </div>
+
+              {/* Date & Note */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
+                    Date
+                  </label>
+                  <input
+                    type="date"
+                    value={newDate}
+                    onChange={(e) => setNewDate(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none transition-colors"
+                    style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
+                    Description / Note
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Weekend expenses, Weekly grocery run"
+                    value={newNote}
+                    onChange={(e) => setNewNote(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none"
+                    style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+                  />
+                </div>
+              </div>
+
+              {/* Category Allocations for the Result Amount */}
+              <div className="p-4 rounded-2xl border space-y-3" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold font-display text-white flex items-center gap-1.5">
+                      <Layers className="size-3.5 text-purple-300" />
+                      Category Allocations
+                    </span>
+                    <p className="text-[10.5px] text-white/60 mt-0.5">
+                      Log every transaction to distribute the {currencySymbol}{formulaResult.toFixed(2)} result
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddSplitRow}
+                    className="px-2.5 py-1 rounded-lg text-xs font-bold text-[#120824] flex items-center gap-1 cursor-pointer transition-all shadow-sm"
+                    style={{ background: tokens.dashboardActivePill }}
+                  >
+                    <Plus className="size-3" /> Add Category
+                  </button>
+                </div>
+
+                {/* Dynamic split rows */}
+                <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+                  {splitRows.map((row, idx) => (
+                    <div key={row.id} className="flex items-center gap-2">
+                      <select
+                        value={row.categoryId}
+                        onChange={(e) => handleUpdateSplitRow(row.id, "categoryId", e.target.value)}
+                        required
+                        className="flex-1 px-3 py-2 border rounded-xl text-xs font-sans text-white focus:outline-none bg-[#1E0C38]/80"
+                        style={{ borderColor: tokens.borderNested }}
+                      >
+                        <option value="" className="bg-[#1E0C38] text-white">Select Category</option>
+                        {categories.map((c) => (
+                          <option key={c.id} value={c.id} className="bg-[#1E0C38] text-white">
+                            {c.name}
+                          </option>
+                        ))}
+                      </select>
+
+                      <div className="w-28 relative">
+                        <input
+                          type="number"
+                          step="0.01"
+                          required
+                          placeholder="Amount"
+                          value={row.amount}
+                          onChange={(e) => handleUpdateSplitRow(row.id, "amount", e.target.value)}
+                          className="w-full px-2.5 py-2 border rounded-xl text-xs font-mono text-white focus:outline-none bg-[#1E0C38]/80 text-right"
+                          style={{ borderColor: tokens.borderNested }}
+                        />
+                      </div>
+
+                      {splitRows.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveSplitRow(row.id)}
+                          className="p-2 rounded-xl text-white/40 hover:text-red-400 hover:bg-red-500/10 cursor-pointer transition-all"
+                          title="Remove row"
+                        >
+                          <Trash2 className="size-3.5" />
+                        </button>
+                      )}
+                    </div>
                   ))}
-                </select>
-              </div>
-            ) : newType !== "expense_divider" ? (
-              <div>
-                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
-                  Category
-                </label>
-                <select
-                  value={newCategoryId}
-                  onChange={(e) => setNewCategoryId(e.target.value)}
-                  className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none cursor-pointer"
-                  style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
-                >
-                  <option value="" className="bg-[#1E0C38] text-white">General / Uncategorized</option>
-                  {categories.map((c) => (
-                    <option key={c.id} value={c.id} className="bg-[#1E0C38] text-white">
-                      {c.name}
-                    </option>
-                  ))}
-                  <option value="custom" className="bg-[#1E0C38] text-[#A7F3D0]">+ Custom Category</option>
-                </select>
-              </div>
-            ) : null}
-          </div>
+                </div>
 
-          {newCategoryId === "custom" && newType !== "transfer" && newType !== "expense_divider" && (
-            <div>
-              <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
-                Custom Category Name
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. Subscriptions, Groceries"
-                value={newCustomCategory}
-                onChange={(e) => setNewCustomCategory(e.target.value)}
-                className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none"
-                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
-              />
+                {/* Running Remainder Banner */}
+                <div className="pt-2.5 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+                  <span className="text-white/60">Allocated: {currencySymbol}{totalAllocated.toFixed(2)} / {currencySymbol}{formulaResult.toFixed(2)}</span>
+                  <span className={`font-bold ${Math.abs(remainingToAllocate) <= 0.001 && formulaResult > 0 ? "text-emerald-300" : "text-amber-300"}`}>
+                    {Math.abs(remainingToAllocate) <= 0.001 && formulaResult > 0 ? (
+                      "✓ Fully allocated"
+                    ) : (
+                      `Remaining to allocate: ${currencySymbol}${remainingToAllocate.toFixed(2)}`
+                    )}
+                  </span>
+                </div>
+              </div>
             </div>
-          )}
+          ) : (
+            /* ─── STANDARD TRANSACTION MODES (Income, Expense, Transfer) ─── */
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Amount */}
+                <div>
+                  <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
+                    Amount ({currencySymbol.trim()})
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    placeholder="0.00"
+                    value={newAmount}
+                    onChange={(e) => setNewAmount(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-mono text-white focus:outline-none transition-colors"
+                    style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+                  />
+                </div>
 
-          {/* FEATURE 2: HIGH EXPENSE DIVIDER CATEGORY SPLIT ROWS */}
-          {newType === "expense_divider" && (
-            <div className="p-4 rounded-2xl border space-y-3" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold font-display text-white flex items-center gap-1.5">
-                  <Layers className="size-3.5 text-purple-300" />
-                  Category Allocations
-                </span>
-                <button
-                  type="button"
-                  onClick={handleAddSplitRow}
-                  className="px-2.5 py-1 rounded-lg text-xs font-bold text-[#120824] flex items-center gap-1 cursor-pointer transition-all shadow-sm"
-                  style={{ background: tokens.dashboardActivePill }}
-                >
-                  <Plus className="size-3" /> Add Category
-                </button>
-              </div>
+                {/* Date */}
+                <div>
+                  <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
+                    Date
+                  </label>
+                  <input
+                    type="date"
+                    value={newDate}
+                    onChange={(e) => setNewDate(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none transition-colors"
+                    style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+                  />
+                </div>
 
-              {/* Dynamic split rows */}
-              <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
-                {splitRows.map((row, idx) => (
-                  <div key={row.id} className="flex items-center gap-2">
+                {/* Source Account */}
+                <div>
+                  <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
+                    {newType === "transfer" ? "From Account" : "Account"}
+                  </label>
+                  <select
+                    value={newAccountId}
+                    onChange={(e) => setNewAccountId(e.target.value)}
+                    required
+                    className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none cursor-pointer"
+                    style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+                  >
+                    {accounts.map((acc) => (
+                      <option key={acc.id} value={acc.id} className="bg-[#1E0C38] text-white">
+                        {acc.name} ({currencySymbol}{Number(acc.balance || 0).toFixed(2)})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Destination Account or Category */}
+                {newType === "transfer" ? (
+                  <div>
+                    <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
+                      To Account
+                    </label>
                     <select
-                      value={row.categoryId}
-                      onChange={(e) => handleUpdateSplitRow(row.id, "categoryId", e.target.value)}
+                      value={newDestAccountId}
+                      onChange={(e) => setNewDestAccountId(e.target.value)}
                       required
-                      className="flex-1 px-3 py-2 border rounded-xl text-xs font-sans text-white focus:outline-none bg-[#1E0C38]/80"
-                      style={{ borderColor: tokens.borderNested }}
+                      className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none cursor-pointer"
+                      style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
                     >
-                      <option value="" className="bg-[#1E0C38] text-white">Select Category</option>
+                      <option value="" className="bg-[#1E0C38] text-white">Select Destination</option>
+                      {accounts.map((acc) => (
+                        <option key={acc.id} value={acc.id} className="bg-[#1E0C38] text-white">
+                          {acc.name} ({currencySymbol}{Number(acc.balance || 0).toFixed(2)})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
+                      Category
+                    </label>
+                    <select
+                      value={newCategoryId}
+                      onChange={(e) => setNewCategoryId(e.target.value)}
+                      className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none cursor-pointer"
+                      style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+                    >
+                      <option value="" className="bg-[#1E0C38] text-white">General / Uncategorized</option>
                       {categories.map((c) => (
                         <option key={c.id} value={c.id} className="bg-[#1E0C38] text-white">
                           {c.name}
                         </option>
                       ))}
+                      <option value="custom" className="bg-[#1E0C38] text-[#A7F3D0]">+ Custom Category</option>
                     </select>
-
-                    <div className="w-28 relative">
-                      <input
-                        type="number"
-                        step="0.01"
-                        required
-                        placeholder="Amount"
-                        value={row.amount}
-                        onChange={(e) => handleUpdateSplitRow(row.id, "amount", e.target.value)}
-                        className="w-full px-2.5 py-2 border rounded-xl text-xs font-mono text-white focus:outline-none bg-[#1E0C38]/80 text-right"
-                        style={{ borderColor: tokens.borderNested }}
-                      />
-                    </div>
-
-                    {splitRows.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveSplitRow(row.id)}
-                        className="p-2 rounded-xl text-white/40 hover:text-red-400 hover:bg-red-500/10 cursor-pointer transition-all"
-                        title="Remove row"
-                      >
-                        <Trash2 className="size-3.5" />
-                      </button>
-                    )}
                   </div>
-                ))}
+                )}
               </div>
 
-              {/* Running Remainder Banner */}
-              <div className="pt-2.5 border-t border-white/10 flex items-center justify-between text-xs font-mono">
-                <span className="text-white/60">Allocated: {currencySymbol}{totalAllocated.toFixed(2)}</span>
-                <span className={`font-bold ${Math.abs(remainingToAllocate) <= 0.001 ? "text-emerald-300" : "text-amber-300"}`}>
-                  Remaining to allocate: {currencySymbol}{remainingToAllocate.toFixed(2)}
-                </span>
+              {newCategoryId === "custom" && newType !== "transfer" && (
+                <div>
+                  <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
+                    Custom Category Name
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Subscriptions, Groceries"
+                    value={newCustomCategory}
+                    onChange={(e) => setNewCustomCategory(e.target.value)}
+                    className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none"
+                    style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+                  />
+                </div>
+              )}
+
+              {/* Note / Description */}
+              <div>
+                <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
+                  Description / Note
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Monthly cloud server, Dinner with friends"
+                  value={newNote}
+                  onChange={(e) => setNewNote(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none"
+                  style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+                />
               </div>
-            </div>
+            </>
           )}
-
-          {/* Note / Description */}
-          <div>
-            <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
-              Description / Note
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. Monthly cloud server, Dinner with friends"
-              value={newNote}
-              onChange={(e) => setNewNote(e.target.value)}
-              className="w-full px-3.5 py-2.5 border rounded-xl text-sm font-sans text-white focus:outline-none"
-              style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
-            />
-          </div>
 
           {/* FEATURE 1: OPTIONAL FEE SYSTEM & INSTAPAY TOGGLE */}
           {(newType === "expense" || newType === "transfer") && (
@@ -1019,11 +1198,15 @@ function AddTransactionModal({
             </button>
             <button
               type="submit"
-              disabled={isSubmitting || (newType === "expense_divider" && Math.abs(remainingToAllocate) > 0.001)}
+              disabled={isSubmitting || (newType === "expense_divider" && (Math.abs(remainingToAllocate) > 0.001 || formulaResult <= 0 || !isRemainingValid))}
               className="px-6 py-2.5 rounded-xl text-xs font-bold transition-all font-sans shadow-lg cursor-pointer hover:scale-[1.02] text-[#120824] disabled:opacity-50"
               style={{ background: tokens.dashboardActivePill }}
             >
-              {isSubmitting ? "Recording..." : newType === "expense_divider" ? "Save Split Transaction" : "Save Transaction"}
+              {isSubmitting
+                ? "Recording..."
+                : newType === "expense_divider"
+                ? (formulaResult > 0 ? `Log Split Expenses (${currencySymbol}${formulaResult.toFixed(2)})` : "Log Split Expenses")
+                : "Save Transaction"}
             </button>
           </div>
         </form>
