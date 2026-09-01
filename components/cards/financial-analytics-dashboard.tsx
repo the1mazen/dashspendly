@@ -30,8 +30,7 @@ import {
   AppNotification
 } from "@/lib/finance-data"
 import { useUserProfile } from "@/lib/user-profile"
-import { supabase, isSupabaseConfigured, resolveCurrentUserId } from "@/lib/supabase"
-import { ManagePlansModal, BudgetPlannerSection } from "./budget-planner"
+import { ManagePlansModal, BudgetPlannerSection, Active503020Tracker } from "./budget-planner"
 
 // ─── Design Tokens: Exact Reproduction of 2.jpeg ──────────────────
 
@@ -6574,6 +6573,9 @@ function CategoriesSection({
           </button>
         </div>
       </SectionHeader>
+
+      {/* Ongoing 50/30/20 Plan Progress Tracker */}
+      <Active503020Tracker />
 
       {/* Category Creation Card */}
       <motion.div

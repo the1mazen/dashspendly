@@ -108,6 +108,220 @@ export function autoAssignBucket(categoryName: string): "needs" | "wants" | "sav
   return "wants"
 }
 
+// ─── Component: Active 50/30/20 Plan Progress Tracker ────────────────
+
+export function Active503020Tracker() {
+  const { budgetPlans, transactions } = useFinanceData()
+  const { profile } = useUserProfile()
+  const { tokens } = useDashboardTheme()
+  const currencySymbol = getCurrencySymbol(profile.currency)
+
+  const activePlan = useMemo(() => {
+    return budgetPlans.find((p) => p.is_active && p.framework === "50/30/20") || null
+  }, [budgetPlans])
+
+  if (!activePlan) return null
+
+  const cycleEndDate = (() => {
+    const d = new Date(activePlan.start_date || new Date().toISOString().split("T")[0])
+    if (activePlan.period === "weekly") d.setDate(d.getDate() + 7)
+    else if (activePlan.period === "monthly") d.setMonth(d.getMonth() + 1)
+    else if (activePlan.period === "custom") d.setDate(d.getDate() + (activePlan.custom_days || 30))
+    return d.toISOString().split("T")[0]
+  })()
+
+  const cycleExpenses = transactions.filter((t) => {
+    return t.type === "expense" && t.date >= activePlan.start_date && t.date <= cycleEndDate
+  })
+
+  const catBucketMap = new Map<string, "needs" | "wants" | "savings">()
+  let plannedNeeds = 0
+  let plannedWants = 0
+  let plannedSavings = 0
+
+  if (activePlan.categories && activePlan.categories.length > 0) {
+    activePlan.categories.forEach((c) => {
+      catBucketMap.set(c.category_id, c.bucket)
+      if (c.bucket === "needs") plannedNeeds += c.allocated_amount
+      else if (c.bucket === "wants") plannedWants += c.allocated_amount
+      else if (c.bucket === "savings") plannedSavings += c.allocated_amount
+    })
+  } else {
+    plannedNeeds = activePlan.total_amount * 0.5
+    plannedWants = activePlan.total_amount * 0.3
+    plannedSavings = activePlan.total_amount * 0.2
+  }
+
+  let actualNeeds = 0
+  let actualWants = 0
+  let actualSavings = 0
+
+  cycleExpenses.forEach((t) => {
+    const b = catBucketMap.get(t.category_id) || autoAssignBucket(t.category_name || "")
+    const amt = Math.abs(t.amount)
+    if (b === "needs") actualNeeds += amt
+    else if (b === "wants") actualWants += amt
+    else if (b === "savings") actualSavings += amt
+  })
+
+  const totalPlanned = activePlan.total_amount
+  const totalSpent = actualNeeds + actualWants + actualSavings
+  const totalLeft = Math.max(0, totalPlanned - totalSpent)
+  const totalProgressPct = totalPlanned > 0 ? Math.min(100, Math.round((totalSpent / totalPlanned) * 100)) : 0
+
+  const needsSurplus = plannedNeeds - actualNeeds
+  let insightText = ""
+  if (needsSurplus > 0 && totalSpent < totalPlanned) {
+    insightText = `💡 You spent ${currencySymbol}${needsSurplus.toLocaleString("en-US", { minimumFractionDigits: 2 })} less in Needs. You can start spending more in Wants or allocating toward Savings!`
+  } else if (actualNeeds > plannedNeeds) {
+    insightText = `⚠️ Needs spending exceeded budget by ${currencySymbol}${(actualNeeds - plannedNeeds).toLocaleString("en-US", { minimumFractionDigits: 2 })}. Consider curbing discretionary Wants.`
+  } else if (totalSpent >= totalPlanned) {
+    insightText = `⚠️ You have reached your total budget limit for this cycle.`
+  } else {
+    insightText = `✨ Your spending is on track across your 50/30/20 buckets.`
+  }
+
+  return (
+    <div className="p-4 sm:p-5 rounded-2xl border space-y-4 backdrop-blur-md" style={{ backgroundColor: tokens.nestedSurface, borderColor: "rgba(94, 234, 212, 0.35)" }}>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 border-b pb-3" style={{ borderColor: tokens.borderNested }}>
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+              <span className="size-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Active 50/30/20 Tracker
+            </span>
+            <span className="text-sm font-bold text-white font-sans">{activePlan.name}</span>
+          </div>
+        </div>
+        <span className="text-[11px] font-mono text-white/60">
+          Cycle: {activePlan.start_date} → {cycleEndDate}
+        </span>
+      </div>
+
+      {/* Overall Plan Indicator Progress */}
+      <div>
+        <div className="flex items-center justify-between text-xs font-mono mb-1.5 flex-wrap gap-1">
+          <span className="text-white font-semibold">
+            {currencySymbol}{totalSpent.toLocaleString("en-US", { minimumFractionDigits: 2 })} spent out of the planned {currencySymbol}{totalPlanned.toLocaleString("en-US", { minimumFractionDigits: 2 })}, {currencySymbol}{totalLeft.toLocaleString("en-US", { minimumFractionDigits: 2 })} left.
+          </span>
+          <span className="text-[#5EEAD4] font-bold font-mono">{totalProgressPct}%</span>
+        </div>
+        <div className="w-full h-2.5 rounded-full bg-black/40 overflow-hidden border" style={{ borderColor: tokens.borderNested }}>
+          <motion.div
+            className="h-full rounded-full transition-all duration-500"
+            style={{
+              width: `${totalProgressPct}%`,
+              background: totalSpent > totalPlanned
+                ? "#F87171"
+                : totalProgressPct >= 85
+                ? "#FBBF24"
+                : "#4ADE80",
+            }}
+            initial={{ width: 0 }}
+            animate={{ width: `${totalProgressPct}%` }}
+          />
+        </div>
+        <p className="text-[11px] text-white/80 font-sans mt-2.5 p-2 rounded-xl bg-white/5 border border-white/10 flex items-center gap-1.5">
+          <span>{insightText}</span>
+        </p>
+      </div>
+
+      {/* 3 Bucket Cards: Needs 50% - Wants 30% - Savings 20% */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+        {/* Needs (50%) */}
+        {(() => {
+          const pct = plannedNeeds > 0 ? Math.round((actualNeeds / plannedNeeds) * 100) : 0
+          const color = pct < 100 ? "#4ADE80" : pct === 100 ? "#D4A934" : "#F87171"
+          return (
+            <div className="p-3.5 rounded-xl border bg-black/25 flex flex-col justify-between" style={{ borderColor: tokens.borderNested }}>
+              <div>
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className="font-bold text-white font-sans">Needs (50%)</span>
+                  <span className="font-mono text-[11px] font-bold" style={{ color }}>{pct}%</span>
+                </div>
+                <p className="text-xs font-mono text-white/80">
+                  <strong className="text-white">{currencySymbol}{actualNeeds.toLocaleString("en-US", { minimumFractionDigits: 2 })}</strong>
+                  <span className="text-white/50"> / {currencySymbol}{plannedNeeds.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+                </p>
+              </div>
+              <div className="mt-3">
+                <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+                  <div className="h-full rounded-full transition-all duration-300" style={{ width: `${Math.min(100, pct)}%`, backgroundColor: color }} />
+                </div>
+                <p className="text-[10.5px] font-mono text-white/60 mt-1.5">
+                  {actualNeeds <= plannedNeeds
+                    ? `${currencySymbol}${(plannedNeeds - actualNeeds).toLocaleString("en-US", { minimumFractionDigits: 2 })} left`
+                    : `${currencySymbol}${(actualNeeds - plannedNeeds).toLocaleString("en-US", { minimumFractionDigits: 2 })} over budget`}
+                </p>
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* Wants (30%) */}
+        {(() => {
+          const pct = plannedWants > 0 ? Math.round((actualWants / plannedWants) * 100) : 0
+          const color = pct < 100 ? "#4ADE80" : pct === 100 ? "#D4A934" : "#F87171"
+          return (
+            <div className="p-3.5 rounded-xl border bg-black/25 flex flex-col justify-between" style={{ borderColor: tokens.borderNested }}>
+              <div>
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className="font-bold text-white font-sans">Wants (30%)</span>
+                  <span className="font-mono text-[11px] font-bold" style={{ color }}>{pct}%</span>
+                </div>
+                <p className="text-xs font-mono text-white/80">
+                  <strong className="text-white">{currencySymbol}{actualWants.toLocaleString("en-US", { minimumFractionDigits: 2 })}</strong>
+                  <span className="text-white/50"> / {currencySymbol}{plannedWants.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+                </p>
+              </div>
+              <div className="mt-3">
+                <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+                  <div className="h-full rounded-full transition-all duration-300" style={{ width: `${Math.min(100, pct)}%`, backgroundColor: color }} />
+                </div>
+                <p className="text-[10.5px] font-mono text-white/60 mt-1.5">
+                  {actualWants <= plannedWants
+                    ? `${currencySymbol}${(plannedWants - actualWants).toLocaleString("en-US", { minimumFractionDigits: 2 })} left`
+                    : `${currencySymbol}${(actualWants - plannedWants).toLocaleString("en-US", { minimumFractionDigits: 2 })} over budget`}
+                </p>
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* Savings (20%) */}
+        {(() => {
+          const pct = plannedSavings > 0 ? Math.round((actualSavings / plannedSavings) * 100) : 0
+          const color = pct < 100 ? "#4ADE80" : pct === 100 ? "#D4A934" : "#F87171"
+          return (
+            <div className="p-3.5 rounded-xl border bg-black/25 flex flex-col justify-between" style={{ borderColor: tokens.borderNested }}>
+              <div>
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className="font-bold text-white font-sans">Savings (20%)</span>
+                  <span className="font-mono text-[11px] font-bold" style={{ color }}>{pct}%</span>
+                </div>
+                <p className="text-xs font-mono text-white/80">
+                  <strong className="text-white">{currencySymbol}{actualSavings.toLocaleString("en-US", { minimumFractionDigits: 2 })}</strong>
+                  <span className="text-white/50"> / {currencySymbol}{plannedSavings.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+                </p>
+              </div>
+              <div className="mt-3">
+                <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+                  <div className="h-full rounded-full transition-all duration-300" style={{ width: `${Math.min(100, pct)}%`, backgroundColor: color }} />
+                </div>
+                <p className="text-[10.5px] font-mono text-white/60 mt-1.5">
+                  {actualSavings <= plannedSavings
+                    ? `${currencySymbol}${(plannedSavings - actualSavings).toLocaleString("en-US", { minimumFractionDigits: 2 })} left`
+                    : `${currencySymbol}${(actualSavings - plannedSavings).toLocaleString("en-US", { minimumFractionDigits: 2 })} over budget`}
+                </p>
+              </div>
+            </div>
+          )
+        })()}
+      </div>
+    </div>
+  )
+}
+
 // ─── Modal: Manage Budget Plans ───────────────────────────────────────
 
 export function ManagePlansModal({
@@ -227,6 +441,11 @@ export function ManagePlansModal({
             <span>{successMsg}</span>
           </div>
         )}
+
+        {/* Feature: Ongoing 50/30/20 Plan Progress Tracker */}
+        <div className="mt-4">
+          <Active503020Tracker />
+        </div>
 
         {/* Plans List */}
         <div className="mt-5 space-y-3">
