@@ -2395,6 +2395,9 @@ function useFinanceDataInternal() {
             await supabase.from("budget_plans").update({ is_active: false }).eq("user_id", userId)
           }
 
+          const validDeselected = (planData.deselected_bill_ids || []).filter(isValidUUID)
+          const validIndicators = (planData.indicator_account_ids || []).filter(isValidUUID)
+
           const { error: planError } = await supabase.from("budget_plans").insert({
             id: newPlanId,
             user_id: userId,
@@ -2407,13 +2410,14 @@ function useFinanceDataInternal() {
             framework: planData.framework,
             is_active: activateNow,
             is_repeating: isRepeating,
-            deselected_bill_ids: planData.deselected_bill_ids || [],
-            indicator_account_ids: planData.indicator_account_ids || [],
+            deselected_bill_ids: validDeselected,
+            indicator_account_ids: validIndicators,
           })
 
           if (!planError) {
-            if (categoryAllocations.length > 0) {
-              const catRows = categoryAllocations.map((c) => ({
+            const validCatRows = categoryAllocations
+              .filter((c) => isValidUUID(c.category_id))
+              .map((c) => ({
                 id: generateUUID(),
                 plan_id: newPlanId,
                 user_id: userId,
@@ -2421,7 +2425,9 @@ function useFinanceDataInternal() {
                 bucket: c.bucket,
                 allocated_amount_cents: Math.round(c.allocated_amount * 100),
               }))
-              await supabase.from("budget_plan_categories").insert(catRows)
+
+            if (validCatRows.length > 0) {
+              await supabase.from("budget_plan_categories").insert(validCatRows)
             }
 
             if (activateNow) {
@@ -2500,15 +2506,16 @@ function useFinanceDataInternal() {
           if (planData.start_date !== undefined) updatePayload.start_date = planData.start_date
           if (planData.framework !== undefined) updatePayload.framework = planData.framework
           if (planData.is_repeating !== undefined) updatePayload.is_repeating = planData.is_repeating
-          if (planData.deselected_bill_ids !== undefined) updatePayload.deselected_bill_ids = planData.deselected_bill_ids
-          if (planData.indicator_account_ids !== undefined) updatePayload.indicator_account_ids = planData.indicator_account_ids
+          if (planData.deselected_bill_ids !== undefined) updatePayload.deselected_bill_ids = (planData.deselected_bill_ids || []).filter(isValidUUID)
+          if (planData.indicator_account_ids !== undefined) updatePayload.indicator_account_ids = (planData.indicator_account_ids || []).filter(isValidUUID)
           if (activateNow) updatePayload.is_active = true
 
           await supabase.from("budget_plans").update(updatePayload).eq("id", planId).eq("user_id", userId)
           await supabase.from("budget_plan_categories").delete().eq("plan_id", planId).eq("user_id", userId)
 
-          if (categoryAllocations.length > 0) {
-            const catRows = categoryAllocations.map((c) => ({
+          const validCatRows = categoryAllocations
+            .filter((c) => isValidUUID(c.category_id))
+            .map((c) => ({
               id: generateUUID(),
               plan_id: planId,
               user_id: userId,
@@ -2516,7 +2523,9 @@ function useFinanceDataInternal() {
               bucket: c.bucket,
               allocated_amount_cents: Math.round(c.allocated_amount * 100),
             }))
-            await supabase.from("budget_plan_categories").insert(catRows)
+
+          if (validCatRows.length > 0) {
+            await supabase.from("budget_plan_categories").insert(validCatRows)
           }
 
           if (activateNow) {
