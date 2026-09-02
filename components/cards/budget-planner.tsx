@@ -45,6 +45,7 @@ import {
   toCents,
   isValidUUID,
   getCurrencySymbol,
+  isTransferTransaction,
 } from "@/lib/finance-data"
 import { useUserProfile } from "@/lib/user-profile"
 import { useDashboardTheme } from "@/components/cards/financial-analytics-dashboard"
@@ -140,7 +141,7 @@ export function Active503020Tracker() {
 
   // All expense transactions from plan start_date to today
   const cycleExpenses = transactions.filter((t) => {
-    return t.type === "expense" && t.date >= activePlan.start_date && t.date <= todayStr
+    return t.type === "expense" && !isTransferTransaction(t) && t.date >= activePlan.start_date && t.date <= todayStr
   })
 
   // Fixed commitments: Use snapshot from saved plan if available, else sum of selected bills
@@ -916,7 +917,7 @@ export function BudgetPlannerSection({
     else if (existingPlan.period === "custom") endObj.setDate(endObj.getDate() + (existingPlan.custom_days || 30))
     const endStr = endObj.toISOString().split("T")[0]
 
-    const periodTxs = transactions.filter((t) => t.type === "expense" && t.date >= startStr && t.date <= endStr)
+    const periodTxs = transactions.filter((t) => t.type === "expense" && !isTransferTransaction(t) && t.date >= startStr && t.date <= endStr)
 
     const categoryBreakdown = (existingPlan.categories || []).map((alloc) => {
       const catObj = categories.find((c) => c.id === alloc.category_id)
@@ -1197,7 +1198,7 @@ export function BudgetPlannerSection({
     cutoff.setMonth(cutoff.getMonth() - months)
     const cutoffStr = cutoff.toISOString().split("T")[0]
 
-    const lookbackTxs = transactions.filter((t) => t.type === "expense" && t.date >= cutoffStr)
+    const lookbackTxs = transactions.filter((t) => t.type === "expense" && !isTransferTransaction(t) && t.date >= cutoffStr)
 
     const stats: Record<string, { total: number; monthlyAvg: number; suggested: number }> = {}
     expenseCategories.forEach((cat) => {

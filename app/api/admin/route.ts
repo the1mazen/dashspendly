@@ -187,12 +187,14 @@ export async function GET(req: NextRequest) {
       const userBills = bills.filter((b) => String(b.user_id) === String(user.id))
       const userHf = heldFunds.filter((h) => String(h.user_id) === String(user.id))
 
+      const isTransfer = (t: any) => Boolean(t.transfer_pair_id || (t.note || "").toLowerCase().startsWith("transfer to ") || (t.note || "").toLowerCase().startsWith("transfer from "))
+
       const totalIncomeCents = userTxs
-        .filter((t) => t.type === "income" && !t.is_fee)
+        .filter((t) => t.type === "income" && !t.is_fee && !isTransfer(t))
         .reduce((sum, t) => sum + (t.amount_cents || 0), 0)
 
       const totalExpenseCents = userTxs
-        .filter((t) => t.type === "expense")
+        .filter((t) => t.type === "expense" && !isTransfer(t))
         .reduce((sum, t) => sum + (t.amount_cents || 0), 0)
 
       const netBalanceCents = totalIncomeCents - totalExpenseCents
@@ -226,12 +228,14 @@ export async function GET(req: NextRequest) {
     })
 
     // App-wide stats
+    const isAppTransfer = (t: any) => Boolean(t.transfer_pair_id || (t.note || "").toLowerCase().startsWith("transfer to ") || (t.note || "").toLowerCase().startsWith("transfer from "))
+
     const totalAppIncomeCents = transactions
-      .filter((t) => t.type === "income" && !t.is_fee)
+      .filter((t) => t.type === "income" && !t.is_fee && !isAppTransfer(t))
       .reduce((sum, t) => sum + (t.amount_cents || 0), 0)
 
     const totalAppExpenseCents = transactions
-      .filter((t) => t.type === "expense")
+      .filter((t) => t.type === "expense" && !isAppTransfer(t))
       .reduce((sum, t) => sum + (t.amount_cents || 0), 0)
 
     const stats = {

@@ -27,7 +27,8 @@ import {
   HeldFundHistory,
   Bill,
   BudgetPlan,
-  AppNotification
+  AppNotification,
+  isTransferTransaction
 } from "@/lib/finance-data"
 import { useUserProfile } from "@/lib/user-profile"
 import { supabase, isSupabaseConfigured } from "@/lib/supabase"
@@ -1965,13 +1966,13 @@ function MonthSummaryModal({
   // Current month metrics
   const currentIncome = useMemo(() => {
     return filteredCurrentTxs
-      .filter((t) => t.type === "income" && !t.is_fee)
+      .filter((t) => t.type === "income" && !t.is_fee && !isTransferTransaction(t))
       .reduce((sum, t) => sum + t.amount, 0)
   }, [filteredCurrentTxs])
 
   const currentExpense = useMemo(() => {
     return filteredCurrentTxs
-      .filter((t) => t.type === "expense")
+      .filter((t) => t.type === "expense" && !isTransferTransaction(t))
       .reduce((sum, t) => sum + t.amount, 0)
   }, [filteredCurrentTxs])
 
@@ -1981,13 +1982,13 @@ function MonthSummaryModal({
   // Previous month metrics
   const prevIncome = useMemo(() => {
     return filteredPrevTxs
-      .filter((t) => t.type === "income" && !t.is_fee)
+      .filter((t) => t.type === "income" && !t.is_fee && !isTransferTransaction(t))
       .reduce((sum, t) => sum + t.amount, 0)
   }, [filteredPrevTxs])
 
   const prevExpense = useMemo(() => {
     return filteredPrevTxs
-      .filter((t) => t.type === "expense")
+      .filter((t) => t.type === "expense" && !isTransferTransaction(t))
       .reduce((sum, t) => sum + t.amount, 0)
   }, [filteredPrevTxs])
 
@@ -2001,17 +2002,18 @@ function MonthSummaryModal({
     return `${sign}${diff.toFixed(1)}%`
   }
 
-  // Biggest single transaction
+  // Biggest single transaction (excluding transfers)
   const biggestTx = useMemo(() => {
-    if (filteredCurrentTxs.length === 0) return null
-    return [...filteredCurrentTxs].sort((a, b) => b.amount - a.amount)[0]
+    const nonTransfers = filteredCurrentTxs.filter((t) => !isTransferTransaction(t))
+    if (nonTransfers.length === 0) return null
+    return [...nonTransfers].sort((a, b) => b.amount - a.amount)[0]
   }, [filteredCurrentTxs])
 
   // Top spending categories and chart data
   const categoryChartData = useMemo(() => {
     const map = new Map<string, number>()
     filteredCurrentTxs
-      .filter((t) => t.type === "expense")
+      .filter((t) => t.type === "expense" && !isTransferTransaction(t))
       .forEach((t) => {
         const name = t.category_name || "General"
         map.set(name, (map.get(name) || 0) + t.amount)
@@ -3927,7 +3929,7 @@ function NetWorthHeroCard({
     let exp = 0
 
     transactions.forEach((tx) => {
-      if (tx.date && tx.date.startsWith(currentYearMonth)) {
+      if (tx.date && tx.date.startsWith(currentYearMonth) && !isTransferTransaction(tx)) {
         if (tx.type === "income" && !tx.is_fee) {
           inc += Math.abs(tx.amount)
         } else if (tx.type === "expense") {
@@ -6480,7 +6482,7 @@ function CategoriesSection({
   const categorySpentMap = useMemo(() => {
     const map = new Map<string, number>()
     transactions
-      .filter((t) => t.type === "expense" && t.date >= currentMonthStart && t.date <= todayStr)
+      .filter((t) => t.type === "expense" && !isTransferTransaction(t) && t.date >= currentMonthStart && t.date <= todayStr)
       .forEach((t) => {
         if (t.category_id) {
           map.set(t.category_id, (map.get(t.category_id) || 0) + Math.abs(t.amount))

@@ -34,6 +34,15 @@ export interface Transaction {
   category_name?: string
 }
 
+export function isTransferTransaction(tx: { transfer_pair_id?: string; note?: string; description?: string }): boolean {
+  if (Boolean(tx.transfer_pair_id)) return true
+  const text = (tx.note || tx.description || "").toLowerCase()
+  if (text.startsWith("transfer to ") || text.startsWith("transfer from ") || text.startsWith("transfer to:") || text.startsWith("transfer from:")) {
+    return true
+  }
+  return false
+}
+
 export interface Category {
   id: string
   user_id?: string
@@ -475,7 +484,7 @@ function useFinanceDataInternal() {
 
           const parsedCategories: Category[] = dbCategories.map((c: any) => {
             const catSpent = parsedTransactions
-              .filter((t) => t.category_id === String(c.id) && t.type === "expense" && t.date >= currentMonthStart && t.date <= todayStr)
+              .filter((t) => t.category_id === String(c.id) && t.type === "expense" && !isTransferTransaction(t) && t.date >= currentMonthStart && t.date <= todayStr)
               .reduce((sum, t) => sum + Math.abs(t.amount), 0)
 
             const budget = c.budget_cents != null ? c.budget_cents / 100 : (c.budget != null ? c.budget : undefined)
@@ -2891,13 +2900,13 @@ function useFinanceDataInternal() {
 
   const totalIncome = useMemo(() => {
     return transactions
-      .filter((t) => t.type === "income" && !t.is_fee)
+      .filter((t) => t.type === "income" && !t.is_fee && !isTransferTransaction(t))
       .reduce((sum, t) => sum + t.amount, 0)
   }, [transactions])
 
   const totalExpense = useMemo(() => {
     return transactions
-      .filter((t) => t.type === "expense")
+      .filter((t) => t.type === "expense" && !isTransferTransaction(t))
       .reduce((sum, t) => sum + t.amount, 0)
   }, [transactions])
 
