@@ -992,6 +992,54 @@ export function BudgetPlannerSection({
   // Inline Add Category Modal state
   const [addCategoryModalOpen, setAddCategoryModalOpen] = useState(false)
 
+  // Fetch fresh data from Supabase on mount
+  useEffect(() => {
+    refreshFinanceData()
+  }, [refreshFinanceData])
+
+  // Populate form fields from existingPlan whenever it loads or changes from Supabase
+  const loadedPlanIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (existingPlan && existingPlan.id !== loadedPlanIdRef.current) {
+      loadedPlanIdRef.current = existingPlan.id
+      setPlanName(existingPlan.name || "Normal")
+      setBudgetMode(existingPlan.account_id ? "account" : "manual")
+      setManualAmount(existingPlan.total_amount ? String(existingPlan.total_amount) : "5000")
+      if (existingPlan.account_id) {
+        setSelectedAccountId(existingPlan.account_id)
+      }
+      setPeriod(existingPlan.period || "monthly")
+      if (existingPlan.custom_days) {
+        setCustomDays(String(existingPlan.custom_days))
+      }
+      if (existingPlan.start_date) {
+        setStartDate(existingPlan.start_date)
+      }
+      if (existingPlan.deselected_bill_ids) {
+        setDeselectedBillIds(existingPlan.deselected_bill_ids)
+      }
+      if (existingPlan.indicator_account_ids && existingPlan.indicator_account_ids.length > 0) {
+        setIndicatorAccountIds(existingPlan.indicator_account_ids)
+      }
+      if (existingPlan.framework) {
+        setFramework(existingPlan.framework)
+      }
+      if (existingPlan.categories && existingPlan.categories.length > 0) {
+        const catMap: Record<string, { bucket: "bills" | "needs" | "wants" | "savings"; amount: string }> = {}
+        const catIds: string[] = []
+        existingPlan.categories.forEach((c) => {
+          catIds.push(c.category_id)
+          catMap[c.category_id] = {
+            bucket: c.bucket,
+            amount: String(c.allocated_amount),
+          }
+        })
+        setSelectedCatIds(catIds)
+        setCategoryAllocations(catMap)
+      }
+    }
+  }, [existingPlan])
+
   // ─── Section 5 State: Activation & Confirmation ───
   const [activateNow, setActivateNow] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -1154,7 +1202,8 @@ export function BudgetPlannerSection({
 
   // Initialize allocations when framework or availableToSpend changes
   useEffect(() => {
-    if (existingPlan && Object.keys(categoryAllocations).length > 0) return
+    if (existingPlan || isEditing) return
+    if (Object.keys(categoryAllocations).length > 0) return
     if (billsExceedBudget) return
     if (categorySelectionMode === "user") return
 

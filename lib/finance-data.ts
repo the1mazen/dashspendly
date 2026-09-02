@@ -542,7 +542,7 @@ function useFinanceDataInternal() {
           })
 
           let parsedBudgetPlans: BudgetPlan[] = []
-          if (Array.isArray(dbBudgetPlans) && dbBudgetPlans.length > 0) {
+          if (Array.isArray(dbBudgetPlans)) {
             parsedBudgetPlans = dbBudgetPlans.map((bp: any) => {
               const planCats = (dbBudgetPlanCategories || [])
                 .filter((c: any) => String(c.plan_id) === String(bp.id))
@@ -584,8 +584,6 @@ function useFinanceDataInternal() {
                 categories: planCats,
               }
             })
-          } else {
-            parsedBudgetPlans = getLocal<BudgetPlan>(STORAGE_BUDGET_PLANS_KEY)
           }
 
           setAccounts(parsedAccounts)
@@ -606,7 +604,7 @@ function useFinanceDataInternal() {
           return
         }
       } catch (err) {
-        console.warn("Supabase finance data fetch error:", err)
+        console.error("Supabase live fetch error:", err)
       }
     }
 
@@ -622,6 +620,10 @@ function useFinanceDataInternal() {
 
   useEffect(() => {
     fetchData()
+  }, [fetchData])
+
+  const refreshFinanceData = useCallback(async () => {
+    await fetchData()
   }, [fetchData])
 
   // ─────────────────────────────────────────────────────────────────
@@ -2436,41 +2438,47 @@ function useFinanceDataInternal() {
             planError = retryRes.error
           }
 
-          if (!planError) {
-            const validCatRows = categoryAllocations
-              .filter((c) => isValidUUID(c.category_id))
-              .map((c) => ({
-                id: generateUUID(),
-                plan_id: newPlanId,
-                user_id: userId,
-                category_id: c.category_id,
-                bucket: c.bucket,
-                allocated_amount_cents: Math.round(c.allocated_amount * 100),
-              }))
+          if (planError) {
+            console.error("Supabase plan save error:", planError)
+            throw new Error(`Failed to save budget plan to Supabase: ${planError.message}`)
+          }
 
-            if (validCatRows.length > 0) {
-              await supabase.from("budget_plan_categories").insert(validCatRows)
+          const validCatRows = categoryAllocations
+            .filter((c) => isValidUUID(c.category_id))
+            .map((c) => ({
+              id: generateUUID(),
+              plan_id: newPlanId,
+              user_id: userId,
+              category_id: c.category_id,
+              bucket: c.bucket,
+              allocated_amount_cents: Math.round(c.allocated_amount * 100),
+            }))
+
+          if (validCatRows.length > 0) {
+            const { error: catInsertError } = await supabase.from("budget_plan_categories").insert(validCatRows)
+            if (catInsertError) {
+              console.error("Supabase plan categories insert error:", catInsertError)
+              throw new Error(`Failed to save category allocations to Supabase: ${catInsertError.message}`)
             }
+          }
 
-            if (activateNow) {
-              for (const c of categoryAllocations) {
-                if (isValidUUID(c.category_id)) {
-                  await supabase
-                    .from("categories")
-                    .update({ budget_cents: Math.round(c.allocated_amount * 100) })
-                    .eq("id", c.category_id)
-                    .eq("user_id", userId)
-                }
+          if (activateNow) {
+            for (const c of categoryAllocations) {
+              if (isValidUUID(c.category_id)) {
+                await supabase
+                  .from("categories")
+                  .update({ budget_cents: Math.round(c.allocated_amount * 100) })
+                  .eq("id", c.category_id)
+                  .eq("user_id", userId)
               }
             }
-            await fetchData()
-            return newPlan
-          } else {
-            console.warn("Supabase plan save notice:", planError.message)
           }
+          await fetchData()
+          return newPlan
         }
-      } catch (sbErr) {
-        console.warn("Supabase plan save exception:", sbErr)
+      } catch (sbErr: any) {
+        console.error("Supabase plan save exception:", sbErr)
+        throw sbErr
       }
     }
 
@@ -2537,10 +2545,20 @@ function useFinanceDataInternal() {
           let { error: updateError } = await supabase.from("budget_plans").update(updatePayload).eq("id", planId).eq("user_id", userId)
           if (updateError && (updateError.code === "PGRST204" || updateError.message?.includes("fixed_commitments_cents"))) {
             delete updatePayload.fixed_commitments_cents
-            await supabase.from("budget_plans").update(updatePayload).eq("id", planId).eq("user_id", userId)
+            const retryRes = await supabase.from("budget_plans").update(updatePayload).eq("id", planId).eq("user_id", userId)
+            updateError = retryRes.error
           }
 
-          await supabase.from("budget_plan_categories").delete().eq("plan_id", planId).eq("user_id", userId)
+          if (updateError) {
+            console.error("Supabase plan update error:", updateError)
+            throw new Error(`Failed to update budget plan in Supabase: ${updateError.message}`)
+          }
+
+          const { error: delError } = await supabase.from("budget_plan_categories").delete().eq("plan_id", planId).eq("user_id", userId)
+          if (delError) {
+            console.error("Supabase plan categories delete error:", delError)
+            throw new Error(`Failed to clear previous allocations in Supabase: ${delError.message}`)
+          }
 
           const validCatRows = categoryAllocations
             .filter((c) => isValidUUID(c.category_id))
@@ -2554,7 +2572,11 @@ function useFinanceDataInternal() {
             }))
 
           if (validCatRows.length > 0) {
-            await supabase.from("budget_plan_categories").insert(validCatRows)
+            const { error: catInsertError } = await supabase.from("budget_plan_categories").insert(validCatRows)
+            if (catInsertError) {
+              console.error("Supabase plan categories insert error:", catInsertError)
+              throw new Error(`Failed to save updated category allocations in Supabase: ${catInsertError.message}`)
+            }
           }
 
           if (activateNow) {
@@ -2571,8 +2593,9 @@ function useFinanceDataInternal() {
 
           await fetchData()
         }
-      } catch (sbErr) {
-        console.warn("Supabase plan update exception:", sbErr)
+      } catch (sbErr: any) {
+        console.error("Supabase plan update exception:", sbErr)
+        throw sbErr
       }
     }
 
