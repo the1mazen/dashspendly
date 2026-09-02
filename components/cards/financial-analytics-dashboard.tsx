@@ -30,6 +30,7 @@ import {
   AppNotification
 } from "@/lib/finance-data"
 import { useUserProfile } from "@/lib/user-profile"
+import { supabase, isSupabaseConfigured } from "@/lib/supabase"
 import { ManagePlansModal, BudgetPlannerSection, Active503020Tracker } from "./budget-planner"
 
 // ─── Design Tokens: Exact Reproduction of 2.jpeg ──────────────────
@@ -6761,12 +6762,21 @@ function SettingsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
   }
 
   const handleLogout = async () => {
-    if (isSupabaseConfigured && supabase) {
-      await supabase.auth.signOut()
-    }
-    if (typeof window !== "undefined") {
-      localStorage.clear()
-      window.location.href = "/login"
+    try {
+      if (isSupabaseConfigured && supabase) {
+        await supabase.auth.signOut()
+      }
+    } catch (err) {
+      console.warn("Supabase sign out error:", err)
+    } finally {
+      if (typeof window !== "undefined") {
+        localStorage.clear()
+        sessionStorage.clear()
+        document.cookie.split(";").forEach((c) => {
+          document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/")
+        })
+        window.location.href = "/login"
+      }
     }
   }
 
