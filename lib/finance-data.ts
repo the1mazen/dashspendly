@@ -841,6 +841,7 @@ function useFinanceDataInternal() {
         if (userId && isValidUUID(categoryId)) {
           await supabase.from("categories").delete().eq("id", categoryId).eq("user_id", userId)
         }
+        await fetchData()
       } catch (err) {
         console.warn("Supabase category delete error:", err)
       }
@@ -850,7 +851,7 @@ function useFinanceDataInternal() {
       saveLocal(STORAGE_CATEGORIES_KEY, updated)
       return updated
     })
-  }, [])
+  }, [fetchData])
 
   // ─────────────────────────────────────────────────────────────────
   // TRANSACTIONS CRUD (Atomic Fee System & InstaPay)

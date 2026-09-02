@@ -276,7 +276,7 @@ export function Active503020Tracker() {
                 </div>
                 <p className="text-[10.5px] font-mono text-white/60 mt-1.5">
                   {actualBills <= plannedBills
-                    ? `${currencySymbol}${actualBills.toFixed(2)} paid of ${currencySymbol}{plannedBills.toFixed(2)} — ${currencySymbol}${(plannedBills - actualBills).toFixed(2)} left`
+                    ? `${currencySymbol}${actualBills.toFixed(2)} paid of ${currencySymbol}${plannedBills.toFixed(2)} — ${currencySymbol}${(plannedBills - actualBills).toFixed(2)} left`
                     : `${currencySymbol}${(actualBills - plannedBills).toFixed(2)} over budget`}
                 </p>
               </div>
@@ -309,7 +309,7 @@ export function Active503020Tracker() {
                 </div>
                 <p className="text-[10.5px] font-mono text-white/60 mt-1.5">
                   {actualNeeds <= plannedNeeds
-                    ? `${currencySymbol}${actualNeeds.toFixed(2)} spent of ${currencySymbol}{plannedNeeds.toFixed(2)} — ${currencySymbol}${(plannedNeeds - actualNeeds).toFixed(2)} left`
+                    ? `${currencySymbol}${actualNeeds.toFixed(2)} spent of ${currencySymbol}${plannedNeeds.toFixed(2)} — ${currencySymbol}${(plannedNeeds - actualNeeds).toFixed(2)} left`
                     : `${currencySymbol}${(actualNeeds - plannedNeeds).toFixed(2)} over budget`}
                 </p>
               </div>
@@ -342,7 +342,7 @@ export function Active503020Tracker() {
                 </div>
                 <p className="text-[10.5px] font-mono text-white/60 mt-1.5">
                   {actualWants <= plannedWants
-                    ? `${currencySymbol}${actualWants.toFixed(2)} spent of ${currencySymbol}{plannedWants.toFixed(2)} — ${currencySymbol}${(plannedWants - actualWants).toFixed(2)} left`
+                    ? `${currencySymbol}${actualWants.toFixed(2)} spent of ${currencySymbol}${plannedWants.toFixed(2)} — ${currencySymbol}${(plannedWants - actualWants).toFixed(2)} left`
                     : `${currencySymbol}${(actualWants - plannedWants).toFixed(2)} over budget`}
                 </p>
               </div>
@@ -375,7 +375,7 @@ export function Active503020Tracker() {
                 </div>
                 <p className="text-[10.5px] font-mono text-white/60 mt-1.5">
                   {actualSavings <= plannedSavings
-                    ? `${currencySymbol}${actualSavings.toFixed(2)} spent of ${currencySymbol}{plannedSavings.toFixed(2)} — ${currencySymbol}${(plannedSavings - actualSavings).toFixed(2)} left`
+                    ? `${currencySymbol}${actualSavings.toFixed(2)} spent of ${currencySymbol}${plannedSavings.toFixed(2)} — ${currencySymbol}${(plannedSavings - actualSavings).toFixed(2)} left`
                     : `${currencySymbol}${(actualSavings - plannedSavings).toFixed(2)} over budget`}
                 </p>
               </div>
