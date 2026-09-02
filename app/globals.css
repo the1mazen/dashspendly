@@ -328,18 +328,19 @@
   display: none;
 }
 
-/* Mobile Application Feel & Prevent Auto-Zoom on Form Inputs */
+/* Mobile Form Inputs: prevent auto-zoom on iOS without disabling user scrolling */
 @media screen and (max-width: 768px) {
   input, select, textarea {
     font-size: 16px !important;
   }
 }
 
-html, body {
-  touch-action: manipulation;
+html {
   -webkit-text-size-adjust: 100%;
-  overscroll-behavior-y: none;
-  overflow-x: hidden;
-  max-width: 100vw;
+}
+
+body {
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
 }
 

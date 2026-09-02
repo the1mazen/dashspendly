@@ -536,9 +536,9 @@ function useFinanceDataInternal() {
           })
 
           let parsedBudgetPlans: BudgetPlan[] = []
-          if (!bpRes.error && Array.isArray(dbBudgetPlans)) {
+          if (Array.isArray(dbBudgetPlans) && dbBudgetPlans.length > 0) {
             parsedBudgetPlans = dbBudgetPlans.map((bp: any) => {
-              const planCats = dbBudgetPlanCategories
+              const planCats = (dbBudgetPlanCategories || [])
                 .filter((c: any) => String(c.plan_id) === String(bp.id))
                 .map((c: any) => {
                   const catObj = dbCategories.find((cat: any) => String(cat.id) === String(c.category_id))
