@@ -6468,10 +6468,26 @@ function CategoriesSection({
   onNavigate: (s: SectionId) => void
   onEditPlan?: (plan: BudgetPlan) => void
 }) {
-  const { categories, createCategory, deleteCategory, activeBudgetPlan, budgetPlans } = useFinanceData()
+  const { categories, transactions, createCategory, deleteCategory, activeBudgetPlan, budgetPlans } = useFinanceData()
   const { profile } = useUserProfile()
   const { tokens } = useDashboardTheme()
   const currencySymbol = getCurrencySymbol(profile.currency)
+
+  const now = new Date()
+  const currentMonthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`
+  const todayStr = now.toISOString().split("T")[0]
+
+  const categorySpentMap = useMemo(() => {
+    const map = new Map<string, number>()
+    transactions
+      .filter((t) => t.type === "expense" && t.date >= currentMonthStart && t.date <= todayStr)
+      .forEach((t) => {
+        if (t.category_id) {
+          map.set(t.category_id, (map.get(t.category_id) || 0) + Math.abs(t.amount))
+        }
+      })
+    return map
+  }, [transactions, currentMonthStart, todayStr])
 
   const [newCatName, setNewCatName] = useState("")
   const [newCatType, setNewCatType] = useState<"expense" | "income">("expense")
@@ -6647,65 +6663,68 @@ function CategoriesSection({
             <p className="text-sm text-white/60">No categories created yet. Create your first category above.</p>
           </div>
         ) : (
-          categories.map((c, i) => (
-            <motion.div
-              key={c.id}
-              {...cardEntrance(0.08 + i * 0.04)}
-              className="p-5 rounded-2xl border flex flex-col justify-between backdrop-blur-md hover:scale-[1.01] transition-transform duration-300 relative group"
-              style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h4 className="text-sm font-bold text-white font-sans">{c.name}</h4>
-                    <span className={`px-2 py-0.5 rounded text-[9.5px] font-mono uppercase ${
-                      c.type === "income" ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "bg-white/10 text-white/70"
-                    }`}>
-                      {c.type}
-                    </span>
+          categories.map((c, i) => {
+            const spent = categorySpentMap.has(c.id) ? categorySpentMap.get(c.id)! : (c.total_spent || 0)
+            return (
+              <motion.div
+                key={c.id}
+                {...cardEntrance(0.08 + i * 0.04)}
+                className="p-5 rounded-2xl border flex flex-col justify-between backdrop-blur-md hover:scale-[1.01] transition-transform duration-300 relative group"
+                style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-bold text-white font-sans">{c.name}</h4>
+                      <span className={`px-2 py-0.5 rounded text-[9.5px] font-mono uppercase ${
+                        c.type === "income" ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "bg-white/10 text-white/70"
+                      }`}>
+                        {c.type}
+                      </span>
+                    </div>
+                    <p className="text-xs text-white/60 font-mono mt-1">
+                      Spent: <span className="text-white font-semibold">{currencySymbol}{spent.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+                      {c.budget != null && c.budget > 0 ? ` / Budget: ${currencySymbol}${c.budget.toLocaleString("en-US", { minimumFractionDigits: 2 })}` : ""}
+                    </p>
                   </div>
-                  <p className="text-xs text-white/60 font-mono mt-1">
-                    Spent: <span className="text-white font-semibold">{currencySymbol}{(c.total_spent || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
-                    {c.budget != null && c.budget > 0 ? ` / Budget: ${currencySymbol}${c.budget.toLocaleString("en-US", { minimumFractionDigits: 2 })}` : ""}
-                  </p>
-                </div>
 
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all shrink-0">
-                  <button
-                    onClick={() => setEditingCategory(c)}
-                    className="p-1.5 rounded-lg hover:bg-white/10 text-white/60 hover:text-white cursor-pointer transition-all"
-                    title="Edit category"
-                  >
-                    <Edit3 className="size-4" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (confirm(`Delete category "${c.name}"?`)) {
-                        deleteCategory(c.id)
-                      }
-                    }}
-                    className="p-1.5 rounded-lg hover:bg-red-500/20 text-white/40 hover:text-red-400 cursor-pointer transition-all"
-                    title="Delete category"
-                  >
-                    <Trash2 className="size-4" />
-                  </button>
-                </div>
-              </div>
-
-              {c.budget != null && c.budget > 0 && (
-                <div className="w-full mt-3">
-                  <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-white/40"
-                      style={{
-                        width: `${Math.min(100, Math.max(0, ((c.total_spent || 0) / c.budget) * 100))}%`,
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all shrink-0">
+                    <button
+                      onClick={() => setEditingCategory(c)}
+                      className="p-1.5 rounded-lg hover:bg-white/10 text-white/60 hover:text-white cursor-pointer transition-all"
+                      title="Edit category"
+                    >
+                      <Edit3 className="size-4" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (confirm(`Delete category "${c.name}"?`)) {
+                          deleteCategory(c.id)
+                        }
                       }}
-                    />
+                      className="p-1.5 rounded-lg hover:bg-red-500/20 text-white/40 hover:text-red-400 cursor-pointer transition-all"
+                      title="Delete category"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
                   </div>
                 </div>
-              )}
-            </motion.div>
-          ))
+
+                {c.budget != null && c.budget > 0 && (
+                  <div className="w-full mt-3">
+                    <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-white/40"
+                        style={{
+                          width: `${Math.min(100, Math.max(0, (spent / c.budget) * 100))}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            )
+          })
         )}
       </div>
 

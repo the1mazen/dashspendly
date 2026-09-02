@@ -469,9 +469,13 @@ function useFinanceDataInternal() {
             }
           })
 
+          const now = new Date()
+          const currentMonthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`
+          const todayStr = now.toISOString().split("T")[0]
+
           const parsedCategories: Category[] = dbCategories.map((c: any) => {
             const catSpent = parsedTransactions
-              .filter((t) => t.category_id === String(c.id) && t.type === "expense")
+              .filter((t) => t.category_id === String(c.id) && t.type === "expense" && t.date >= currentMonthStart && t.date <= todayStr)
               .reduce((sum, t) => sum + Math.abs(t.amount), 0)
 
             const budget = c.budget_cents != null ? c.budget_cents / 100 : (c.budget != null ? c.budget : undefined)
