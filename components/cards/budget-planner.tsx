@@ -57,7 +57,7 @@ const cardEntrance = (delay = 0) => ({
   transition: { duration: 0.5, ease: EASE_OUT, delay },
 })
 
-// Auto-assignment dictionary for 50/30/20 & Bills buckets
+// Auto-assignment dictionary for 50/30/20 buckets
 export function autoAssignBucket(categoryName: string): "bills" | "needs" | "wants" | "savings" {
   const name = categoryName.trim().toLowerCase()
 
@@ -74,36 +74,23 @@ export function autoAssignBucket(categoryName: string): "bills" | "needs" | "wan
     return "savings"
   }
 
-  // Bills / Fixed commitments keywords
-  if (
-    name.includes("bill") ||
-    name.includes("utility") ||
-    name.includes("utilities") ||
-    name.includes("rent") ||
-    name.includes("subscription") ||
-    name.includes("wifi") ||
-    name.includes("internet") ||
-    name.includes("electricity") ||
-    name.includes("water") ||
-    name.includes("telecom") ||
-    name.includes("tuition") ||
-    name.includes("insurance")
-  ) {
-    return "bills"
-  }
-
-  // Needs keywords
+  // Needs keywords (including essential bills/utilities)
   if (
     name.includes("grocer") ||
     name.includes("supermarket") ||
     name.includes("food") ||
     name.includes("meat") ||
     name.includes("produce") ||
+    name.includes("bill") ||
+    name.includes("utility") ||
+    name.includes("utilities") ||
+    name.includes("rent") ||
     name.includes("house") ||
     name.includes("home") ||
     name.includes("public transport") ||
     name.includes("metro") ||
     name.includes("bus") ||
+    name.includes("subscription") ||
     name.includes("fuel") ||
     name.includes("gasoline") ||
     name.includes("commute") ||
@@ -116,7 +103,9 @@ export function autoAssignBucket(categoryName: string): "bills" | "needs" | "wan
     name.includes("pharmacy") ||
     name.includes("educat") ||
     name.includes("school") ||
-    name.includes("college")
+    name.includes("college") ||
+    name.includes("tuition") ||
+    name.includes("insurance")
   ) {
     return "needs"
   }
@@ -151,35 +140,28 @@ export function Active503020Tracker() {
     return t.type === "expense" && t.date >= activePlan.start_date && t.date <= cycleEndDate
   })
 
-  // Fixed bills selected in this plan
+  // Fixed commitments selected for this plan
   const planFixedBillsTotal = bills
     .filter((b) => b.type === "expense" && !(activePlan.deselected_bill_ids || []).includes(b.id))
     .reduce((sum, b) => sum + (b.amount + (b.fee_amount || 0)), 0)
 
   const catBucketMap = new Map<string, "bills" | "needs" | "wants" | "savings">()
-  let plannedBillsAlloc = 0
-  let plannedNeeds = 0
-  let plannedWants = 0
-  let plannedSavings = 0
-
   if (activePlan.categories && activePlan.categories.length > 0) {
     activePlan.categories.forEach((c) => {
       catBucketMap.set(c.category_id, c.bucket)
-      if (c.bucket === "bills") plannedBillsAlloc += c.allocated_amount
-      else if (c.bucket === "needs") plannedNeeds += c.allocated_amount
-      else if (c.bucket === "wants") plannedWants += c.allocated_amount
-      else if (c.bucket === "savings") plannedSavings += c.allocated_amount
     })
   }
 
-  const plannedBills = planFixedBillsTotal + plannedBillsAlloc
+  // 1. Bills & Fixed = Fixed commitments (e.g. 768.32)
+  const plannedBills = planFixedBillsTotal
+
+  // 2. Available to Spend = Total budget - Fixed commitments (e.g. 3000 - 768.32 = 2231.68)
   const plannedAvailable = Math.max(0, activePlan.total_amount - plannedBills)
 
-  if (!activePlan.categories || activePlan.categories.length === 0 || (plannedNeeds === 0 && plannedWants === 0 && plannedSavings === 0)) {
-    plannedNeeds = plannedAvailable * 0.5
-    plannedWants = plannedAvailable * 0.3
-    plannedSavings = plannedAvailable * 0.2
-  }
+  // 3. Needs 50%, Wants 30%, Savings 20%
+  const plannedNeeds = Math.round(plannedAvailable * 0.5 * 100) / 100
+  const plannedWants = Math.round(plannedAvailable * 0.3 * 100) / 100
+  const plannedSavings = Math.round(plannedAvailable * 0.2 * 100) / 100
 
   let actualBills = 0
   let actualNeeds = 0
@@ -1106,24 +1088,18 @@ export function BudgetPlannerSection({
   }, [activeAllocationsList])
 
   const plannedBillsTotal = useMemo(() => {
-    return activeFixedExpenses + bucketTotals.bills
-  }, [activeFixedExpenses, bucketTotals.bills])
+    return activeFixedExpenses
+  }, [activeFixedExpenses])
 
-  // Available Free Money after all bills (Fixed + Category bills)
-  const availableFreeMoney = useMemo(() => {
-    const free = Math.max(0, availableToSpend - bucketTotals.bills)
-    return Math.round(free * 100) / 100
-  }, [availableToSpend, bucketTotals.bills])
-
-  // ─── 50/30/20 Targets based on Available Free Money ───
+  // ─── 50/30/20 Targets based on Available to Spend ───
   const rule503020Targets = useMemo(() => {
-    const spendable = availableFreeMoney
+    const spendable = Math.max(0, availableToSpend)
     return {
       needs: Math.round(spendable * 0.5 * 100) / 100,
       wants: Math.round(spendable * 0.3 * 100) / 100,
       savings: Math.round(spendable * 0.2 * 100) / 100,
     }
-  }, [availableFreeMoney])
+  }, [availableToSpend])
 
   // Expense categories list
   const expenseCategories = useMemo(() => {
