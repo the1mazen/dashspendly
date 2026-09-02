@@ -57,8 +57,8 @@ const cardEntrance = (delay = 0) => ({
   transition: { duration: 0.5, ease: EASE_OUT, delay },
 })
 
-// Auto-assignment dictionary for 50/30/20 buckets
-export function autoAssignBucket(categoryName: string): "needs" | "wants" | "savings" {
+// Auto-assignment dictionary for 50/30/20 & Bills buckets
+export function autoAssignBucket(categoryName: string): "bills" | "needs" | "wants" | "savings" {
   const name = categoryName.trim().toLowerCase()
 
   // Savings keywords
@@ -74,20 +74,39 @@ export function autoAssignBucket(categoryName: string): "needs" | "wants" | "sav
     return "savings"
   }
 
-  // Needs keywords
+  // Bills / Fixed commitments keywords
   if (
-    name.includes("grocer") ||
-    name.includes("supermarket") ||
     name.includes("bill") ||
     name.includes("utility") ||
     name.includes("utilities") ||
     name.includes("rent") ||
+    name.includes("subscription") ||
+    name.includes("wifi") ||
+    name.includes("internet") ||
+    name.includes("electricity") ||
+    name.includes("water") ||
+    name.includes("telecom") ||
+    name.includes("tuition") ||
+    name.includes("insurance")
+  ) {
+    return "bills"
+  }
+
+  // Needs keywords
+  if (
+    name.includes("grocer") ||
+    name.includes("supermarket") ||
+    name.includes("food") ||
+    name.includes("meat") ||
+    name.includes("produce") ||
     name.includes("house") ||
     name.includes("home") ||
     name.includes("public transport") ||
     name.includes("metro") ||
     name.includes("bus") ||
-    name.includes("subscription") ||
+    name.includes("fuel") ||
+    name.includes("gasoline") ||
+    name.includes("commute") ||
     name.includes("giving") ||
     name.includes("charity") ||
     name.includes("zakat") ||
@@ -97,9 +116,7 @@ export function autoAssignBucket(categoryName: string): "needs" | "wants" | "sav
     name.includes("pharmacy") ||
     name.includes("educat") ||
     name.includes("school") ||
-    name.includes("college") ||
-    name.includes("tuition") ||
-    name.includes("insurance")
+    name.includes("college")
   ) {
     return "needs"
   }
@@ -111,7 +128,7 @@ export function autoAssignBucket(categoryName: string): "needs" | "wants" | "sav
 // ─── Component: Active 50/30/20 Plan Progress Tracker ────────────────
 
 export function Active503020Tracker() {
-  const { budgetPlans, transactions } = useFinanceData()
+  const { budgetPlans, transactions, bills } = useFinanceData()
   const { profile } = useUserProfile()
   const { tokens } = useDashboardTheme()
   const currencySymbol = getCurrencySymbol(profile.currency)
@@ -134,7 +151,13 @@ export function Active503020Tracker() {
     return t.type === "expense" && t.date >= activePlan.start_date && t.date <= cycleEndDate
   })
 
-  const catBucketMap = new Map<string, "needs" | "wants" | "savings">()
+  // Fixed bills selected in this plan
+  const planFixedBillsTotal = bills
+    .filter((b) => b.type === "expense" && !(activePlan.deselected_bill_ids || []).includes(b.id))
+    .reduce((sum, b) => sum + (b.amount + (b.fee_amount || 0)), 0)
+
+  const catBucketMap = new Map<string, "bills" | "needs" | "wants" | "savings">()
+  let plannedBillsAlloc = 0
   let plannedNeeds = 0
   let plannedWants = 0
   let plannedSavings = 0
@@ -142,16 +165,23 @@ export function Active503020Tracker() {
   if (activePlan.categories && activePlan.categories.length > 0) {
     activePlan.categories.forEach((c) => {
       catBucketMap.set(c.category_id, c.bucket)
-      if (c.bucket === "needs") plannedNeeds += c.allocated_amount
+      if (c.bucket === "bills") plannedBillsAlloc += c.allocated_amount
+      else if (c.bucket === "needs") plannedNeeds += c.allocated_amount
       else if (c.bucket === "wants") plannedWants += c.allocated_amount
       else if (c.bucket === "savings") plannedSavings += c.allocated_amount
     })
-  } else {
-    plannedNeeds = activePlan.total_amount * 0.5
-    plannedWants = activePlan.total_amount * 0.3
-    plannedSavings = activePlan.total_amount * 0.2
   }
 
+  const plannedBills = planFixedBillsTotal + plannedBillsAlloc
+  const plannedAvailable = Math.max(0, activePlan.total_amount - plannedBills)
+
+  if (!activePlan.categories || activePlan.categories.length === 0 || (plannedNeeds === 0 && plannedWants === 0 && plannedSavings === 0)) {
+    plannedNeeds = plannedAvailable * 0.5
+    plannedWants = plannedAvailable * 0.3
+    plannedSavings = plannedAvailable * 0.2
+  }
+
+  let actualBills = 0
   let actualNeeds = 0
   let actualWants = 0
   let actualSavings = 0
@@ -159,26 +189,27 @@ export function Active503020Tracker() {
   cycleExpenses.forEach((t) => {
     const b = catBucketMap.get(t.category_id) || autoAssignBucket(t.category_name || "")
     const amt = Math.abs(t.amount)
-    if (b === "needs") actualNeeds += amt
+    if (b === "bills") actualBills += amt
+    else if (b === "needs") actualNeeds += amt
     else if (b === "wants") actualWants += amt
     else if (b === "savings") actualSavings += amt
   })
 
-  const totalPlanned = activePlan.total_amount
-  const totalSpent = actualNeeds + actualWants + actualSavings
-  const totalLeft = Math.max(0, totalPlanned - totalSpent)
-  const totalProgressPct = totalPlanned > 0 ? Math.min(100, Math.round((totalSpent / totalPlanned) * 100)) : 0
+  // Available free money tracking (discretionary)
+  const discretionarySpent = actualNeeds + actualWants + actualSavings
+  const availableLeft = Math.max(0, plannedAvailable - discretionarySpent)
+  const availableProgressPct = plannedAvailable > 0 ? Math.min(100, Math.round((discretionarySpent / plannedAvailable) * 100)) : 0
 
   const needsSurplus = plannedNeeds - actualNeeds
   let insightText = ""
-  if (needsSurplus > 0 && totalSpent < totalPlanned) {
+  if (needsSurplus > 0 && discretionarySpent < plannedAvailable) {
     insightText = `💡 You spent ${currencySymbol}${needsSurplus.toLocaleString("en-US", { minimumFractionDigits: 2 })} less in Needs. You can start spending more in Wants or allocating toward Savings!`
   } else if (actualNeeds > plannedNeeds) {
     insightText = `⚠️ Needs spending exceeded budget by ${currencySymbol}${(actualNeeds - plannedNeeds).toLocaleString("en-US", { minimumFractionDigits: 2 })}. Consider curbing discretionary Wants.`
-  } else if (totalSpent >= totalPlanned) {
-    insightText = `⚠️ You have reached your total budget limit for this cycle.`
+  } else if (discretionarySpent >= plannedAvailable) {
+    insightText = `⚠️ You have reached your available free money budget limit for this cycle.`
   } else {
-    insightText = `✨ Your spending is on track across your 50/30/20 buckets.`
+    insightText = `✨ Your available free money spending is on track across your 50/30/20 buckets.`
   }
 
   return (
@@ -198,27 +229,27 @@ export function Active503020Tracker() {
         </span>
       </div>
 
-      {/* Overall Plan Indicator Progress */}
+      {/* Overall Plan Indicator Progress: Available Free Money Only */}
       <div>
         <div className="flex items-center justify-between text-xs font-mono mb-1.5 flex-wrap gap-1">
           <span className="text-white font-semibold">
-            {currencySymbol}{totalSpent.toLocaleString("en-US", { minimumFractionDigits: 2 })} spent out of the planned {currencySymbol}{totalPlanned.toLocaleString("en-US", { minimumFractionDigits: 2 })}, {currencySymbol}{totalLeft.toLocaleString("en-US", { minimumFractionDigits: 2 })} left.
+            {currencySymbol}{discretionarySpent.toLocaleString("en-US", { minimumFractionDigits: 2 })} spent out of the planned {currencySymbol}{plannedAvailable.toLocaleString("en-US", { minimumFractionDigits: 2 })} available free money, {currencySymbol}{availableLeft.toLocaleString("en-US", { minimumFractionDigits: 2 })} left.
           </span>
-          <span className="text-[#5EEAD4] font-bold font-mono">{totalProgressPct}%</span>
+          <span className="text-[#5EEAD4] font-bold font-mono">{availableProgressPct}%</span>
         </div>
         <div className="w-full h-2.5 rounded-full bg-black/40 overflow-hidden border" style={{ borderColor: tokens.borderNested }}>
           <motion.div
             className="h-full rounded-full transition-all duration-500"
             style={{
-              width: `${totalProgressPct}%`,
-              background: totalSpent > totalPlanned
+              width: `${availableProgressPct}%`,
+              background: discretionarySpent > plannedAvailable
                 ? "#F87171"
-                : totalProgressPct >= 85
+                : availableProgressPct >= 85
                 ? "#FBBF24"
                 : "#4ADE80",
             }}
             initial={{ width: 0 }}
-            animate={{ width: `${totalProgressPct}%` }}
+            animate={{ width: `${availableProgressPct}%` }}
           />
         </div>
         <p className="text-[11px] text-white/80 font-sans mt-2.5 p-2 rounded-xl bg-white/5 border border-white/10 flex items-center gap-1.5">
@@ -226,9 +257,42 @@ export function Active503020Tracker() {
         </p>
       </div>
 
-      {/* 3 Bucket Cards: Needs 50% - Wants 30% - Savings 20% */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-        {/* Needs (50%) */}
+      {/* 4 Cards: Bills - Needs 50% - Wants 30% - Savings 20% */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+        {/* Card 1: Bills */}
+        {(() => {
+          const pct = plannedBills > 0 ? Math.round((actualBills / plannedBills) * 100) : 0
+          const color = pct < 100 ? "#38BDF8" : pct === 100 ? "#D4A934" : "#F87171"
+          return (
+            <div className="p-3.5 rounded-xl border bg-black/25 flex flex-col justify-between" style={{ borderColor: tokens.borderNested }}>
+              <div>
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className="font-bold text-white font-sans flex items-center gap-1">
+                    <span className="size-2 rounded-full bg-[#38BDF8]" />
+                    Bills
+                  </span>
+                  <span className="font-mono text-[11px] font-bold" style={{ color }}>{pct}%</span>
+                </div>
+                <p className="text-xs font-mono text-white/80">
+                  <strong className="text-white">{currencySymbol}{actualBills.toLocaleString("en-US", { minimumFractionDigits: 2 })}</strong>
+                  <span className="text-white/50"> / {currencySymbol}{plannedBills.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+                </p>
+              </div>
+              <div className="mt-3">
+                <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+                  <div className="h-full rounded-full transition-all duration-300" style={{ width: `${Math.min(100, pct)}%`, backgroundColor: color }} />
+                </div>
+                <p className="text-[10.5px] font-mono text-white/60 mt-1.5">
+                  {actualBills <= plannedBills
+                    ? `${currencySymbol}${(plannedBills - actualBills).toLocaleString("en-US", { minimumFractionDigits: 2 })} left`
+                    : `${currencySymbol}${(actualBills - plannedBills).toLocaleString("en-US", { minimumFractionDigits: 2 })} over budget`}
+                </p>
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* Card 2: Needs (50%) */}
         {(() => {
           const pct = plannedNeeds > 0 ? Math.round((actualNeeds / plannedNeeds) * 100) : 0
           const color = pct < 100 ? "#4ADE80" : pct === 100 ? "#D4A934" : "#F87171"
@@ -236,7 +300,10 @@ export function Active503020Tracker() {
             <div className="p-3.5 rounded-xl border bg-black/25 flex flex-col justify-between" style={{ borderColor: tokens.borderNested }}>
               <div>
                 <div className="flex items-center justify-between text-xs mb-1">
-                  <span className="font-bold text-white font-sans">Needs (50%)</span>
+                  <span className="font-bold text-white font-sans flex items-center gap-1">
+                    <span className="size-2 rounded-full bg-[#4ADE80]" />
+                    Needs (50%)
+                  </span>
                   <span className="font-mono text-[11px] font-bold" style={{ color }}>{pct}%</span>
                 </div>
                 <p className="text-xs font-mono text-white/80">
@@ -258,15 +325,18 @@ export function Active503020Tracker() {
           )
         })()}
 
-        {/* Wants (30%) */}
+        {/* Card 3: Wants (30%) */}
         {(() => {
           const pct = plannedWants > 0 ? Math.round((actualWants / plannedWants) * 100) : 0
-          const color = pct < 100 ? "#4ADE80" : pct === 100 ? "#D4A934" : "#F87171"
+          const color = pct < 100 ? "#C084FC" : pct === 100 ? "#D4A934" : "#F87171"
           return (
             <div className="p-3.5 rounded-xl border bg-black/25 flex flex-col justify-between" style={{ borderColor: tokens.borderNested }}>
               <div>
                 <div className="flex items-center justify-between text-xs mb-1">
-                  <span className="font-bold text-white font-sans">Wants (30%)</span>
+                  <span className="font-bold text-white font-sans flex items-center gap-1">
+                    <span className="size-2 rounded-full bg-[#C084FC]" />
+                    Wants (30%)
+                  </span>
                   <span className="font-mono text-[11px] font-bold" style={{ color }}>{pct}%</span>
                 </div>
                 <p className="text-xs font-mono text-white/80">
@@ -288,15 +358,18 @@ export function Active503020Tracker() {
           )
         })()}
 
-        {/* Savings (20%) */}
+        {/* Card 4: Savings (20%) */}
         {(() => {
           const pct = plannedSavings > 0 ? Math.round((actualSavings / plannedSavings) * 100) : 0
-          const color = pct < 100 ? "#4ADE80" : pct === 100 ? "#D4A934" : "#F87171"
+          const color = pct < 100 ? "#FBBF24" : pct === 100 ? "#D4A934" : "#F87171"
           return (
             <div className="p-3.5 rounded-xl border bg-black/25 flex flex-col justify-between" style={{ borderColor: tokens.borderNested }}>
               <div>
                 <div className="flex items-center justify-between text-xs mb-1">
-                  <span className="font-bold text-white font-sans">Savings (20%)</span>
+                  <span className="font-bold text-white font-sans flex items-center gap-1">
+                    <span className="size-2 rounded-full bg-[#FBBF24]" />
+                    Savings (20%)
+                  </span>
                   <span className="font-mono text-[11px] font-bold" style={{ color }}>{pct}%</span>
                 </div>
                 <p className="text-xs font-mono text-white/80">
@@ -911,8 +984,8 @@ export function BudgetPlannerSection({
     return categories.filter((c) => c.type === "expense").map((c) => c.id)
   })
 
-  const [categoryAllocations, setCategoryAllocations] = useState<Record<string, { bucket: "needs" | "wants" | "savings"; amount: string }>>(() => {
-    const initial: Record<string, { bucket: "needs" | "wants" | "savings"; amount: string }> = {}
+  const [categoryAllocations, setCategoryAllocations] = useState<Record<string, { bucket: "bills" | "needs" | "wants" | "savings"; amount: string }>>(() => {
+    const initial: Record<string, { bucket: "bills" | "needs" | "wants" | "savings"; amount: string }> = {}
     if (existingPlan?.categories && existingPlan.categories.length > 0) {
       existingPlan.categories.forEach((c) => {
         initial[c.category_id] = {
@@ -1001,15 +1074,56 @@ export function BudgetPlannerSection({
     return activeFixedExpenses > totalBudgetAmount || availableToSpend <= 0
   }, [activeFixedExpenses, totalBudgetAmount, availableToSpend])
 
-  // ─── 50/30/20 Targets based on Available to spend ───
+  // Active category allocations list
+  const activeAllocationsList = useMemo(() => {
+    return (categories.filter((c) => c.type === "expense"))
+      .filter((c) => categorySelectionMode === "app" || selectedCatIds.includes(c.id))
+      .map((c) => {
+        const alloc = categoryAllocations[c.id] || { bucket: autoAssignBucket(c.name), amount: "0" }
+        const amt = parseFloat(alloc.amount) || 0
+        return {
+          category_id: c.id,
+          category_name: c.name,
+          bucket: alloc.bucket,
+          allocated_amount: amt,
+        }
+      })
+  }, [categories, categorySelectionMode, selectedCatIds, categoryAllocations])
+
+  // Bucket Totals: Bills, Needs, Wants, Savings
+  const bucketTotals = useMemo(() => {
+    let bills = 0
+    let needs = 0
+    let wants = 0
+    let savings = 0
+    activeAllocationsList.forEach((a) => {
+      if (a.bucket === "bills") bills += a.allocated_amount
+      else if (a.bucket === "needs") needs += a.allocated_amount
+      else if (a.bucket === "wants") wants += a.allocated_amount
+      else if (a.bucket === "savings") savings += a.allocated_amount
+    })
+    return { bills, needs, wants, savings }
+  }, [activeAllocationsList])
+
+  const plannedBillsTotal = useMemo(() => {
+    return activeFixedExpenses + bucketTotals.bills
+  }, [activeFixedExpenses, bucketTotals.bills])
+
+  // Available Free Money after all bills (Fixed + Category bills)
+  const availableFreeMoney = useMemo(() => {
+    const free = Math.max(0, availableToSpend - bucketTotals.bills)
+    return Math.round(free * 100) / 100
+  }, [availableToSpend, bucketTotals.bills])
+
+  // ─── 50/30/20 Targets based on Available Free Money ───
   const rule503020Targets = useMemo(() => {
-    const spendable = Math.max(0, availableToSpend)
+    const spendable = availableFreeMoney
     return {
       needs: Math.round(spendable * 0.5 * 100) / 100,
       wants: Math.round(spendable * 0.3 * 100) / 100,
       savings: Math.round(spendable * 0.2 * 100) / 100,
     }
-  }, [availableToSpend])
+  }, [availableFreeMoney])
 
   // Expense categories list
   const expenseCategories = useMemo(() => {
@@ -1058,10 +1172,11 @@ export function BudgetPlannerSection({
     if (billsExceedBudget) return
     if (categorySelectionMode === "user") return
 
-    const newAllocs: Record<string, { bucket: "needs" | "wants" | "savings"; amount: string }> = {}
+    const newAllocs: Record<string, { bucket: "bills" | "needs" | "wants" | "savings"; amount: string }> = {}
 
     if (framework === "50/30/20") {
-      const bucketGroups: { needs: Category[]; wants: Category[]; savings: Category[] } = {
+      const bucketGroups: { bills: Category[]; needs: Category[]; wants: Category[]; savings: Category[] } = {
+        bills: [],
         needs: [],
         wants: [],
         savings: [],
@@ -1072,6 +1187,13 @@ export function BudgetPlannerSection({
         bucketGroups[bucket].push(c)
       })
 
+      // Allocate bills category lookbacks
+      bucketGroups.bills.forEach((cat) => {
+        const suggested = lookbackStats[cat.id]?.suggested || 0
+        newAllocs[cat.id] = { bucket: "bills", amount: String(suggested) }
+      })
+
+      // Allocate Needs, Wants, Savings from available free money
       ;(["needs", "wants", "savings"] as const).forEach((b) => {
         const target = rule503020Targets[b]
         const group = bucketGroups[b]
@@ -1100,7 +1222,7 @@ export function BudgetPlannerSection({
     setCategorySelectionMode("user")
     // Reset all written budgets to 0
     setCategoryAllocations((prev) => {
-      const reset: Record<string, { bucket: "needs" | "wants" | "savings"; amount: string }> = {}
+      const reset: Record<string, { bucket: "bills" | "needs" | "wants" | "savings"; amount: string }> = {}
       categories.forEach((cat) => {
         reset[cat.id] = {
           bucket: prev[cat.id]?.bucket || autoAssignBucket(cat.name),
@@ -1113,9 +1235,10 @@ export function BudgetPlannerSection({
 
   const handleSelectAppCategories = () => {
     setCategorySelectionMode("app")
-    const newAllocs: Record<string, { bucket: "needs" | "wants" | "savings"; amount: string }> = {}
+    const newAllocs: Record<string, { bucket: "bills" | "needs" | "wants" | "savings"; amount: string }> = {}
     if (framework === "50/30/20") {
-      const bucketGroups: { needs: Category[]; wants: Category[]; savings: Category[] } = {
+      const bucketGroups: { bills: Category[]; needs: Category[]; wants: Category[]; savings: Category[] } = {
+        bills: [],
         needs: [],
         wants: [],
         savings: [],
@@ -1124,6 +1247,12 @@ export function BudgetPlannerSection({
         const bucket = autoAssignBucket(c.name)
         bucketGroups[bucket].push(c)
       })
+
+      bucketGroups.bills.forEach((cat) => {
+        const suggested = lookbackStats[cat.id]?.suggested || 0
+        newAllocs[cat.id] = { bucket: "bills", amount: String(suggested) }
+      })
+
       ;(["needs", "wants", "savings"] as const).forEach((b) => {
         const target = rule503020Targets[b]
         const group = bucketGroups[b]
@@ -1156,44 +1285,16 @@ export function BudgetPlannerSection({
     }))
   }
 
-  // Active category allocations list
-  const activeAllocationsList = useMemo(() => {
-    return displayedCategories
-      .filter((c) => categorySelectionMode === "app" || selectedCatIds.includes(c.id))
-      .map((c) => {
-        const alloc = categoryAllocations[c.id] || { bucket: autoAssignBucket(c.name), amount: "0" }
-        const amt = parseFloat(alloc.amount) || 0
-        return {
-          category_id: c.id,
-          category_name: c.name,
-          bucket: alloc.bucket,
-          allocated_amount: amt,
-        }
-      })
-  }, [displayedCategories, categorySelectionMode, selectedCatIds, categoryAllocations])
-
   // Total allocated amount
   const totalAllocated = useMemo(() => {
     return activeAllocationsList.reduce((sum, a) => sum + a.allocated_amount, 0)
   }, [activeAllocationsList])
 
-  // Bucket Totals and Allocations
-  const bucketTotals = useMemo(() => {
-    let needs = 0
-    let wants = 0
-    let savings = 0
-    activeAllocationsList.forEach((a) => {
-      if (a.bucket === "needs") needs += a.allocated_amount
-      else if (a.bucket === "wants") wants += a.allocated_amount
-      else if (a.bucket === "savings") savings += a.allocated_amount
-    })
-    return { needs, wants, savings }
-  }, [activeAllocationsList])
-
-  // Change 5: Progress bar and label calculations for Needs/Wants/Savings
+  // Progress bar and label calculations for Bills/Needs/Wants/Savings
   const bucketIndicators = useMemo(() => {
     const buckets = [
-      { key: "needs", label: "Needs (50%)", subtitle: "Groceries, bills, transport, giving", target: rule503020Targets.needs, allocated: bucketTotals.needs },
+      { key: "bills", label: "Bills & Fixed", subtitle: "Fixed bills & commitments", target: plannedBillsTotal, allocated: plannedBillsTotal },
+      { key: "needs", label: "Needs (50%)", subtitle: "Groceries, healthcare, transport", target: rule503020Targets.needs, allocated: bucketTotals.needs },
       { key: "wants", label: "Wants (30%)", subtitle: "Dining, cafés, shopping, games", target: rule503020Targets.wants, allocated: bucketTotals.wants },
       { key: "savings", label: "Savings (20%)", subtitle: "Emergency fund, investments", target: rule503020Targets.savings, allocated: bucketTotals.savings },
     ]
@@ -1203,7 +1304,7 @@ export function BudgetPlannerSection({
       const isOver = b.allocated > b.target
       const isExact = Math.abs(b.allocated - b.target) < 0.01 && b.allocated > 0
 
-      let barColor = "#4ADE80" // Below 100% green
+      let barColor = b.key === "bills" ? "#38BDF8" : "#4ADE80" // Bills is cyan/sky blue
       if (isExact) barColor = "#D4A934" // Exactly 100% gold
       if (isOver) barColor = "#F87171" // Over 100% red
 
@@ -1216,7 +1317,7 @@ export function BudgetPlannerSection({
         barColor,
       }
     })
-  }, [rule503020Targets, bucketTotals])
+  }, [rule503020Targets, bucketTotals, plannedBillsTotal])
 
   // Change 6: Account Remaining Calculations
   const accountRemainingStats = useMemo(() => {
@@ -2118,9 +2219,9 @@ export function BudgetPlannerSection({
             </button>
           </div>
 
-          {/* Change 5: 50/30/20 Progress Indicators with Live Fill Bars & Colors */}
+          {/* Change 5: 50/30/20 & Bills Progress Indicators with Live Fill Bars & Colors */}
           {framework === "50/30/20" && (
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-2xl border" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-4 rounded-2xl border" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
               {bucketIndicators.map((bucket) => (
                 <div key={bucket.key} className="p-3.5 rounded-xl border bg-white/5 space-y-2" style={{ borderColor: tokens.borderNested }}>
                   <div className="flex items-center justify-between">
@@ -2271,6 +2372,7 @@ export function BudgetPlannerSection({
                       className="px-2.5 py-1.5 border rounded-xl text-xs font-sans text-white focus:outline-none bg-[#1E0C38]/90"
                       style={{ borderColor: tokens.borderNested }}
                     >
+                      <option value="bills" className="bg-[#1E0C38] text-sky-300">Bills</option>
                       <option value="needs" className="bg-[#1E0C38] text-emerald-300">Needs (50%)</option>
                       <option value="wants" className="bg-[#1E0C38] text-purple-300">Wants (30%)</option>
                       <option value="savings" className="bg-[#1E0C38] text-amber-300">Savings (20%)</option>

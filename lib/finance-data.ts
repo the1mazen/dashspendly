@@ -99,7 +99,7 @@ export interface BudgetPlanCategory {
   plan_id?: string
   user_id?: string
   category_id: string
-  bucket: "needs" | "wants" | "savings"
+  bucket: "bills" | "needs" | "wants" | "savings"
   allocated_amount_cents: number
   allocated_amount: number
   category_name?: string
@@ -548,7 +548,7 @@ function useFinanceDataInternal() {
                     plan_id: String(c.plan_id),
                     user_id: c.user_id,
                     category_id: String(c.category_id),
-                    bucket: c.bucket as "needs" | "wants" | "savings",
+                    bucket: c.bucket as "bills" | "needs" | "wants" | "savings",
                     allocated_amount_cents: allocCents,
                     allocated_amount: allocCents / 100,
                     category_name: catObj?.name || "Category",
@@ -2353,7 +2353,7 @@ function useFinanceDataInternal() {
     },
     categoryAllocations: Array<{
       category_id: string
-      bucket: "needs" | "wants" | "savings"
+      bucket: "bills" | "needs" | "wants" | "savings"
       allocated_amount: number
     }>,
     activateNow: boolean
@@ -2482,7 +2482,7 @@ function useFinanceDataInternal() {
     planData: Partial<BudgetPlan>,
     categoryAllocations: Array<{
       category_id: string
-      bucket: "needs" | "wants" | "savings"
+      bucket: "bills" | "needs" | "wants" | "savings"
       allocated_amount: number
     }>,
     activateNow: boolean

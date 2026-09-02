@@ -30,7 +30,7 @@ create table if not exists public.budget_plan_categories (
   plan_id uuid references public.budget_plans(id) on delete cascade not null,
   user_id uuid references auth.users(id) not null,
   category_id uuid references public.categories(id) not null,
-  bucket text not null check (bucket in ('needs', 'wants', 'savings')),
+  bucket text not null check (bucket in ('bills', 'needs', 'wants', 'savings')),
   allocated_amount_cents bigint not null
 );
 
