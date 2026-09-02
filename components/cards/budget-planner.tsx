@@ -128,23 +128,28 @@ export function Active503020Tracker() {
 
   if (!activePlan) return null
 
+  const todayStr = new Date().toISOString().split("T")[0]
   const cycleEndDate = (() => {
-    const d = new Date(activePlan.start_date || new Date().toISOString().split("T")[0])
+    const d = new Date(activePlan.start_date || todayStr)
     if (activePlan.period === "weekly") d.setDate(d.getDate() + 7)
     else if (activePlan.period === "monthly") d.setMonth(d.getMonth() + 1)
     else if (activePlan.period === "custom") d.setDate(d.getDate() + (activePlan.custom_days || 30))
     return d.toISOString().split("T")[0]
   })()
 
+  // All expense transactions from plan start_date to today
   const cycleExpenses = transactions.filter((t) => {
-    return t.type === "expense" && t.date >= activePlan.start_date && t.date <= cycleEndDate
+    return t.type === "expense" && t.date >= activePlan.start_date && t.date <= todayStr
   })
 
-  // Fixed commitments selected for this plan
+  // Fixed commitments: Use snapshot from saved plan if available, else sum of selected bills
   const planFixedBillsTotal = bills
     .filter((b) => b.type === "expense" && !(activePlan.deselected_bill_ids || []).includes(b.id))
     .reduce((sum, b) => sum + (b.amount + (b.fee_amount || 0)), 0)
 
+  const plannedBills = (activePlan.fixed_commitments_cents ? activePlan.fixed_commitments_cents / 100 : activePlan.fixed_commitments) ?? planFixedBillsTotal
+
+  // Category to bucket mapping from plan categories
   const catBucketMap = new Map<string, "bills" | "needs" | "wants" | "savings">()
   if (activePlan.categories && activePlan.categories.length > 0) {
     activePlan.categories.forEach((c) => {
@@ -152,18 +157,18 @@ export function Active503020Tracker() {
     })
   }
 
-  // 1. Bills & Fixed = Fixed commitments (e.g. 768.32)
-  const plannedBills = planFixedBillsTotal
+  // 1. Total Planned Budget (e.g. 3000)
+  const totalPlannedBudget = activePlan.total_amount || 0
 
   // 2. Available to Spend = Total budget - Fixed commitments (e.g. 3000 - 768.32 = 2231.68)
-  const plannedAvailable = Math.max(0, activePlan.total_amount - plannedBills)
+  const plannedAvailable = Math.max(0, totalPlannedBudget - plannedBills)
 
-  // 3. Needs 50%, Wants 30%, Savings 20%
+  // 3. Targets: Needs (50%), Wants (30%), Savings (20%)
   const plannedNeeds = Math.round(plannedAvailable * 0.5 * 100) / 100
   const plannedWants = Math.round(plannedAvailable * 0.3 * 100) / 100
   const plannedSavings = Math.round(plannedAvailable * 0.2 * 100) / 100
 
-  let actualBills = 0
+  // Actual spent per bucket from real transactions
   let actualNeeds = 0
   let actualWants = 0
   let actualSavings = 0
@@ -171,27 +176,36 @@ export function Active503020Tracker() {
   cycleExpenses.forEach((t) => {
     const b = catBucketMap.get(t.category_id) || autoAssignBucket(t.category_name || "")
     const amt = Math.abs(t.amount)
-    if (b === "bills") actualBills += amt
-    else if (b === "needs") actualNeeds += amt
+    if (b === "needs") actualNeeds += amt
     else if (b === "wants") actualWants += amt
     else if (b === "savings") actualSavings += amt
   })
 
-  // Available free money tracking (discretionary)
-  const discretionarySpent = actualNeeds + actualWants + actualSavings
-  const availableLeft = Math.max(0, plannedAvailable - discretionarySpent)
-  const availableProgressPct = plannedAvailable > 0 ? Math.min(100, Math.round((discretionarySpent / plannedAvailable) * 100)) : 0
+  // Actual bills: sum of completed bills in this cycle from start_date to today
+  const actualBills = bills
+    .filter((b) => b.type === "expense" && b.is_completed && b.due_date >= activePlan.start_date && b.due_date <= todayStr)
+    .reduce((sum, b) => sum + (b.amount + (b.fee_amount || 0)), 0)
 
-  const needsSurplus = plannedNeeds - actualNeeds
+  // Overall Total Spending: all logged expenses in this cycle
+  const totalSpent = cycleExpenses.reduce((sum, t) => sum + Math.abs(t.amount), 0)
+  const totalLeft = Math.max(0, totalPlannedBudget - totalSpent)
+  const totalProgressPct = totalPlannedBudget > 0 ? Math.round((totalSpent / totalPlannedBudget) * 100) : 0
+
+  // Overall progress bar color
+  const overallBarColor = totalProgressPct < 80 ? "#4ADE80" : totalProgressPct <= 100 ? "#FACC15" : "#F87171"
+
+  // Smart Reallocation Tip: Only show when Needs actual spending is more than 10% below planned
   let insightText = ""
-  if (needsSurplus > 0 && discretionarySpent < plannedAvailable) {
-    insightText = `💡 You spent ${currencySymbol}${needsSurplus.toLocaleString("en-US", { minimumFractionDigits: 2 })} less in Needs. You can start spending more in Wants or allocating toward Savings!`
+  const isNeedsUnder10Pct = plannedNeeds > 0 && actualNeeds < plannedNeeds * 0.90
+  if (isNeedsUnder10Pct) {
+    const needsSurplus = plannedNeeds - actualNeeds
+    insightText = `💡 You spent ${currencySymbol}${needsSurplus.toFixed(2)} less in Needs. You can start spending more in Wants or allocating toward Savings.`
   } else if (actualNeeds > plannedNeeds) {
-    insightText = `⚠️ Needs spending exceeded budget by ${currencySymbol}${(actualNeeds - plannedNeeds).toLocaleString("en-US", { minimumFractionDigits: 2 })}. Consider curbing discretionary Wants.`
-  } else if (discretionarySpent >= plannedAvailable) {
-    insightText = `⚠️ You have reached your available free money budget limit for this cycle.`
+    insightText = `⚠️ Needs spending exceeded budget by ${currencySymbol}${(actualNeeds - plannedNeeds).toFixed(2)}. Consider curbing discretionary Wants.`
+  } else if (totalSpent >= totalPlannedBudget && totalPlannedBudget > 0) {
+    insightText = `⚠️ You have reached your total budget limit for this cycle.`
   } else {
-    insightText = `✨ Your available free money spending is on track across your 50/30/20 buckets.`
+    insightText = `✨ Your spending is on track across your 50/30/20 budget.`
   }
 
   return (
@@ -211,27 +225,23 @@ export function Active503020Tracker() {
         </span>
       </div>
 
-      {/* Overall Plan Indicator Progress: Available Free Money Only */}
+      {/* Overall Plan Indicator Progress: Against Total Budget */}
       <div>
         <div className="flex items-center justify-between text-xs font-mono mb-1.5 flex-wrap gap-1">
           <span className="text-white font-semibold">
-            {currencySymbol}{discretionarySpent.toLocaleString("en-US", { minimumFractionDigits: 2 })} spent out of the planned {currencySymbol}{plannedAvailable.toLocaleString("en-US", { minimumFractionDigits: 2 })} available free money, {currencySymbol}{availableLeft.toLocaleString("en-US", { minimumFractionDigits: 2 })} left.
+            {currencySymbol}{totalSpent.toLocaleString("en-US", { minimumFractionDigits: 2 })} spent out of the planned {currencySymbol}{totalPlannedBudget.toLocaleString("en-US", { minimumFractionDigits: 2 })}, {currencySymbol}{totalLeft.toLocaleString("en-US", { minimumFractionDigits: 2 })} left.
           </span>
-          <span className="text-[#5EEAD4] font-bold font-mono">{availableProgressPct}%</span>
+          <span className="font-bold font-mono" style={{ color: overallBarColor }}>{totalProgressPct}%</span>
         </div>
         <div className="w-full h-2.5 rounded-full bg-black/40 overflow-hidden border" style={{ borderColor: tokens.borderNested }}>
           <motion.div
             className="h-full rounded-full transition-all duration-500"
             style={{
-              width: `${availableProgressPct}%`,
-              background: discretionarySpent > plannedAvailable
-                ? "#F87171"
-                : availableProgressPct >= 85
-                ? "#FBBF24"
-                : "#4ADE80",
+              width: `${Math.min(100, totalProgressPct)}%`,
+              backgroundColor: overallBarColor,
             }}
             initial={{ width: 0 }}
-            animate={{ width: `${availableProgressPct}%` }}
+            animate={{ width: `${Math.min(100, totalProgressPct)}%` }}
           />
         </div>
         <p className="text-[11px] text-white/80 font-sans mt-2.5 p-2 rounded-xl bg-white/5 border border-white/10 flex items-center gap-1.5">
@@ -239,25 +249,25 @@ export function Active503020Tracker() {
         </p>
       </div>
 
-      {/* 4 Cards: Bills - Needs 50% - Wants 30% - Savings 20% */}
+      {/* 4 Cards: Bills & Fixed - Needs 50% - Wants 30% - Savings 20% */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
-        {/* Card 1: Bills */}
+        {/* Card 1: Bills & Fixed */}
         {(() => {
           const pct = plannedBills > 0 ? Math.round((actualBills / plannedBills) * 100) : 0
-          const color = pct < 100 ? "#38BDF8" : pct === 100 ? "#D4A934" : "#F87171"
+          const color = pct < 80 ? "#4ADE80" : pct <= 100 ? "#FACC15" : "#F87171"
           return (
             <div className="p-3.5 rounded-xl border bg-black/25 flex flex-col justify-between" style={{ borderColor: tokens.borderNested }}>
               <div>
                 <div className="flex items-center justify-between text-xs mb-1">
                   <span className="font-bold text-white font-sans flex items-center gap-1">
-                    <span className="size-2 rounded-full bg-[#38BDF8]" />
-                    Bills
+                    <span className="size-2 rounded-full" style={{ backgroundColor: color }} />
+                    Bills & Fixed
                   </span>
                   <span className="font-mono text-[11px] font-bold" style={{ color }}>{pct}%</span>
                 </div>
                 <p className="text-xs font-mono text-white/80">
-                  <strong className="text-white">{currencySymbol}{actualBills.toLocaleString("en-US", { minimumFractionDigits: 2 })}</strong>
-                  <span className="text-white/50"> / {currencySymbol}{plannedBills.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+                  <strong className="text-white">{currencySymbol}{actualBills.toFixed(2)}</strong>
+                  <span className="text-white/50"> / {currencySymbol}{plannedBills.toFixed(2)}</span>
                 </p>
               </div>
               <div className="mt-3">
@@ -266,8 +276,8 @@ export function Active503020Tracker() {
                 </div>
                 <p className="text-[10.5px] font-mono text-white/60 mt-1.5">
                   {actualBills <= plannedBills
-                    ? `${currencySymbol}${(plannedBills - actualBills).toLocaleString("en-US", { minimumFractionDigits: 2 })} left`
-                    : `${currencySymbol}${(actualBills - plannedBills).toLocaleString("en-US", { minimumFractionDigits: 2 })} over budget`}
+                    ? `${currencySymbol}${actualBills.toFixed(2)} paid of ${currencySymbol}{plannedBills.toFixed(2)} — ${currencySymbol}${(plannedBills - actualBills).toFixed(2)} left`
+                    : `${currencySymbol}${(actualBills - plannedBills).toFixed(2)} over budget`}
                 </p>
               </div>
             </div>
@@ -277,20 +287,20 @@ export function Active503020Tracker() {
         {/* Card 2: Needs (50%) */}
         {(() => {
           const pct = plannedNeeds > 0 ? Math.round((actualNeeds / plannedNeeds) * 100) : 0
-          const color = pct < 100 ? "#4ADE80" : pct === 100 ? "#D4A934" : "#F87171"
+          const color = pct < 80 ? "#4ADE80" : pct <= 100 ? "#FACC15" : "#F87171"
           return (
             <div className="p-3.5 rounded-xl border bg-black/25 flex flex-col justify-between" style={{ borderColor: tokens.borderNested }}>
               <div>
                 <div className="flex items-center justify-between text-xs mb-1">
                   <span className="font-bold text-white font-sans flex items-center gap-1">
-                    <span className="size-2 rounded-full bg-[#4ADE80]" />
+                    <span className="size-2 rounded-full" style={{ backgroundColor: color }} />
                     Needs (50%)
                   </span>
                   <span className="font-mono text-[11px] font-bold" style={{ color }}>{pct}%</span>
                 </div>
                 <p className="text-xs font-mono text-white/80">
-                  <strong className="text-white">{currencySymbol}{actualNeeds.toLocaleString("en-US", { minimumFractionDigits: 2 })}</strong>
-                  <span className="text-white/50"> / {currencySymbol}{plannedNeeds.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+                  <strong className="text-white">{currencySymbol}{actualNeeds.toFixed(2)}</strong>
+                  <span className="text-white/50"> / {currencySymbol}{plannedNeeds.toFixed(2)}</span>
                 </p>
               </div>
               <div className="mt-3">
@@ -299,8 +309,8 @@ export function Active503020Tracker() {
                 </div>
                 <p className="text-[10.5px] font-mono text-white/60 mt-1.5">
                   {actualNeeds <= plannedNeeds
-                    ? `${currencySymbol}${(plannedNeeds - actualNeeds).toLocaleString("en-US", { minimumFractionDigits: 2 })} left`
-                    : `${currencySymbol}${(actualNeeds - plannedNeeds).toLocaleString("en-US", { minimumFractionDigits: 2 })} over budget`}
+                    ? `${currencySymbol}${actualNeeds.toFixed(2)} spent of ${currencySymbol}{plannedNeeds.toFixed(2)} — ${currencySymbol}${(plannedNeeds - actualNeeds).toFixed(2)} left`
+                    : `${currencySymbol}${(actualNeeds - plannedNeeds).toFixed(2)} over budget`}
                 </p>
               </div>
             </div>
@@ -310,20 +320,20 @@ export function Active503020Tracker() {
         {/* Card 3: Wants (30%) */}
         {(() => {
           const pct = plannedWants > 0 ? Math.round((actualWants / plannedWants) * 100) : 0
-          const color = pct < 100 ? "#C084FC" : pct === 100 ? "#D4A934" : "#F87171"
+          const color = pct < 80 ? "#4ADE80" : pct <= 100 ? "#FACC15" : "#F87171"
           return (
             <div className="p-3.5 rounded-xl border bg-black/25 flex flex-col justify-between" style={{ borderColor: tokens.borderNested }}>
               <div>
                 <div className="flex items-center justify-between text-xs mb-1">
                   <span className="font-bold text-white font-sans flex items-center gap-1">
-                    <span className="size-2 rounded-full bg-[#C084FC]" />
+                    <span className="size-2 rounded-full" style={{ backgroundColor: color }} />
                     Wants (30%)
                   </span>
                   <span className="font-mono text-[11px] font-bold" style={{ color }}>{pct}%</span>
                 </div>
                 <p className="text-xs font-mono text-white/80">
-                  <strong className="text-white">{currencySymbol}{actualWants.toLocaleString("en-US", { minimumFractionDigits: 2 })}</strong>
-                  <span className="text-white/50"> / {currencySymbol}{plannedWants.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+                  <strong className="text-white">{currencySymbol}{actualWants.toFixed(2)}</strong>
+                  <span className="text-white/50"> / {currencySymbol}{plannedWants.toFixed(2)}</span>
                 </p>
               </div>
               <div className="mt-3">
@@ -332,8 +342,8 @@ export function Active503020Tracker() {
                 </div>
                 <p className="text-[10.5px] font-mono text-white/60 mt-1.5">
                   {actualWants <= plannedWants
-                    ? `${currencySymbol}${(plannedWants - actualWants).toLocaleString("en-US", { minimumFractionDigits: 2 })} left`
-                    : `${currencySymbol}${(actualWants - plannedWants).toLocaleString("en-US", { minimumFractionDigits: 2 })} over budget`}
+                    ? `${currencySymbol}${actualWants.toFixed(2)} spent of ${currencySymbol}{plannedWants.toFixed(2)} — ${currencySymbol}${(plannedWants - actualWants).toFixed(2)} left`
+                    : `${currencySymbol}${(actualWants - plannedWants).toFixed(2)} over budget`}
                 </p>
               </div>
             </div>
@@ -343,20 +353,20 @@ export function Active503020Tracker() {
         {/* Card 4: Savings (20%) */}
         {(() => {
           const pct = plannedSavings > 0 ? Math.round((actualSavings / plannedSavings) * 100) : 0
-          const color = pct < 100 ? "#FBBF24" : pct === 100 ? "#D4A934" : "#F87171"
+          const color = pct < 80 ? "#4ADE80" : pct <= 100 ? "#FACC15" : "#F87171"
           return (
             <div className="p-3.5 rounded-xl border bg-black/25 flex flex-col justify-between" style={{ borderColor: tokens.borderNested }}>
               <div>
                 <div className="flex items-center justify-between text-xs mb-1">
                   <span className="font-bold text-white font-sans flex items-center gap-1">
-                    <span className="size-2 rounded-full bg-[#FBBF24]" />
+                    <span className="size-2 rounded-full" style={{ backgroundColor: color }} />
                     Savings (20%)
                   </span>
                   <span className="font-mono text-[11px] font-bold" style={{ color }}>{pct}%</span>
                 </div>
                 <p className="text-xs font-mono text-white/80">
-                  <strong className="text-white">{currencySymbol}{actualSavings.toLocaleString("en-US", { minimumFractionDigits: 2 })}</strong>
-                  <span className="text-white/50"> / {currencySymbol}{plannedSavings.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+                  <strong className="text-white">{currencySymbol}{actualSavings.toFixed(2)}</strong>
+                  <span className="text-white/50"> / {currencySymbol}{plannedSavings.toFixed(2)}</span>
                 </p>
               </div>
               <div className="mt-3">
@@ -365,8 +375,8 @@ export function Active503020Tracker() {
                 </div>
                 <p className="text-[10.5px] font-mono text-white/60 mt-1.5">
                   {actualSavings <= plannedSavings
-                    ? `${currencySymbol}${(plannedSavings - actualSavings).toLocaleString("en-US", { minimumFractionDigits: 2 })} left`
-                    : `${currencySymbol}${(actualSavings - plannedSavings).toLocaleString("en-US", { minimumFractionDigits: 2 })} over budget`}
+                    ? `${currencySymbol}${actualSavings.toFixed(2)} spent of ${currencySymbol}{plannedSavings.toFixed(2)} — ${currencySymbol}${(plannedSavings - actualSavings).toFixed(2)} left`
+                    : `${currencySymbol}${(actualSavings - plannedSavings).toFixed(2)} over budget`}
                 </p>
               </div>
             </div>
@@ -1498,6 +1508,7 @@ export function BudgetPlannerSection({
           {
             name: planName.trim(),
             total_amount: totalBudgetAmount,
+            fixed_commitments: activeFixedExpenses,
             account_id: budgetMode === "account" ? selectedAccountId : undefined,
             period,
             custom_days: period === "custom" ? parseInt(customDays) || 30 : undefined,
@@ -1515,6 +1526,7 @@ export function BudgetPlannerSection({
           {
             name: planName.trim(),
             total_amount: totalBudgetAmount,
+            fixed_commitments: activeFixedExpenses,
             account_id: budgetMode === "account" ? selectedAccountId : undefined,
             period,
             custom_days: period === "custom" ? parseInt(customDays) || 30 : undefined,

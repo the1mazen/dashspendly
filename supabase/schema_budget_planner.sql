@@ -8,6 +8,7 @@ create table if not exists public.budget_plans (
   user_id uuid references auth.users(id) not null,
   name text not null,
   total_amount_cents bigint not null,
+  fixed_commitments_cents bigint not null default 0,
   account_id uuid references public.accounts(id),
   period text not null check (period in ('weekly', 'monthly', 'custom')),
   custom_days int,
@@ -21,6 +22,7 @@ create table if not exists public.budget_plans (
 );
 
 -- Migration support for existing budget_plans table
+alter table public.budget_plans add column if not exists fixed_commitments_cents bigint not null default 0;
 alter table public.budget_plans add column if not exists deselected_bill_ids uuid[] default '{}';
 alter table public.budget_plans add column if not exists indicator_account_ids uuid[] default '{}';
 

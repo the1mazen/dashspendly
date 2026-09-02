@@ -111,6 +111,8 @@ export interface BudgetPlan {
   name: string
   total_amount_cents: number
   total_amount: number
+  fixed_commitments_cents?: number
+  fixed_commitments?: number
   account_id?: string
   period: "weekly" | "monthly" | "custom"
   custom_days?: number
@@ -556,12 +558,15 @@ function useFinanceDataInternal() {
                 })
 
               const totCents = Number(bp.total_amount_cents ?? 0)
+              const fixedCents = Number(bp.fixed_commitments_cents ?? 0)
               return {
                 id: String(bp.id),
                 user_id: bp.user_id,
                 name: bp.name,
                 total_amount_cents: totCents,
                 total_amount: totCents / 100,
+                fixed_commitments_cents: fixedCents,
+                fixed_commitments: fixedCents / 100,
                 account_id: bp.account_id ? String(bp.account_id) : undefined,
                 period: bp.period as "weekly" | "monthly" | "custom",
                 custom_days: bp.custom_days,
@@ -2342,6 +2347,7 @@ function useFinanceDataInternal() {
     planData: {
       name: string
       total_amount: number
+      fixed_commitments?: number
       account_id?: string
       period: "weekly" | "monthly" | "custom"
       custom_days?: number
@@ -2360,6 +2366,7 @@ function useFinanceDataInternal() {
   ): Promise<BudgetPlan> => {
     const newPlanId = generateUUID()
     const totalAmountCents = Math.round((planData.total_amount || 0) * 100)
+    const fixedCommitmentsCents = Math.round((planData.fixed_commitments || 0) * 100)
     const isRepeating = planData.is_repeating ?? true
 
     const newPlan: BudgetPlan = {
@@ -2367,6 +2374,8 @@ function useFinanceDataInternal() {
       name: planData.name.trim(),
       total_amount_cents: totalAmountCents,
       total_amount: planData.total_amount,
+      fixed_commitments_cents: fixedCommitmentsCents,
+      fixed_commitments: planData.fixed_commitments,
       account_id: planData.account_id,
       period: planData.period,
       custom_days: planData.custom_days,
@@ -2398,11 +2407,12 @@ function useFinanceDataInternal() {
           const validDeselected = (planData.deselected_bill_ids || []).filter(isValidUUID)
           const validIndicators = (planData.indicator_account_ids || []).filter(isValidUUID)
 
-          const { error: planError } = await supabase.from("budget_plans").insert({
+          const insertPayload: any = {
             id: newPlanId,
             user_id: userId,
             name: planData.name.trim(),
             total_amount_cents: totalAmountCents,
+            fixed_commitments_cents: fixedCommitmentsCents,
             account_id: planData.account_id ? (isValidUUID(planData.account_id) ? planData.account_id : null) : null,
             period: planData.period,
             custom_days: planData.period === "custom" ? (planData.custom_days || 30) : null,
@@ -2412,7 +2422,14 @@ function useFinanceDataInternal() {
             is_repeating: isRepeating,
             deselected_bill_ids: validDeselected,
             indicator_account_ids: validIndicators,
-          })
+          }
+
+          let { error: planError } = await supabase.from("budget_plans").insert(insertPayload)
+          if (planError && (planError.code === "PGRST204" || planError.message?.includes("fixed_commitments_cents"))) {
+            delete insertPayload.fixed_commitments_cents
+            const retryRes = await supabase.from("budget_plans").insert(insertPayload)
+            planError = retryRes.error
+          }
 
           if (!planError) {
             const validCatRows = categoryAllocations
@@ -2488,6 +2505,7 @@ function useFinanceDataInternal() {
     activateNow: boolean
   ) => {
     const totalAmountCents = planData.total_amount !== undefined ? Math.round(planData.total_amount * 100) : undefined
+    const fixedCommitmentsCents = planData.fixed_commitments !== undefined ? Math.round(planData.fixed_commitments * 100) : undefined
 
     if (isSupabaseConfigured && supabase) {
       try {
@@ -2500,6 +2518,7 @@ function useFinanceDataInternal() {
           const updatePayload: any = {}
           if (planData.name !== undefined) updatePayload.name = planData.name.trim()
           if (totalAmountCents !== undefined) updatePayload.total_amount_cents = totalAmountCents
+          if (fixedCommitmentsCents !== undefined) updatePayload.fixed_commitments_cents = fixedCommitmentsCents
           if (planData.account_id !== undefined) updatePayload.account_id = planData.account_id ? (isValidUUID(planData.account_id) ? planData.account_id : null) : null
           if (planData.period !== undefined) updatePayload.period = planData.period
           if (planData.custom_days !== undefined) updatePayload.custom_days = planData.custom_days || null
@@ -2510,7 +2529,12 @@ function useFinanceDataInternal() {
           if (planData.indicator_account_ids !== undefined) updatePayload.indicator_account_ids = (planData.indicator_account_ids || []).filter(isValidUUID)
           if (activateNow) updatePayload.is_active = true
 
-          await supabase.from("budget_plans").update(updatePayload).eq("id", planId).eq("user_id", userId)
+          let { error: updateError } = await supabase.from("budget_plans").update(updatePayload).eq("id", planId).eq("user_id", userId)
+          if (updateError && (updateError.code === "PGRST204" || updateError.message?.includes("fixed_commitments_cents"))) {
+            delete updatePayload.fixed_commitments_cents
+            await supabase.from("budget_plans").update(updatePayload).eq("id", planId).eq("user_id", userId)
+          }
+
           await supabase.from("budget_plan_categories").delete().eq("plan_id", planId).eq("user_id", userId)
 
           const validCatRows = categoryAllocations
