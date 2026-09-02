@@ -561,8 +561,12 @@ function useFinanceDataInternal() {
                   }
                 })
 
+              const categoriesAllocCents = planCats
+                .reduce((sum: number, c: any) => sum + (c.allocated_amount_cents || 0), 0)
+
               const totCents = Number(bp.total_amount_cents ?? 0)
-              const fixedCents = Number(bp.fixed_commitments_cents ?? 0)
+              const fixedCents = Number(bp.fixed_commitments_cents ?? 0) || (categoriesAllocCents > 0 && categoriesAllocCents < totCents ? totCents - categoriesAllocCents : 0)
+
               return {
                 id: String(bp.id),
                 user_id: bp.user_id,
@@ -2444,7 +2448,7 @@ function useFinanceDataInternal() {
           }
 
           const validCatRows = categoryAllocations
-            .filter((c) => isValidUUID(c.category_id))
+            .filter((c) => isValidUUID(c.category_id) && ["needs", "wants", "savings"].includes(c.bucket))
             .map((c) => ({
               id: generateUUID(),
               plan_id: newPlanId,
@@ -2561,7 +2565,7 @@ function useFinanceDataInternal() {
           }
 
           const validCatRows = categoryAllocations
-            .filter((c) => isValidUUID(c.category_id))
+            .filter((c) => isValidUUID(c.category_id) && ["needs", "wants", "savings"].includes(c.bucket))
             .map((c) => ({
               id: generateUUID(),
               plan_id: planId,

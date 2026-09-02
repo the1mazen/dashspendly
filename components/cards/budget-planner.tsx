@@ -117,7 +117,7 @@ export function autoAssignBucket(categoryName: string): "bills" | "needs" | "wan
 // ─── Component: Active 50/30/20 Plan Progress Tracker ────────────────
 
 export function Active503020Tracker() {
-  const { budgetPlans, transactions, bills } = useFinanceData()
+  const { budgetPlans, transactions, bills, loading } = useFinanceData()
   const { profile } = useUserProfile()
   const { tokens } = useDashboardTheme()
   const currencySymbol = getCurrencySymbol(profile.currency)
@@ -126,6 +126,7 @@ export function Active503020Tracker() {
     return budgetPlans.find((p) => p.is_active && p.framework === "50/30/20") || null
   }, [budgetPlans])
 
+  if (loading) return null
   if (!activePlan) return null
 
   const todayStr = new Date().toISOString().split("T")[0]
@@ -147,7 +148,21 @@ export function Active503020Tracker() {
     .filter((b) => b.type === "expense" && !(activePlan.deselected_bill_ids || []).includes(b.id))
     .reduce((sum, b) => sum + (b.amount + (b.fee_amount || 0)), 0)
 
-  const plannedBills = (activePlan.fixed_commitments_cents ? activePlan.fixed_commitments_cents / 100 : activePlan.fixed_commitments) ?? planFixedBillsTotal
+  // 1. Total Planned Budget (e.g. 3000)
+  const totalPlannedBudget = (activePlan.total_amount_cents ? activePlan.total_amount_cents / 100 : activePlan.total_amount) || 0
+
+  // 2. Sum of allocated categories in active plan (Needs + Wants + Savings = Available to spend)
+  const categoriesTotalAlloc = (activePlan.categories || [])
+    .reduce((sum, c) => sum + (c.allocated_amount_cents ? c.allocated_amount_cents / 100 : c.allocated_amount || 0), 0)
+
+  // 3. Fixed commitments (Bills & Fixed planned amount)
+  const plannedBills = (activePlan.fixed_commitments && activePlan.fixed_commitments > 0)
+    ? activePlan.fixed_commitments
+    : (activePlan.fixed_commitments_cents && activePlan.fixed_commitments_cents > 0)
+      ? activePlan.fixed_commitments_cents / 100
+      : (categoriesTotalAlloc > 0 && categoriesTotalAlloc < totalPlannedBudget)
+        ? Math.round((totalPlannedBudget - categoriesTotalAlloc) * 100) / 100
+        : planFixedBillsTotal
 
   // Category to bucket mapping from plan categories
   const catBucketMap = new Map<string, "bills" | "needs" | "wants" | "savings">()
@@ -157,16 +172,25 @@ export function Active503020Tracker() {
     })
   }
 
-  // 1. Total Planned Budget (e.g. 3000)
-  const totalPlannedBudget = activePlan.total_amount || 0
+  // 4. Available to Spend = Total budget - Fixed commitments (e.g. 3000 - 768.32 = 2231.68)
+  const plannedAvailable = Math.max(0, Math.round((totalPlannedBudget - plannedBills) * 100) / 100)
 
-  // 2. Available to Spend = Total budget - Fixed commitments (e.g. 3000 - 768.32 = 2231.68)
-  const plannedAvailable = Math.max(0, totalPlannedBudget - plannedBills)
+  // 5. Targets: Needs (50%), Wants (30%), Savings (20%)
+  const needsAlloc = (activePlan.categories || [])
+    .filter((c) => c.bucket === "needs")
+    .reduce((sum, c) => sum + (c.allocated_amount_cents ? c.allocated_amount_cents / 100 : c.allocated_amount || 0), 0)
 
-  // 3. Targets: Needs (50%), Wants (30%), Savings (20%)
-  const plannedNeeds = Math.round(plannedAvailable * 0.5 * 100) / 100
-  const plannedWants = Math.round(plannedAvailable * 0.3 * 100) / 100
-  const plannedSavings = Math.round(plannedAvailable * 0.2 * 100) / 100
+  const wantsAlloc = (activePlan.categories || [])
+    .filter((c) => c.bucket === "wants")
+    .reduce((sum, c) => sum + (c.allocated_amount_cents ? c.allocated_amount_cents / 100 : c.allocated_amount || 0), 0)
+
+  const savingsAlloc = (activePlan.categories || [])
+    .filter((c) => c.bucket === "savings")
+    .reduce((sum, c) => sum + (c.allocated_amount_cents ? c.allocated_amount_cents / 100 : c.allocated_amount || 0), 0)
+
+  const plannedNeeds = needsAlloc > 0 ? Math.round(needsAlloc * 100) / 100 : Math.round(plannedAvailable * 0.5 * 100) / 100
+  const plannedWants = wantsAlloc > 0 ? Math.round(wantsAlloc * 100) / 100 : Math.round(plannedAvailable * 0.3 * 100) / 100
+  const plannedSavings = savingsAlloc > 0 ? Math.round(savingsAlloc * 100) / 100 : Math.round(plannedAvailable * 0.2 * 100) / 100
 
   // Actual spent per bucket from real transactions
   let actualNeeds = 0
@@ -1544,12 +1568,14 @@ export function BudgetPlannerSection({
         )
       }
 
-      const allocationsPayload: BudgetPlanCategory[] = activeAllocationsList.map((a) => ({
-        category_id: a.category_id,
-        bucket: a.bucket,
-        allocated_amount: a.allocated_amount,
-        allocated_amount_cents: Math.round(a.allocated_amount * 100),
-      }))
+      const allocationsPayload: BudgetPlanCategory[] = activeAllocationsList
+        .filter((a) => ["needs", "wants", "savings"].includes(a.bucket))
+        .map((a) => ({
+          category_id: a.category_id,
+          bucket: a.bucket,
+          allocated_amount: a.allocated_amount,
+          allocated_amount_cents: Math.round(a.allocated_amount * 100),
+        }))
 
       if (isEditing && existingPlan) {
         await updateBudgetPlan(
