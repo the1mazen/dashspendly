@@ -334,6 +334,15 @@ export default function AuthPage() {
       >
         {/* Sign-up / Login Form */}
         <div className="p-6 lg:p-8 flex flex-col justify-center bg-transparent">
+          <div className="flex justify-center mb-5">
+            <Link href="/" className="inline-block cursor-pointer group transition-transform duration-200 hover:scale-105">
+              <img
+                src="/LOGO.png"
+                alt="Spendly"
+                className="h-9 w-auto object-contain select-none drop-shadow-[0_2px_8px_rgba(0,0,0,0.4)]"
+              />
+            </Link>
+          </div>
           <div className={`transition-all duration-300 ease-out ${isTransitioning ? "opacity-0 translate-y-2" : "opacity-100 translate-y-0"}`}>
             <h1 
               className={`font-serif text-white text-2xl lg:text-3xl font-bold mb-1 tracking-tight transition-all duration-500 delay-300 ${

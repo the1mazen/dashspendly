@@ -3,7 +3,7 @@
 import type React from "react"
 import { useEffect, useRef } from "react"
 import Link from "next/link"
-import { LiquidMetalBackground } from "@/components/liquid-metal-background"
+import { LandingBackground, LandingVideoProvider } from "@/components/landing-background"
 import { FloatingNavbar } from "@/components/floating-navbar"
 import { ShinyButton } from "@/components/ui/shiny-button"
 import { Feature } from "@/components/ui/feature-with-advantages"
@@ -176,12 +176,13 @@ export default function Home() {
   }, [])
 
   return (
-    <main className="relative h-[100dvh] min-h-[100svh] w-full overflow-hidden bg-[#00042e]">
-      <LiquidMetalBackground />
+    <LandingVideoProvider>
+      <main className="relative h-[100dvh] min-h-[100svh] w-full overflow-hidden bg-[#00042e]">
+        <LandingBackground />
 
-      <div className="pointer-events-none fixed inset-0 z-[5] bg-black/15" />
+        <div className="pointer-events-none fixed inset-0 z-[5] bg-black/15" />
 
-      <FloatingNavbar />
+        <FloatingNavbar />
 
       <div
         ref={scrollContainerRef}
@@ -350,5 +351,6 @@ export default function Home() {
         </section>
       </div>
     </main>
+  </LandingVideoProvider>
   )
 }

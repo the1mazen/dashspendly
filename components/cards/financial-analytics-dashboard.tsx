@@ -7177,14 +7177,13 @@ function FinancialAnalyticsDashboardInner({
             {/* Brand Logo */}
             <div
               onClick={() => setActiveSection("dashboard")}
-              className="flex items-center gap-2.5 cursor-pointer select-none"
+              className="flex items-center gap-2.5 cursor-pointer select-none group transition-transform duration-200 hover:scale-[1.03]"
             >
-              <div className="size-8 rounded-full bg-white flex items-center justify-center text-black font-bold text-sm shadow-md">
-                S
-              </div>
-              <span className="text-base font-bold tracking-tight font-display text-white">
-                Spendly
-              </span>
+              <img
+                src="/LOGO.png"
+                alt="Spendly"
+                className="h-8 sm:h-9 w-auto object-contain select-none drop-shadow-[0_2px_8px_rgba(0,0,0,0.3)]"
+              />
             </div>
 
             {/* Desktop Navigation Pills */}
