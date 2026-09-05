@@ -7,12 +7,14 @@ import { Eye, EyeOff, Plus, Trash2, ArrowRight } from "lucide-react"
 import { saveLocalUserProfile } from "@/lib/user-profile"
 import { saveLocalAccounts, Account } from "@/lib/finance-data"
 import { supabase, isSupabaseConfigured, resolveCurrentUserId } from "@/lib/supabase"
+import { TermsDialog } from "@/components/terms-dialog"
 
 export default function AuthPage() {
   const router = useRouter()
   const [isSignUp, setIsSignUp] = useState(true)
   const [showPassword, setShowPassword] = useState(false)
   const [agreedToTerms, setAgreedToTerms] = useState(true)
+  const [showTermsModal, setShowTermsModal] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [setupStep, setSetupStep] = useState<"auth" | "account" | "dashboard">("auth")
@@ -220,7 +222,7 @@ export default function AuthPage() {
       <div className="min-h-screen bg-[#00042e] flex items-center justify-center p-4">
         <div className="w-full max-w-md bg-[#12121a] rounded-3xl overflow-hidden shadow-2xl shadow-black/50">
           <div className="p-6 lg:p-8">
-            <h1 className="font-serif text-white text-2xl lg:text-3xl font-bold mb-1 tracking-tight">Add your first account</h1>
+            <h1 className="font-sans text-white text-2xl lg:text-3xl font-bold mb-1 tracking-tight">Add your first account</h1>
             <p className="text-white/40 text-sm mb-6">Set up one or more accounts to start tracking your finances.</p>
             <form className="space-y-4" onSubmit={handleSaveAccounts}>
               {accountsList.map((acc, index) => (
@@ -311,7 +313,7 @@ export default function AuthPage() {
     return (
       <div className="min-h-screen bg-[#00042e] flex items-center justify-center p-4">
         <div className="w-full max-w-md bg-[#12121a] rounded-3xl p-8 text-center shadow-2xl shadow-black/50">
-          <h1 className="font-serif text-white text-2xl font-bold">Your dashboard</h1>
+          <h1 className="font-sans text-white text-2xl font-bold">Your dashboard</h1>
           <p className="text-white/40 text-sm mt-2 mb-6">Your account is ready to go.</p>
           <Link
             href="/dashboard"
@@ -345,7 +347,7 @@ export default function AuthPage() {
           </div>
           <div className={`transition-all duration-300 ease-out ${isTransitioning ? "opacity-0 translate-y-2" : "opacity-100 translate-y-0"}`}>
             <h1 
-              className={`font-serif text-white text-2xl lg:text-3xl font-bold mb-1 tracking-tight transition-all duration-500 delay-300 ${
+              className={`font-sans text-white text-2xl lg:text-3xl font-bold mb-1 tracking-tight transition-all duration-500 delay-300 ${
                 mounted ? "opacity-100 translate-x-0" : "opacity-0 translate-x-8"
               }`}
             >
@@ -603,9 +605,17 @@ export default function AuthPage() {
                   </div>
                   <span className="text-white/40 text-xs">
                     I agree to the{" "}
-                    <a href="#" className="text-[#5b4dc7] underline underline-offset-2 hover:text-[#5b4dc7]/80 transition-colors duration-300">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setShowTermsModal(true)
+                      }}
+                      className="text-[#5b4dc7] underline underline-offset-2 hover:text-[#5b4dc7]/80 transition-colors duration-300 cursor-pointer"
+                    >
                       Terms & Conditions
-                    </a>
+                    </button>
                   </span>
                 </label>
               </div>
@@ -642,7 +652,7 @@ export default function AuthPage() {
 
           {/* Social Buttons */}
           <div 
-            className={`grid grid-cols-2 gap-3 transition-all duration-500 delay-700 ${
+            className={`w-full transition-all duration-500 delay-700 ${
               mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
             }`}
           >
@@ -670,9 +680,9 @@ export default function AuthPage() {
                   }
                 }
               }}
-              className="flex items-center justify-center gap-2 bg-[#1a1a26] border border-white/5 hover:border-white/20 hover:bg-[#1f1f2a] text-white text-sm py-2.5 rounded-xl transition-all duration-300 group hover:scale-[1.02] active:scale-100 cursor-pointer disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-2.5 bg-[#1a1a26] border border-white/5 hover:border-white/20 hover:bg-[#1f1f2a] text-white text-sm py-2.5 rounded-xl transition-all duration-300 group hover:scale-[1.01] active:scale-100 cursor-pointer disabled:opacity-50 font-sans font-medium"
             >
-              <svg className="w-4 h-4 transition-transform duration-300 group-hover:scale-110" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 transition-transform duration-300 group-hover:scale-110 shrink-0" viewBox="0 0 24 24">
                 <path
                   fill="#4285F4"
                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -690,42 +700,16 @@ export default function AuthPage() {
                   d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                 />
               </svg>
-              <span className="text-white/80 group-hover:text-white transition-colors duration-300">Google</span>
-            </button>
-            <button
-              type="button"
-              disabled={loading}
-              onClick={async () => {
-                if (isSupabaseConfigured && supabase) {
-                  try {
-                    setLoading(true)
-                    setAuthError("")
-                    const { error } = await supabase.auth.signInWithOAuth({
-                      provider: "apple",
-                      options: {
-                        redirectTo: typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : undefined,
-                      },
-                    })
-                    if (error) {
-                      setAuthError(error.message)
-                      setLoading(false)
-                    }
-                  } catch (err: any) {
-                    setAuthError(err?.message || "Failed to initiate Apple sign-in")
-                    setLoading(false)
-                  }
-                }
-              }}
-              className="flex items-center justify-center gap-2 bg-[#1a1a26] border border-white/5 hover:border-white/20 hover:bg-[#1f1f2a] text-white text-sm py-2.5 rounded-xl transition-all duration-300 group hover:scale-[1.02] active:scale-100 cursor-pointer disabled:opacity-50"
-            >
-              <svg className="w-4 h-4 text-white/80 group-hover:text-white transition-all duration-300 group-hover:scale-110" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
-              </svg>
-              <span className="text-white/80 group-hover:text-white transition-colors duration-300">Apple</span>
+              <span className="text-white/80 group-hover:text-white transition-colors duration-300">
+                Continue with Google
+              </span>
             </button>
           </div>
         </div>
       </div>
+
+      {/* Terms & Conditions Modal */}
+      <TermsDialog open={showTermsModal} onClose={() => setShowTermsModal(false)} />
     </div>
   )
 }

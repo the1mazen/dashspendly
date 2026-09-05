@@ -1,0 +1,300 @@
+"use client"
+
+import { useEffect, useRef } from "react"
+import { X, FileText, Download, ShieldCheck, Mail, ExternalLink } from "lucide-react"
+
+interface TermsDialogProps {
+  open: boolean
+  onClose: () => void
+}
+
+export function TermsDialog({ open, onClose }: TermsDialogProps) {
+  const overlayRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose()
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown)
+    document.body.style.overflow = "hidden"
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown)
+      document.body.style.overflow = "unset"
+    }
+  }, [open, onClose])
+
+  if (!open) return null
+
+  return (
+    <div
+      ref={overlayRef}
+      onClick={(e) => {
+        if (e.target === overlayRef.current) onClose()
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md transition-all duration-300 animate-in fade-in"
+      aria-modal="true"
+      role="dialog"
+    >
+      <div className="relative w-full max-w-2xl max-h-[85vh] flex flex-col bg-[#12121a] border border-white/10 rounded-3xl shadow-2xl shadow-black/80 overflow-hidden text-white font-sans animate-in zoom-in-95 duration-200">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-[#171722]/80 backdrop-blur-sm">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-[#5b4dc7]/20 border border-[#5b4dc7]/30 flex items-center justify-center text-[#9d93f7]">
+              <FileText className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-white tracking-tight">Terms and Conditions</h2>
+              <p className="text-xs text-white/50">Last Updated: September 2025</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <a
+              href="/Spendly_Terms_and_Conditions.docx"
+              download="Spendly_Terms_and_Conditions.docx"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-medium text-white/80 hover:text-white transition-colors"
+              title="Download original .docx file"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Download</span> .docx
+            </a>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-white/40 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6 text-sm text-white/80 leading-relaxed scrollbar-thin scrollbar-thumb-white/20">
+          <p className="text-white/90 text-sm bg-white/5 p-4 rounded-xl border border-white/5">
+            These Terms and Conditions govern your use of the Spendly website and application (collectively, the &ldquo;Service&rdquo;). Please read them carefully before using Spendly.
+          </p>
+
+          <section className="space-y-2">
+            <h3 className="text-base font-semibold text-white flex items-center gap-2">
+              <span className="text-[#5b4dc7]">1.</span> Acceptance of Terms
+            </h3>
+            <p>
+              By accessing or using Spendly (&ldquo;the Service&rdquo;), you agree to be bound by these Terms and Conditions (&ldquo;Terms&rdquo;). If you do not agree to these Terms, please do not use the Service.
+            </p>
+            <p>
+              These Terms apply to all visitors, users, and anyone who accesses or uses the Service. By using Spendly, you represent that you are at least 13 years of age and have the legal capacity to enter into these Terms.
+            </p>
+          </section>
+
+          <section className="space-y-2">
+            <h3 className="text-base font-semibold text-white flex items-center gap-2">
+              <span className="text-[#5b4dc7]">2.</span> Description of Service
+            </h3>
+            <p>Spendly is a free, manual-entry personal finance tracking tool. It allows users to:</p>
+            <ul className="list-disc list-inside space-y-1 pl-2 text-white/70">
+              <li>Add and manage multiple accounts (bank, cash, credit cards, savings)</li>
+              <li>Log income, expenses, transfers, fees, and notes</li>
+              <li>Plan bills, recurring income, and transfers</li>
+              <li>Create spending categories with budgets and allowances</li>
+              <li>Build structured budgets using weekly, monthly, or custom periods</li>
+              <li>Track net worth, account balances, and financial health</li>
+              <li>Manage held funds and personalize the experience</li>
+            </ul>
+            <p className="text-white/70 text-xs italic pt-1">
+              Spendly does not connect to any bank or financial institution. All data is entered manually by the user. The Service does not provide financial advice, investment recommendations, or any form of regulated financial services.
+            </p>
+          </section>
+
+          <section className="space-y-2">
+            <h3 className="text-base font-semibold text-white flex items-center gap-2">
+              <span className="text-[#5b4dc7]">3.</span> Free Service
+            </h3>
+            <p>
+              Spendly is offered entirely free of charge. There are no subscription fees, trial periods, or premium tiers. All features available on the platform are accessible to all users at no cost.
+            </p>
+            <p>
+              We reserve the right to introduce optional paid features in the future. If we do, existing free features will remain free, and any paid features will be clearly communicated in advance.
+            </p>
+          </section>
+
+          <section className="space-y-2">
+            <h3 className="text-base font-semibold text-white flex items-center gap-2">
+              <span className="text-[#5b4dc7]">4.</span> User Accounts and Data
+            </h3>
+            <p>
+              You are responsible for maintaining the confidentiality of your account credentials and for all activity that occurs under your account.
+            </p>
+            <p>
+              All financial data you enter into Spendly is your own. You may permanently reset or delete your data at any time through the settings. Upon deletion, your data is removed and cannot be recovered.
+            </p>
+            <p>
+              You agree not to enter false, misleading, or fraudulent information into the Service.
+            </p>
+          </section>
+
+          <section className="space-y-2">
+            <h3 className="text-base font-semibold text-white flex items-center gap-2">
+              <span className="text-[#5b4dc7]">5.</span> Privacy and Data
+            </h3>
+            <p>
+              Spendly does not connect to your bank accounts or any third-party financial institution. Your financial data is entered manually and is not shared with or sold to any third party.
+            </p>
+            <p>
+              We take reasonable technical measures to protect your data. However, no system is completely secure. By using the Service, you acknowledge and accept this inherent risk.
+            </p>
+            <p>
+              For full details on how we collect and handle data, please refer to our Privacy Policy.
+            </p>
+          </section>
+
+          <section className="space-y-2">
+            <h3 className="text-base font-semibold text-white flex items-center gap-2">
+              <span className="text-[#5b4dc7]">6.</span> Acceptable Use
+            </h3>
+            <p>You agree to use Spendly only for lawful purposes and in a manner consistent with these Terms. You must not:</p>
+            <ul className="list-disc list-inside space-y-1 pl-2 text-white/70">
+              <li>Use the Service for any unlawful, fraudulent, or malicious purpose</li>
+              <li>Attempt to gain unauthorized access to any part of the Service or its infrastructure</li>
+              <li>Reverse-engineer, decompile, or disassemble any part of the Service</li>
+              <li>Use the Service to store or transmit harmful, offensive, or illegal content</li>
+              <li>Interfere with or disrupt the integrity or performance of the Service</li>
+            </ul>
+          </section>
+
+          <section className="space-y-2">
+            <h3 className="text-base font-semibold text-white flex items-center gap-2">
+              <span className="text-[#5b4dc7]">7.</span> Intellectual Property
+            </h3>
+            <p>
+              The Spendly name, logo, design, and all content created by us are protected by intellectual property laws and remain the property of Spendly and its creator.
+            </p>
+            <p>
+              You are granted a limited, non-exclusive, non-transferable license to access and use the Service for your personal, non-commercial purposes. You may not reproduce, distribute, or create derivative works based on the Service without prior written permission.
+            </p>
+          </section>
+
+          <section className="space-y-2">
+            <h3 className="text-base font-semibold text-white flex items-center gap-2">
+              <span className="text-[#5b4dc7]">8.</span> Disclaimer of Warranties
+            </h3>
+            <p>
+              Spendly is provided &ldquo;as is&rdquo; and &ldquo;as available&rdquo; without warranties of any kind, either express or implied, including but not limited to warranties of merchantability, fitness for a particular purpose, or non-infringement.
+            </p>
+            <p>
+              We do not guarantee that the Service will be uninterrupted, error-free, or completely secure. We are not responsible for any inaccuracies in the data you enter or calculations derived from it.
+            </p>
+            <p>
+              Nothing in Spendly constitutes financial, legal, or professional advice. Decisions made based on information within the Service are made at your own risk.
+            </p>
+          </section>
+
+          <section className="space-y-2">
+            <h3 className="text-base font-semibold text-white flex items-center gap-2">
+              <span className="text-[#5b4dc7]">9.</span> Limitation of Liability
+            </h3>
+            <p>
+              To the fullest extent permitted by applicable law, Spendly and its creator shall not be liable for any indirect, incidental, special, consequential, or punitive damages arising out of or relating to your use of the Service.
+            </p>
+            <p>
+              This includes, but is not limited to, loss of data, financial loss, or any damages resulting from reliance on information provided by the Service.
+            </p>
+          </section>
+
+          <section className="space-y-2">
+            <h3 className="text-base font-semibold text-white flex items-center gap-2">
+              <span className="text-[#5b4dc7]">10.</span> Changes to the Service
+            </h3>
+            <p>
+              We reserve the right to modify, suspend, or discontinue any part of the Service at any time, with or without notice. We will make reasonable efforts to notify users of significant changes.
+            </p>
+            <p>
+              Continued use of the Service after changes are made constitutes your acceptance of the revised Terms.
+            </p>
+          </section>
+
+          <section className="space-y-2">
+            <h3 className="text-base font-semibold text-white flex items-center gap-2">
+              <span className="text-[#5b4dc7]">11.</span> Changes to These Terms
+            </h3>
+            <p>
+              We may update these Terms from time to time. When we do, we will revise the &ldquo;Last Updated&rdquo; date at the top of this document. We encourage you to review these Terms periodically.
+            </p>
+            <p>
+              Your continued use of Spendly after any changes constitutes your acceptance of the updated Terms.
+            </p>
+          </section>
+
+          <section className="space-y-2">
+            <h3 className="text-base font-semibold text-white flex items-center gap-2">
+              <span className="text-[#5b4dc7]">12.</span> Termination
+            </h3>
+            <p>
+              You may stop using Spendly at any time. You may also permanently delete your account and all associated data through the settings.
+            </p>
+            <p>
+              We reserve the right to suspend or terminate your access to the Service at our discretion, including if we believe you have violated these Terms.
+            </p>
+          </section>
+
+          <section className="space-y-2">
+            <h3 className="text-base font-semibold text-white flex items-center gap-2">
+              <span className="text-[#5b4dc7]">13.</span> Governing Law
+            </h3>
+            <p>
+              These Terms are governed by and construed in accordance with applicable laws. Any disputes arising from these Terms or your use of the Service will be resolved in the appropriate jurisdiction.
+            </p>
+          </section>
+
+          <section className="space-y-2 pb-2">
+            <h3 className="text-base font-semibold text-white flex items-center gap-2">
+              <span className="text-[#5b4dc7]">14.</span> Contact
+            </h3>
+            <p>If you have any questions or concerns about these Terms, you can reach us at:</p>
+            <div className="space-y-1.5 pt-1">
+              <div className="flex items-center gap-2 text-white/70">
+                <Mail className="w-4 h-4 text-[#5b4dc7]" />
+                <span>Email: </span>
+                <a href="mailto:reachmazen@gmail.com" className="text-white hover:underline">
+                  reachmazen@gmail.com
+                </a>
+              </div>
+              <div className="flex items-center gap-2 text-white/70">
+                <ExternalLink className="w-4 h-4 text-[#5b4dc7]" />
+                <span>GitHub: </span>
+                <a
+                  href="https://github.com/the1mazen"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-white hover:underline"
+                >
+                  https://github.com/the1mazen
+                </a>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between px-6 py-4 border-t border-white/10 bg-[#171722]/80 backdrop-blur-sm">
+          <div className="flex items-center gap-2 text-white/40 text-xs">
+            <ShieldCheck className="w-4 h-4 text-[#5b4dc7]" />
+            <span>Spendly Legal Documentation</span>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-5 py-2 rounded-xl bg-[#5b4dc7] hover:bg-[#5b4dc7]/90 text-white font-medium text-xs sm:text-sm transition-all shadow-lg shadow-[#5b4dc7]/25 cursor-pointer"
+          >
+            I Understand
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
