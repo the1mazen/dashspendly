@@ -129,7 +129,13 @@ export function useUserProfile() {
             is_banned: Boolean(dbProfile?.is_banned || userMeta.is_banned),
           }
           setProfile(supaProfile)
-          saveLocalUserProfile(supaProfile)
+          if (typeof window !== "undefined") {
+            try {
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(supaProfile))
+            } catch {
+              // ignore
+            }
+          }
           setLoading(false)
           return
         }
