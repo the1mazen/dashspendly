@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import { useEffect } from "react"
 import { AlertCircle, RotateCcw } from "lucide-react"
@@ -22,7 +22,7 @@ export default function ErrorBoundary({
         </div>
         <h2 className="text-lg font-bold font-display text-white">Something went wrong</h2>
         <p className="text-xs text-white/60 font-sans">
-          A temporary network or display error occurred. Please reload to resume your session.
+          {error?.message || "A temporary network or display error occurred. Please reload to resume your session."}
         </p>
         <div className="flex items-center justify-center gap-3 pt-2">
           <button

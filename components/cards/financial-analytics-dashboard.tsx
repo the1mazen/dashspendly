@@ -4811,10 +4811,10 @@ function RecentTransactionsFeed({
     const list = transactions.filter((t) => {
       const matchesFilter = filter === "all" || t.type === filter
       const matchesSearch =
-        t.description.toLowerCase().includes(search.toLowerCase()) ||
-        (t.category_name || "").toLowerCase().includes(search.toLowerCase()) ||
-        (t.account_name || "").toLowerCase().includes(search.toLowerCase()) ||
-        (t.note || "").toLowerCase().includes(search.toLowerCase())
+        (t.description || t.note || "").toLowerCase().includes((search || "").toLowerCase()) ||
+        (t.category_name || "").toLowerCase().includes((search || "").toLowerCase()) ||
+        (t.account_name || "").toLowerCase().includes((search || "").toLowerCase()) ||
+        (t.note || "").toLowerCase().includes((search || "").toLowerCase())
       return matchesFilter && matchesSearch
     })
 
@@ -5415,7 +5415,7 @@ function CategoryBudgetGauges({
       const budgetA = a.budget || 0
       const budgetB = b.budget || 0
       if (budgetB !== budgetA) return budgetB - budgetA
-      return a.name.localeCompare(b.name)
+      return (a.name || "").localeCompare(b.name || "")
     })
 
     return sorted.slice(0, 5).map((c) => {
@@ -5569,28 +5569,28 @@ function BillsSection({ onNavigate }: { onNavigate: (s: SectionId) => void }) {
   // 1. Overdue (past due date, not completed)
   const overdueBills = useMemo(() => {
     return filteredBills
-      .filter((b) => !b.is_completed && b.due_date < todayStr)
-      .sort((a, b) => a.due_date.localeCompare(b.due_date))
+      .filter((b) => !b.is_completed && (b.due_date || "") < todayStr)
+      .sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""))
   }, [filteredBills, todayStr])
 
   // 2. This Month (due within current calendar month >= today, not completed)
   const thisMonthBills = useMemo(() => {
     return filteredBills
-      .filter((b) => !b.is_completed && b.due_date >= todayStr && b.due_date <= endOfMonthStr)
-      .sort((a, b) => a.due_date.localeCompare(b.due_date))
+      .filter((b) => !b.is_completed && (b.due_date || "") >= todayStr && (b.due_date || "") <= endOfMonthStr)
+      .sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""))
   }, [filteredBills, todayStr, endOfMonthStr])
 
   // 3. Later on... (due in future months, not completed)
   const laterBills = useMemo(() => {
     return filteredBills
-      .filter((b) => !b.is_completed && b.due_date > endOfMonthStr)
-      .sort((a, b) => a.due_date.localeCompare(b.due_date))
+      .filter((b) => !b.is_completed && (b.due_date || "") > endOfMonthStr)
+      .sort((a, b) => (a.due_date || "").localeCompare(b.due_date || ""))
   }, [filteredBills, endOfMonthStr])
 
   const completedBills = useMemo(() => {
     return filteredBills
       .filter((b) => b.is_completed)
-      .sort((a, b) => b.due_date.localeCompare(a.due_date))
+      .sort((a, b) => (b.due_date || "").localeCompare(a.due_date || ""))
   }, [filteredBills])
 
   // Summary Metrics: Current Calendar Month ONLY (selected account + current month)
