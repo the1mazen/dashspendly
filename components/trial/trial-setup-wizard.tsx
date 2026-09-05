@@ -1,17 +1,19 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useTrialMode } from '@/lib/trial-mode-context'
 import { useFinanceData } from '@/lib/finance-data'
+import { useUserProfile } from '@/lib/user-profile'
 import {
   Wallet,
   ArrowRightLeft,
-  ReceiptText,
+  Receipt,
   Sparkles,
   CheckCircle2,
   Lock,
   ArrowRight,
+  Plus,
 } from 'lucide-react'
 
 interface TrialSetupWizardProps {
@@ -26,51 +28,95 @@ export function TrialSetupWizard({
   onOpenAddBill,
 }: TrialSetupWizardProps) {
   const { isWizardOpen, wizardStep, setWizardStep, closeWizard, startPageTour } = useTrialMode()
-  const { accounts } = useFinanceData()
+  const { accounts, createAccount } = useFinanceData()
+  const { profile } = useUserProfile()
+
+  // Inline account creation form state
+  const [accountName, setAccountName] = useState('')
+  const [accountType, setAccountType] = useState('checking')
+  const [startingBalance, setStartingBalance] = useState('')
+  const [accountCurrency, setAccountCurrency] = useState(profile.currency || 'USD')
+  const [isCreatingAccount, setIsCreatingAccount] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
 
   if (!isWizardOpen) return null
 
   const hasAccount = accounts.length > 0
+
+  const handleCreateInlineAccount = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!accountName.trim()) return
+
+    setIsCreatingAccount(true)
+    setCreateError(null)
+
+    try {
+      await createAccount({
+        name: accountName.trim(),
+        type: accountType,
+        starting_balance: parseFloat(startingBalance) || 0,
+        currency: accountCurrency || profile.currency || 'USD',
+      })
+      // Advance to step 2 automatically
+      setWizardStep('transaction')
+    } catch (err: any) {
+      console.error('Trial account creation error:', err)
+      setCreateError(err?.message || 'Failed to create account. Please try again.')
+    } finally {
+      setIsCreatingAccount(false)
+    }
+  }
 
   const handleStartTour = () => {
     closeWizard()
     startPageTour('dashboard')
   }
 
+  const handleAddTxClick = () => {
+    closeWizard()
+    onOpenAddTransaction()
+  }
+
+  const handleAddBillClick = () => {
+    closeWizard()
+    onOpenAddBill()
+  }
+
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[9950] flex items-center justify-center p-4 bg-background/80 backdrop-blur-md">
+      <div className="fixed inset-0 z-[9950] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
         <motion.div
-          initial={{ opacity: 0, scale: 0.92, y: 20 }}
+          initial={{ opacity: 0, scale: 0.95, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
-          transition={{ type: 'spring', damping: 26, stiffness: 320 }}
-          className="relative w-full max-w-lg bg-card/95 dark:bg-zinc-900/95 border border-white/20 dark:border-zinc-800 rounded-3xl p-6 sm:p-8 shadow-2xl overflow-hidden backdrop-blur-xl"
+          transition={{ duration: 0.25, ease: 'easeOut' }}
+          className="relative w-full max-w-md rounded-3xl p-6 sm:p-7 border shadow-2xl backdrop-blur-2xl text-white selection:bg-[#5EEAD4] selection:text-[#120824]"
+          style={{
+            background: 'linear-gradient(135deg, rgba(32, 12, 62, 0.92) 0%, rgba(18, 48, 38, 0.88) 50%, rgba(42, 48, 16, 0.88) 100%)',
+            borderColor: 'rgba(255, 255, 255, 0.16)',
+            boxShadow: '0 20px 50px 0 rgba(0, 0, 0, 0.6), inset 0 1px 0 0 rgba(255, 255, 255, 0.2)',
+          }}
         >
-          {/* Decorative glowing gradient orbs */}
-          <div className="absolute -top-24 -left-24 w-48 h-48 bg-primary/20 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
-
-          {/* Stepper Header */}
-          <div className="flex items-center justify-between gap-3 mb-6 relative z-10">
+          {/* Header */}
+          <div className="flex items-center justify-between pb-3.5 mb-4 border-b border-white/10">
             <div className="flex items-center gap-2">
-              <span className="p-2 rounded-xl bg-primary/15 text-primary border border-primary/20">
-                <Sparkles className="w-5 h-5 animate-pulse" />
+              <span className="size-7 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center text-[#FEF08A]">
+                <Sparkles className="size-4" />
               </span>
               <div>
-                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                <h3 className="text-xs font-bold uppercase tracking-wider font-display text-white/90">
                   Quick Setup Guide
                 </h3>
-                <p className="text-xs font-medium text-foreground/80">
-                  {wizardStep === 'account' && 'Step 1 of 3: Primary Account (Required)'}
-                  {wizardStep === 'transaction' && 'Step 2 of 3: First Activity (Optional)'}
-                  {wizardStep === 'bill' && 'Step 3 of 3: Fixed Bills (Optional)'}
-                  {wizardStep === 'celebration' && 'Setup Complete!'}
+                <p className="text-[11px] font-sans text-white/60">
+                  {wizardStep === 'account' && 'Step 1 of 3: Primary Account'}
+                  {wizardStep === 'transaction' && 'Step 2 of 3: First Activity'}
+                  {wizardStep === 'bill' && 'Step 3 of 3: Recurring Bills'}
+                  {wizardStep === 'celebration' && 'Ready to Explore!'}
                 </p>
               </div>
             </div>
 
-            {/* Step Indicators */}
+            {/* Stepper Dots */}
             <div className="flex items-center gap-1.5">
               {(['account', 'transaction', 'bill'] as const).map((s, idx) => {
                 const isCurrent = wizardStep === s
@@ -83,12 +129,12 @@ export function TrialSetupWizard({
                 return (
                   <div
                     key={s}
-                    className={`h-2 rounded-full transition-all duration-300 ${
+                    className={`h-1.5 rounded-full transition-all duration-300 ${
                       isCurrent
-                        ? 'w-6 bg-primary'
+                        ? 'w-5 bg-[#5EEAD4]'
                         : isPassed
-                        ? 'w-2.5 bg-emerald-500'
-                        : 'w-2 bg-muted/60'
+                        ? 'w-2 bg-[#34D399]'
+                        : 'w-1.5 bg-white/20'
                     }`}
                   />
                 )
@@ -96,152 +142,231 @@ export function TrialSetupWizard({
             </div>
           </div>
 
-          {/* Step 1: Account Creation (Required, No skip) */}
+          {/* Step 1: Create First Account (Inline form) */}
           {wizardStep === 'account' && (
-            <div className="space-y-6 relative z-10">
-              <div className="p-4 rounded-2xl bg-primary/10 border border-primary/20 flex items-start gap-4">
-                <div className="p-3 rounded-xl bg-primary text-primary-foreground shrink-0 shadow-lg shadow-primary/20">
-                  <Wallet className="w-6 h-6" />
+            <div className="space-y-4">
+              <div>
+                <h4 className="text-base font-bold font-display text-white">
+                  Create Your First Account
+                </h4>
+                <p className="text-xs text-white/70 font-sans mt-0.5 leading-relaxed">
+                  Spendly needs at least one account to calculate your net worth and 50/30/20 budget.
+                </p>
+              </div>
+
+              {createError && (
+                <div className="p-2.5 rounded-xl bg-red-500/20 border border-red-500/40 text-red-200 text-xs font-sans">
+                  {createError}
                 </div>
+              )}
+
+              <form onSubmit={handleCreateInlineAccount} className="space-y-3 pt-1">
                 <div>
-                  <h4 className="text-base font-bold text-foreground">
-                    Create Your First Account
-                  </h4>
-                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                    Spendly requires at least one active account (such as your Bank, Cash Wallet, or Card) to track cash flow and budget allocations.
+                  <label className="text-[10.5px] font-semibold uppercase tracking-wider block mb-1 text-white/75 font-sans">
+                    Account Name
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. QNB Checking, Cash Wallet, Card"
+                    value={accountName}
+                    onChange={(e) => setAccountName(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-xl text-xs font-sans text-white focus:outline-none border border-white/10 bg-black/40 focus:border-[#5EEAD4]/50"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="text-[10.5px] font-semibold uppercase tracking-wider block mb-1 text-white/75 font-sans">
+                      Account Type
+                    </label>
+                    <select
+                      value={accountType}
+                      onChange={(e) => setAccountType(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl text-xs font-sans text-white focus:outline-none border border-white/10 bg-[#160a2c] focus:border-[#5EEAD4]/50 cursor-pointer"
+                    >
+                      <option value="checking">Bank / Checking</option>
+                      <option value="cash">Cash wallet</option>
+                      <option value="credit">Credit card</option>
+                      <option value="savings">Savings account</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[10.5px] font-semibold uppercase tracking-wider block mb-1 text-white/75 font-sans">
+                      Currency
+                    </label>
+                    <select
+                      value={accountCurrency}
+                      onChange={(e) => setAccountCurrency(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl text-xs font-sans text-white focus:outline-none border border-white/10 bg-[#160a2c] focus:border-[#5EEAD4]/50 cursor-pointer"
+                    >
+                      <option value="USD">USD ($)</option>
+                      <option value="EGP">EGP (EGP)</option>
+                      <option value="EUR">EUR (€)</option>
+                      <option value="GBP">GBP (£)</option>
+                      <option value="SAR">SAR (SAR)</option>
+                      <option value="AED">AED (AED)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10.5px] font-semibold uppercase tracking-wider block mb-1 text-white/75 font-sans">
+                    Starting Balance
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={startingBalance}
+                    onChange={(e) => setStartingBalance(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-xl text-xs font-mono text-white focus:outline-none border border-white/10 bg-black/40 focus:border-[#5EEAD4]/50"
+                  />
+                </div>
+
+                <div className="pt-2 space-y-2">
+                  <button
+                    type="submit"
+                    disabled={isCreatingAccount || !accountName.trim()}
+                    className="w-full py-2.5 px-4 rounded-xl text-xs font-bold text-[#120824] shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 hover:scale-[1.01] active:scale-[0.99]"
+                    style={{ background: 'linear-gradient(90deg, #5EEAD4 0%, #A7F3D0 40%, #FEF08A 100%)' }}
+                  >
+                    <Wallet className="size-3.5" />
+                    <span>{isCreatingAccount ? 'Creating account...' : 'Create Account & Continue'}</span>
+                  </button>
+
+                  <p className="text-[10.5px] text-white/50 text-center font-sans">
+                    Account setup is required to initialize your dashboard
                   </p>
                 </div>
-              </div>
-
-              <div className="space-y-2.5 text-xs text-muted-foreground">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
-                  <span>Supports EGP, USD, EUR, GBP, SAR, AED and multiple currencies</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
-                  <span>Track opening balance and live income/expense adjustments</span>
-                </div>
-              </div>
-
-              <div className="pt-2">
-                <button
-                  onClick={onOpenAddAccount}
-                  className="w-full py-3 px-4 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-2xl shadow-lg shadow-primary/25 transition-all duration-200 flex items-center justify-center gap-2 text-sm"
-                >
-                  <Wallet className="w-4 h-4" />
-                  Create First Account
-                </button>
-                <div className="flex items-center justify-center gap-1.5 mt-3 text-[11px] text-muted-foreground/80">
-                  <Lock className="w-3 h-3" />
-                  <span>Account setup is required to initialize your dashboard</span>
-                </div>
-              </div>
+              </form>
             </div>
           )}
 
-          {/* Step 2: Transaction (Optional) */}
+          {/* Step 2: First Transaction (Optional) */}
           {wizardStep === 'transaction' && (
-            <div className="space-y-6 relative z-10">
-              <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-start gap-4">
-                <div className="p-3 rounded-xl bg-emerald-500 text-white shrink-0 shadow-lg shadow-emerald-500/20">
-                  <ArrowRightLeft className="w-6 h-6" />
+            <div className="space-y-4">
+              <div>
+                <h4 className="text-base font-bold font-display text-white">
+                  Add Your First Transaction
+                </h4>
+                <p className="text-xs text-white/70 font-sans mt-0.5 leading-relaxed">
+                  Log an expense, income, or transfer to see real-time cash flow and charts in action.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl border border-white/10 bg-white/5 space-y-2 text-xs text-white/80 font-sans">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="size-3.5 text-[#5EEAD4]" />
+                  <span>Account successfully created</span>
                 </div>
-                <div>
-                  <h4 className="text-base font-bold text-foreground">
-                    Record Your First Transaction
-                  </h4>
-                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                    Log an income, an expense, or a transfer between accounts. You can also skip this and add transactions later.
-                  </p>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="size-3.5 text-[#5EEAD4]" />
+                  <span>You can log a transaction now or skip to later</span>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 pt-2">
+              <div className="grid grid-cols-2 gap-2.5 pt-2">
                 <button
+                  type="button"
                   onClick={() => setWizardStep('bill')}
-                  className="w-full py-3 px-4 bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground font-medium rounded-2xl border border-border/60 transition text-sm text-center"
+                  className="py-2.5 px-3 rounded-xl text-xs font-semibold text-white/70 hover:text-white border border-white/10 hover:bg-white/10 transition text-center cursor-pointer"
                 >
                   Skip for now
                 </button>
 
                 <button
-                  onClick={onOpenAddTransaction}
-                  className="w-full py-3 px-4 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-2xl shadow-lg shadow-primary/25 transition flex items-center justify-center gap-2 text-sm text-center"
+                  type="button"
+                  onClick={handleAddTxClick}
+                  className="py-2.5 px-3 rounded-xl text-xs font-bold text-[#120824] shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer hover:scale-[1.01]"
+                  style={{ background: 'linear-gradient(90deg, #5EEAD4 0%, #A7F3D0 40%, #FEF08A 100%)' }}
                 >
-                  <ArrowRightLeft className="w-4 h-4" />
-                  Add Transaction
+                  <ArrowRightLeft className="size-3.5" />
+                  <span>Add Transaction</span>
                 </button>
               </div>
             </div>
           )}
 
-          {/* Step 3: Bill (Optional) */}
+          {/* Step 3: Recurring Bill (Optional) */}
           {wizardStep === 'bill' && (
-            <div className="space-y-6 relative z-10">
-              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-start gap-4">
-                <div className="p-3 rounded-xl bg-amber-500 text-white shrink-0 shadow-lg shadow-amber-500/20">
-                  <ReceiptText className="w-6 h-6" />
+            <div className="space-y-4">
+              <div>
+                <h4 className="text-base font-bold font-display text-white">
+                  Set Up Recurring Bills
+                </h4>
+                <p className="text-xs text-white/70 font-sans mt-0.5 leading-relaxed">
+                  Track rent, electricity, gym, or subscriptions to calculate fixed commitments and safe-to-spend allowances.
+                </p>
+              </div>
+
+              <div className="p-3.5 rounded-2xl border border-white/10 bg-white/5 space-y-2 text-xs text-white/80 font-sans">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="size-3.5 text-[#FEF08A]" />
+                  <span>Safeguards your 50/30/20 budget framework</span>
                 </div>
-                <div>
-                  <h4 className="text-base font-bold text-foreground">
-                    Set Up Recurring Bills
-                  </h4>
-                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                    Track rent, electricity, gym, or software subscriptions. Spendly uses fixed commitments to safeguard your 50/30/20 budget.
-                  </p>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="size-3.5 text-[#FEF08A]" />
+                  <span>1-click mark as paid auto-records transactions</span>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 pt-2">
+              <div className="grid grid-cols-2 gap-2.5 pt-2">
                 <button
+                  type="button"
                   onClick={() => setWizardStep('celebration')}
-                  className="w-full py-3 px-4 bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground font-medium rounded-2xl border border-border/60 transition text-sm text-center"
+                  className="py-2.5 px-3 rounded-xl text-xs font-semibold text-white/70 hover:text-white border border-white/10 hover:bg-white/10 transition text-center cursor-pointer"
                 >
                   Skip for now
                 </button>
 
                 <button
-                  onClick={onOpenAddBill}
-                  className="w-full py-3 px-4 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-2xl shadow-lg shadow-primary/25 transition flex items-center justify-center gap-2 text-sm text-center"
+                  type="button"
+                  onClick={handleAddBillClick}
+                  className="py-2.5 px-3 rounded-xl text-xs font-bold text-[#120824] shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer hover:scale-[1.01]"
+                  style={{ background: 'linear-gradient(90deg, #5EEAD4 0%, #A7F3D0 40%, #FEF08A 100%)' }}
                 >
-                  <ReceiptText className="w-4 h-4" />
-                  Add Bill
+                  <Receipt className="size-3.5" />
+                  <span>Add Bill</span>
                 </button>
               </div>
             </div>
           )}
 
-          {/* Step 4: Celebration & Guided Tour prompt */}
+          {/* Celebration / Guided Tour Launch */}
           {wizardStep === 'celebration' && (
-            <div className="space-y-6 relative z-10 text-center">
-              <div className="mx-auto w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-500 flex items-center justify-center border-2 border-emerald-500/30 shadow-xl shadow-emerald-500/20 animate-bounce">
-                <Sparkles className="w-8 h-8" />
+            <div className="space-y-4 text-center py-2">
+              <div className="mx-auto size-12 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-[#5EEAD4] flex items-center justify-center shadow-lg shadow-emerald-950/50">
+                <Sparkles className="size-6 animate-pulse" />
               </div>
 
               <div>
-                <h4 className="text-xl font-bold text-foreground">
+                <h4 className="text-lg font-bold font-display text-white">
                   You're all set! 🚀
                 </h4>
-                <p className="text-xs text-muted-foreground mt-2 max-w-sm mx-auto leading-relaxed">
-                  Your Spendly workspace is active. As you navigate through each section, our interactive spotlight tour will guide you step-by-step.
+                <p className="text-xs text-white/70 font-sans mt-1 leading-relaxed">
+                  Your Spendly workspace is active. Let's take a quick interactive tour through the dashboard to show you around.
                 </p>
               </div>
 
               <div className="pt-2 space-y-2">
                 <button
+                  type="button"
                   onClick={handleStartTour}
-                  className="w-full py-3.5 px-4 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-2xl shadow-lg shadow-primary/25 transition flex items-center justify-center gap-2 text-sm"
+                  className="w-full py-2.5 px-4 rounded-xl text-xs font-bold text-[#120824] shadow-lg transition flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.01]"
+                  style={{ background: 'linear-gradient(90deg, #5EEAD4 0%, #A7F3D0 40%, #FEF08A 100%)' }}
                 >
-                  Start Dashboard Tour
-                  <ArrowRight className="w-4 h-4" />
+                  <span>Start Dashboard Tour</span>
+                  <ArrowRight className="size-3.5" />
                 </button>
 
                 <button
+                  type="button"
                   onClick={closeWizard}
-                  className="w-full py-2.5 px-4 text-xs font-medium text-muted-foreground hover:text-foreground transition"
+                  className="w-full py-1.5 text-xs text-white/60 hover:text-white transition cursor-pointer"
                 >
-                  Explore freely
+                  Explore on my own
                 </button>
               </div>
             </div>

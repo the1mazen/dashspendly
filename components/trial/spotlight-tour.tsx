@@ -203,7 +203,7 @@ export function SpotlightTour() {
             initial={{ opacity: 0, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.25 }}
-            className="absolute pointer-events-none rounded-2xl border-2 border-primary/80 shadow-[0_0_25px_rgba(var(--primary-rgb,59,130,246),0.45)]"
+            className="absolute pointer-events-none rounded-2xl border-2 border-[#5EEAD4] shadow-[0_0_25px_rgba(94,234,212,0.45)]"
             style={{
               top: targetRect.top - padding,
               left: targetRect.left - padding,
@@ -220,21 +220,26 @@ export function SpotlightTour() {
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, scale: 0.95 }}
           transition={{ type: 'spring', damping: 25, stiffness: 350 }}
-          style={tooltipStyle}
-          className="pointer-events-auto bg-card/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-white/20 dark:border-zinc-700/60 shadow-2xl rounded-2xl p-5 text-card-foreground flex flex-col gap-3.5 z-[9999]"
+          style={{
+            ...tooltipStyle,
+            background: 'linear-gradient(135deg, rgba(32, 12, 62, 0.95) 0%, rgba(18, 48, 38, 0.92) 50%, rgba(42, 48, 16, 0.92) 100%)',
+            borderColor: 'rgba(255, 255, 255, 0.16)',
+            boxShadow: '0 20px 50px 0 rgba(0, 0, 0, 0.6), inset 0 1px 0 0 rgba(255, 255, 255, 0.2)',
+          }}
+          className="pointer-events-auto backdrop-blur-2xl border rounded-3xl p-5 text-white flex flex-col gap-3.5 z-[9999]"
         >
           {/* Header */}
-          <div className="flex items-center justify-between gap-2 border-b border-border/40 pb-2.5">
+          <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-2.5">
             <div className="flex items-center gap-2">
-              <div className="p-1.5 rounded-lg bg-primary/15 text-primary">
-                <Compass className="w-4 h-4 animate-spin-slow" />
+              <div className="size-6 rounded-lg bg-white/10 flex items-center justify-center text-[#FEF08A]">
+                <Compass className="size-3.5 animate-spin-slow" />
               </div>
               <div>
-                <span className="text-[11px] font-semibold tracking-wider uppercase text-muted-foreground">
+                <span className="text-[10.5px] font-bold tracking-wider uppercase text-white/60 font-sans">
                   {currentTour.title}
                 </span>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-primary/20 text-primary">
+                  <span className="text-[10.5px] font-mono font-bold px-2 py-0.5 rounded-full bg-[#5EEAD4]/20 text-[#5EEAD4]">
                     Step {currentTourStepIndex + 1} of {currentTour.steps.length}
                   </span>
                 </div>
@@ -244,19 +249,19 @@ export function SpotlightTour() {
             <button
               onClick={skipCurrentTour}
               aria-label="Skip tour"
-              className="text-muted-foreground hover:text-foreground p-1 rounded-lg hover:bg-muted/40 transition"
+              className="text-white/40 hover:text-white p-1 rounded-lg hover:bg-white/10 transition cursor-pointer"
             >
-              <X className="w-4 h-4" />
+              <X className="size-4" />
             </button>
           </div>
 
           {/* Body */}
-          <div className="space-y-1.5">
-            <h4 className="text-base font-bold text-foreground flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+          <div className="space-y-1">
+            <h4 className="text-sm font-bold font-display text-white flex items-center gap-1.5">
+              <Sparkles className="size-3.5 text-[#FEF08A] shrink-0" />
               {currentStep.title}
             </h4>
-            <p className="text-sm text-muted-foreground leading-relaxed">
+            <p className="text-xs text-white/70 font-sans leading-relaxed">
               {currentStep.description}
             </p>
           </div>
@@ -270,10 +275,10 @@ export function SpotlightTour() {
                   key={idx}
                   className={`h-1.5 rounded-full transition-all duration-300 ${
                     idx === currentTourStepIndex
-                      ? 'w-5 bg-primary'
+                      ? 'w-5 bg-[#5EEAD4]'
                       : idx < currentTourStepIndex
-                      ? 'w-2 bg-primary/50'
-                      : 'w-1.5 bg-muted-foreground/30'
+                      ? 'w-2 bg-[#34D399]'
+                      : 'w-1.5 bg-white/20'
                   }`}
                 />
               ))}
@@ -284,19 +289,20 @@ export function SpotlightTour() {
               {currentTourStepIndex > 0 && (
                 <button
                   onClick={prevTourStep}
-                  className="px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded-xl transition flex items-center gap-1 border border-border/50"
+                  className="px-2.5 py-1 text-xs font-semibold text-white/70 hover:text-white hover:bg-white/10 rounded-xl transition flex items-center gap-1 border border-white/10 cursor-pointer"
                 >
-                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <ChevronLeft className="size-3" />
                   Back
                 </button>
               )}
 
               <button
                 onClick={nextTourStep}
-                className="px-4 py-1.5 text-xs font-semibold text-primary-foreground bg-primary hover:bg-primary/90 rounded-xl shadow-md hover:shadow-primary/25 transition flex items-center gap-1"
+                className="px-3.5 py-1 text-xs font-bold text-[#120824] rounded-xl shadow-md transition flex items-center gap-1 cursor-pointer hover:scale-[1.02]"
+                style={{ background: 'linear-gradient(90deg, #5EEAD4 0%, #A7F3D0 40%, #FEF08A 100%)' }}
               >
-                {isLastStep ? 'Got it!' : 'Next'}
-                {!isLastStep && <ChevronRight className="w-3.5 h-3.5" />}
+                <span>{isLastStep ? 'Got it!' : 'Next'}</span>
+                {!isLastStep && <ChevronRight className="size-3" />}
               </button>
             </div>
           </div>
