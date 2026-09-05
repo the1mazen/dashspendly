@@ -1,24 +1,11 @@
 "use client"
 import Link from "next/link"
-import { useState, useEffect } from "react"
-import { useTheme } from "next-themes"
-import { Sun, Moon, Film, VideoOff } from "lucide-react"
+import { Film, VideoOff } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useLandingVideo } from "@/components/landing-background"
 
 export function FloatingNavbar() {
-  const { theme, setTheme, resolvedTheme } = useTheme()
   const { isVideoEnabled, toggleVideo } = useLandingVideo()
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  const isDarkMode = mounted ? (resolvedTheme !== "light" && theme !== "light") : true
-
-  const toggleTheme = () => {
-    setTheme(isDarkMode ? "light" : "dark")
-  }
 
   const scrollToSection = (sectionId: string) => {
     const section = document.getElementById(sectionId)
@@ -47,16 +34,16 @@ export function FloatingNavbar() {
           {/* Navigation Links */}
           <div className="hidden items-center gap-8 md:flex">
             <button
+              onClick={() => scrollToSection("home")}
+              className="text-sm font-open-sans-custom text-gray-200 transition-colors hover:text-white [text-shadow:_0_2px_6px_rgb(0_0_0_/_40%)] cursor-pointer"
+            >
+              Welcome
+            </button>
+            <button
               onClick={() => scrollToSection("features")}
               className="text-sm font-open-sans-custom text-gray-200 transition-colors hover:text-white [text-shadow:_0_2px_6px_rgb(0_0_0_/_40%)] cursor-pointer"
             >
               Features
-            </button>
-            <button
-              onClick={() => scrollToSection("how-it-works")}
-              className="text-sm font-open-sans-custom text-gray-200 transition-colors hover:text-white [text-shadow:_0_2px_6px_rgb(0_0_0_/_40%)] cursor-pointer"
-            >
-              How it works
             </button>
             <button
               onClick={() => scrollToSection("about")}
@@ -84,19 +71,6 @@ export function FloatingNavbar() {
                 <Film className="size-4 text-[#A7F3D0]" />
               ) : (
                 <VideoOff className="size-4 text-white/50" />
-              )}
-            </button>
-
-            <button
-              onClick={toggleTheme}
-              className="rounded-xl p-2 text-white/80 hover:text-white hover:bg-white/10 transition-all cursor-pointer border border-white/10 flex items-center justify-center group"
-              aria-label="Toggle Light / Dark mode"
-              title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-            >
-              {isDarkMode ? (
-                <Sun className="size-4 text-[#D4A934] group-hover:rotate-45 transition-transform duration-300" />
-              ) : (
-                <Moon className="size-4 text-[#9C7A1E] group-hover:-rotate-12 transition-transform duration-300" />
               )}
             </button>
 
