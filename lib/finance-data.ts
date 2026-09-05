@@ -2740,7 +2740,16 @@ function useFinanceDataInternal() {
             }))
 
           if (validCatRows.length > 0) {
-            const { error: catInsertError } = await supabase.from("budget_plan_categories").insert(validCatRows)
+            let { error: catInsertError } = await supabase.from("budget_plan_categories").insert(validCatRows)
+            if (catInsertError && catInsertError.message?.includes("budget_plan_categories_bucket_check")) {
+              const fallbackRows = validCatRows.filter((r) => ["needs", "wants", "savings"].includes(r.bucket))
+              if (fallbackRows.length > 0) {
+                const retryInsert = await supabase.from("budget_plan_categories").insert(fallbackRows)
+                catInsertError = retryInsert.error
+              } else {
+                catInsertError = null
+              }
+            }
             if (catInsertError) {
               console.error("Supabase plan categories insert error:", catInsertError)
               throw new Error(`Failed to save category allocations to Supabase: ${catInsertError.message}`)
@@ -2889,7 +2898,16 @@ function useFinanceDataInternal() {
             }))
 
           if (validCatRows.length > 0) {
-            const { error: catInsertError } = await supabase.from("budget_plan_categories").insert(validCatRows)
+            let { error: catInsertError } = await supabase.from("budget_plan_categories").insert(validCatRows)
+            if (catInsertError && catInsertError.message?.includes("budget_plan_categories_bucket_check")) {
+              const fallbackRows = validCatRows.filter((r) => ["needs", "wants", "savings"].includes(r.bucket))
+              if (fallbackRows.length > 0) {
+                const retryInsert = await supabase.from("budget_plan_categories").insert(fallbackRows)
+                catInsertError = retryInsert.error
+              } else {
+                catInsertError = null
+              }
+            }
             if (catInsertError) {
               console.error("Supabase plan categories insert error:", catInsertError)
               throw new Error(`Failed to save updated category allocations in Supabase: ${catInsertError.message}`)

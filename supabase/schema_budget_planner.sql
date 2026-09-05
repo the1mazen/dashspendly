@@ -36,6 +36,10 @@ create table if not exists public.budget_plan_categories (
   allocated_amount_cents bigint not null
 );
 
+-- Ensure bucket constraint supports 'bills' if table already existed
+alter table public.budget_plan_categories drop constraint if exists budget_plan_categories_bucket_check;
+alter table public.budget_plan_categories add constraint budget_plan_categories_bucket_check check (bucket in ('bills', 'needs', 'wants', 'savings'));
+
 -- 3. Period performance snapshots (for carry-over and comparison)
 create table if not exists public.budget_plan_history (
   id uuid primary key default gen_random_uuid(),
