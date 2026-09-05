@@ -486,7 +486,7 @@ function AddTransactionModal({
   isOpen: boolean
   onClose: () => void
 }) {
-  const { accounts, categories, createTransaction, createSplitExpenseTransaction } = useFinanceData()
+  const { accounts, categories, createCategory, createTransaction, createSplitExpenseTransaction } = useFinanceData()
   const { profile } = useUserProfile()
   const { tokens } = useDashboardTheme()
   const { startPageTour, isTourActive, currentTour, skipCurrentTour } = useTrialMode()
@@ -676,11 +676,34 @@ function AddTransactionModal({
         const amt = parseFloat(newAmount)
         if (isNaN(amt) || amt <= 0) throw new Error("Please enter a valid amount.")
 
+        let resolvedCatId: string | undefined = newCategoryId === "custom" ? undefined : newCategoryId || undefined
+        let resolvedCatName: string | undefined = undefined
+
+        if (newCategoryId === "custom" && newType !== "transfer") {
+          const trimmed = newCustomCategory.trim()
+          if (!trimmed) {
+            throw new Error("Please enter a name for your custom category.")
+          }
+          const existing = categories.find((c) => c.name.toLowerCase() === trimmed.toLowerCase())
+          if (existing) {
+            resolvedCatId = existing.id
+            resolvedCatName = existing.name
+          } else {
+            const created = await createCategory({
+              name: trimmed,
+              type: newType === "income" ? "income" : "expense",
+              currency: profile.currency || "EGP",
+            })
+            resolvedCatId = created?.id
+            resolvedCatName = created?.name || trimmed
+          }
+        }
+
         await createTransaction({
           account_id: newAccountId,
           destination_account_id: newType === "transfer" ? newDestAccountId : undefined,
-          category_id: newCategoryId === "custom" ? undefined : newCategoryId || undefined,
-          category_name: newCategoryId === "custom" ? newCustomCategory : undefined,
+          category_id: resolvedCatId,
+          category_name: resolvedCatName,
           amount: amt,
           type: newType,
           note: newNote,
