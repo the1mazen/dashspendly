@@ -179,10 +179,32 @@ export interface AppNotification {
 const STORAGE_ACCOUNTS_KEY = "spendly_accounts"
 const STORAGE_TRANSACTIONS_KEY = "spendly_transactions"
 const STORAGE_CATEGORIES_KEY = "spendly_categories"
+const STORAGE_CATEGORY_GROUPS_KEY = "spendly_category_groups_v1"
 const STORAGE_HELD_FUNDS_KEY = "spendly_held_funds"
 const STORAGE_HELD_HISTORY_KEY = "spendly_held_fund_history"
 const STORAGE_BILLS_KEY = "spendly_bills"
 const STORAGE_BUDGET_PLANS_KEY = "spendly_budget_plans"
+
+export function getLocalCategoryGroups(): Record<string, CategoryGroup> {
+  if (typeof window === "undefined") return {}
+  try {
+    const raw = localStorage.getItem(STORAGE_CATEGORY_GROUPS_KEY)
+    if (raw) return JSON.parse(raw)
+  } catch {
+    // Ignore JSON errors
+  }
+  return {}
+}
+
+export function saveLocalCategoryGroups(map: Record<string, CategoryGroup>): Record<string, CategoryGroup> {
+  if (typeof window === "undefined") return map
+  try {
+    localStorage.setItem(STORAGE_CATEGORY_GROUPS_KEY, JSON.stringify(map))
+  } catch {
+    // Ignore write errors
+  }
+  return map
+}
 
 export function getLocal<T>(key: string): T[] {
   if (typeof window === "undefined") return []
@@ -504,17 +526,24 @@ function useFinanceDataInternal() {
           const currentMonthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`
           const todayStr = now.toISOString().split("T")[0]
 
+          const localGroups = getLocalCategoryGroups()
+
           const parsedCategories: Category[] = dbCategories.map((c: any) => {
             const catSpent = parsedTransactions
               .filter((t) => t.category_id === String(c.id) && t.type === "expense" && !isTransferTransaction(t) && t.date >= currentMonthStart && t.date <= todayStr)
               .reduce((sum, t) => sum + Math.abs(t.amount), 0)
 
             const budget = c.budget_cents != null ? c.budget_cents / 100 : (c.budget != null ? c.budget : undefined)
-            const rawGroup = c.group || c.bucket || c.category_group || (c.group_name ? String(c.group_name).toLowerCase() : undefined)
+            const catIdStr = String(c.id)
+            const rawGroup = c.group || c.bucket || c.category_group || (c.group_name ? String(c.group_name).toLowerCase() : undefined) || localGroups[catIdStr]
             const normalizedGroup: CategoryGroup = (rawGroup === "needs" || rawGroup === "wants" || rawGroup === "savings" || rawGroup === "bills") ? rawGroup : "ungrouped"
 
+            if (normalizedGroup !== "ungrouped" && !localGroups[catIdStr]) {
+              localGroups[catIdStr] = normalizedGroup
+            }
+
             return {
-              id: String(c.id),
+              id: catIdStr,
               user_id: c.user_id,
               name: c.name,
               type: c.type || "expense",
@@ -526,6 +555,7 @@ function useFinanceDataInternal() {
               created_at: c.created_at,
             }
           })
+          saveLocalCategoryGroups(localGroups)
 
           const parsedHeldFunds: HeldFund[] = dbHeldFunds.map((h: any) => {
             const accObj = dbAccounts.find((a: any) => String(a.id) === String(h.account_id))
@@ -818,6 +848,13 @@ function useFinanceDataInternal() {
     const newCatId = generateUUID()
     const groupVal = (catData.group && catData.group !== "ungrouped") ? catData.group : null
 
+    // Persist group to local groups map immediately
+    if (groupVal) {
+      const currentMap = getLocalCategoryGroups()
+      currentMap[newCatId] = groupVal
+      saveLocalCategoryGroups(currentMap)
+    }
+
     if (isSupabaseConfigured && supabase) {
       const userId = await resolveCurrentUserId()
       if (!userId) {
@@ -900,70 +937,86 @@ function useFinanceDataInternal() {
       group?: CategoryGroup | null
     }
   ) => {
+    // 1. Optimistically update local React state immediately so UI changes without delay
+    setCategories((prev) => {
+      const updated = prev.map((c) => {
+        if (c.id === categoryId) {
+          return {
+            ...c,
+            ...(updates.name !== undefined ? { name: updates.name.trim() } : {}),
+            ...(updates.type !== undefined ? { type: updates.type } : {}),
+            ...(updates.budget !== undefined ? { budget: updates.budget } : {}),
+            ...(updates.group !== undefined ? { group: updates.group || "ungrouped" } : {}),
+          }
+        }
+        return c
+      })
+      saveLocal(STORAGE_CATEGORIES_KEY, updated)
+      return updated
+    })
+
+    // 2. Persist to local category groups map
+    if (updates.group !== undefined) {
+      const currentMap = getLocalCategoryGroups()
+      if (updates.group && updates.group !== "ungrouped") {
+        currentMap[categoryId] = updates.group
+      } else {
+        delete currentMap[categoryId]
+      }
+      saveLocalCategoryGroups(currentMap)
+    }
+
+    // 3. Persist to Supabase if configured
     if (isSupabaseConfigured && supabase) {
-      const userId = await resolveCurrentUserId()
-      if (!userId) {
-        throw new Error("No active Supabase user session found.")
-      }
+      try {
+        const userId = await resolveCurrentUserId()
+        if (userId && isValidUUID(categoryId)) {
+          const updatePayload: any = {}
+          if (updates.name !== undefined) updatePayload.name = updates.name.trim()
+          if (updates.type !== undefined) updatePayload.type = updates.type
+          if (updates.budget !== undefined) {
+            updatePayload.budget_cents = updates.budget && updates.budget > 0 ? Math.round(updates.budget * 100) : 0
+          }
+          if (updates.group !== undefined) {
+            updatePayload.group = (updates.group === "ungrouped" || !updates.group) ? null : updates.group
+          }
 
-      const updatePayload: any = {}
-      if (updates.name !== undefined) updatePayload.name = updates.name.trim()
-      if (updates.type !== undefined) updatePayload.type = updates.type
-      if (updates.budget !== undefined) {
-        updatePayload.budget_cents = updates.budget && updates.budget > 0 ? Math.round(updates.budget * 100) : 0
-      }
-      if (updates.group !== undefined) {
-        updatePayload.group = (updates.group === "ungrouped" || !updates.group) ? null : updates.group
-      }
-
-      if (isValidUUID(categoryId)) {
-        let { error } = await supabase
-          .from("categories")
-          .update(updatePayload)
-          .eq("id", categoryId)
-          .eq("user_id", userId)
-
-        // Fallback if group or budget_cents column is missing
-        if (error && (error.message?.includes("group") || error.message?.includes("budget_cents") || error.code === "PGRST204" || error.code === "42703")) {
-          const fallbackPayload = { ...updatePayload }
-          if (error.message?.includes("group")) delete fallbackPayload.group
-          if (error.message?.includes("budget_cents")) delete fallbackPayload.budget_cents
-          const retry = await supabase
+          let { error } = await supabase
             .from("categories")
-            .update(fallbackPayload)
+            .update(updatePayload)
             .eq("id", categoryId)
             .eq("user_id", userId)
-          error = retry.error
-        }
 
-        if (error) {
-          console.error("Supabase category update error:", error)
-          throw new Error(`Failed to update category in Supabase: ${error.message}`)
+          // Fallback if group or budget_cents column is missing
+          if (error && (error.message?.includes("group") || error.message?.includes("budget_cents") || error.code === "PGRST204" || error.code === "42703")) {
+            const fallbackPayload = { ...updatePayload }
+            if (error.message?.includes("group") || error.code === "42703") delete fallbackPayload.group
+            if (error.message?.includes("budget_cents")) delete fallbackPayload.budget_cents
+            if (Object.keys(fallbackPayload).length > 0) {
+              await supabase
+                .from("categories")
+                .update(fallbackPayload)
+                .eq("id", categoryId)
+                .eq("user_id", userId)
+            }
+          }
         }
+      } catch (err) {
+        console.warn("Supabase category update warning:", err)
       }
 
       await fetchData()
-    } else {
-      setCategories((prev) => {
-        const updated = prev.map((c) => {
-          if (c.id === categoryId) {
-            return {
-              ...c,
-              ...(updates.name !== undefined ? { name: updates.name.trim() } : {}),
-              ...(updates.type !== undefined ? { type: updates.type } : {}),
-              ...(updates.budget !== undefined ? { budget: updates.budget } : {}),
-              ...(updates.group !== undefined ? { group: updates.group || "ungrouped" } : {}),
-            }
-          }
-          return c
-        })
-        saveLocal(STORAGE_CATEGORIES_KEY, updated)
-        return updated
-      })
     }
   }, [fetchData])
 
   const deleteCategory = useCallback(async (categoryId: string) => {
+    // Clean up local group map
+    const currentMap = getLocalCategoryGroups()
+    if (currentMap[categoryId]) {
+      delete currentMap[categoryId]
+      saveLocalCategoryGroups(currentMap)
+    }
+
     if (isSupabaseConfigured && supabase) {
       try {
         const userId = await resolveCurrentUserId()

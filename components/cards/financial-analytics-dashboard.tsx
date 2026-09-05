@@ -6571,11 +6571,11 @@ function EditCategoryModal({
               className="w-full px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
               style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
             >
-              <option value="ungrouped" className="bg-[#1E0C38] text-white">⚪ Ungrouped (None)</option>
-              <option value="needs" className="bg-[#1E0C38] text-teal-300">🎯 Needs (Essential)</option>
-              <option value="wants" className="bg-[#1E0C38] text-purple-300">🎨 Wants (Discretionary)</option>
-              <option value="savings" className="bg-[#1E0C38] text-amber-300">💰 Savings & Investments</option>
-              <option value="bills" className="bg-[#1E0C38] text-blue-300">📄 Bills & Commitments</option>
+              <option value="ungrouped" className="bg-[#1E0C38] text-white">Ungrouped (None)</option>
+              <option value="needs" className="bg-[#1E0C38] text-teal-300">Needs (Essential)</option>
+              <option value="wants" className="bg-[#1E0C38] text-purple-300">Wants (Discretionary)</option>
+              <option value="savings" className="bg-[#1E0C38] text-amber-300">Savings & Investments</option>
+              <option value="bills" className="bg-[#1E0C38] text-blue-300">Bills & Commitments</option>
             </select>
           </div>
 
@@ -6704,15 +6704,15 @@ function CategoriesSection({
   const getGroupBadgeInfo = (g?: CategoryGroup | null) => {
     switch (g) {
       case "needs":
-        return { label: "Needs", icon: "🎯", border: "border-teal-500/40", bg: "bg-teal-500/15", text: "text-teal-300" }
+        return { label: "Needs", border: "border-teal-500/40", bg: "bg-teal-500/15", text: "text-teal-300" }
       case "wants":
-        return { label: "Wants", icon: "🎨", border: "border-purple-500/40", bg: "bg-purple-500/15", text: "text-purple-300" }
+        return { label: "Wants", border: "border-purple-500/40", bg: "bg-purple-500/15", text: "text-purple-300" }
       case "savings":
-        return { label: "Savings", icon: "💰", border: "border-amber-500/40", bg: "bg-amber-500/15", text: "text-amber-300" }
+        return { label: "Savings", border: "border-amber-500/40", bg: "bg-amber-500/15", text: "text-amber-300" }
       case "bills":
-        return { label: "Bills", icon: "📄", border: "border-blue-500/40", bg: "bg-blue-500/15", text: "text-blue-300" }
+        return { label: "Bills", border: "border-blue-500/40", bg: "bg-blue-500/15", text: "text-blue-300" }
       default:
-        return { label: "Ungrouped", icon: "⚪", border: "border-white/20 border-dashed", bg: "bg-white/5", text: "text-white/60" }
+        return { label: "Ungrouped", border: "border-white/20 border-dashed", bg: "bg-white/5", text: "text-white/60" }
     }
   }
 
@@ -6841,11 +6841,11 @@ function CategoriesSection({
             className="w-full px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
             style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
           >
-            <option value="ungrouped" className="bg-[#1E0C38] text-white">⚪ Ungrouped (None)</option>
-            <option value="needs" className="bg-[#1E0C38] text-teal-300">🎯 Needs (Essential)</option>
-            <option value="wants" className="bg-[#1E0C38] text-purple-300">🎨 Wants (Discretionary)</option>
-            <option value="savings" className="bg-[#1E0C38] text-amber-300">💰 Savings & Investments</option>
-            <option value="bills" className="bg-[#1E0C38] text-blue-300">📄 Bills & Commitments</option>
+            <option value="ungrouped" className="bg-[#1E0C38] text-white">Ungrouped (None)</option>
+            <option value="needs" className="bg-[#1E0C38] text-teal-300">Needs (Essential)</option>
+            <option value="wants" className="bg-[#1E0C38] text-purple-300">Wants (Discretionary)</option>
+            <option value="savings" className="bg-[#1E0C38] text-amber-300">Savings & Investments</option>
+            <option value="bills" className="bg-[#1E0C38] text-blue-300">Bills & Commitments</option>
           </select>
 
           <input
@@ -6873,12 +6873,12 @@ function CategoriesSection({
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full">
           {[
-            { id: "all" as const, label: "All", icon: "🌐", count: groupCounts.all },
-            { id: "needs" as const, label: "Needs", icon: "🎯", count: groupCounts.needs },
-            { id: "wants" as const, label: "Wants", icon: "🎨", count: groupCounts.wants },
-            { id: "savings" as const, label: "Savings", icon: "💰", count: groupCounts.savings },
-            { id: "bills" as const, label: "Bills", icon: "📄", count: groupCounts.bills },
-            { id: "ungrouped" as const, label: "Ungrouped", icon: "⚪", count: groupCounts.ungrouped },
+            { id: "all" as const, label: "All", count: groupCounts.all },
+            { id: "needs" as const, label: "Needs", count: groupCounts.needs },
+            { id: "wants" as const, label: "Wants", count: groupCounts.wants },
+            { id: "savings" as const, label: "Savings", count: groupCounts.savings },
+            { id: "bills" as const, label: "Bills", count: groupCounts.bills },
+            { id: "ungrouped" as const, label: "Ungrouped", count: groupCounts.ungrouped },
           ].map((tab) => {
             const isActive = selectedFilterGroup === tab.id
             return (
@@ -6897,7 +6897,6 @@ function CategoriesSection({
                   borderColor: isActive ? "rgba(255,255,255,0.4)" : tokens.borderNested,
                 }}
               >
-                <span>{tab.icon}</span>
                 <span>{tab.label}</span>
                 <span
                   className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
@@ -6917,7 +6916,6 @@ function CategoriesSection({
 
         {selectedFilterGroup === "ungrouped" && groupCounts.ungrouped > 0 && (
           <div className="text-xs text-amber-300 font-sans flex items-center gap-1.5 bg-amber-500/10 px-3 py-1.5 rounded-xl border border-amber-500/20">
-            <span>💡</span>
             <span>Assign your ungrouped categories to Needs, Wants, Savings, or Bills below.</span>
           </div>
         )}
@@ -6929,7 +6927,7 @@ function CategoriesSection({
           <div className="col-span-full p-8 rounded-3xl border text-center backdrop-blur-xl" style={{ background: tokens.cardGradient, borderColor: tokens.border }}>
             {selectedFilterGroup === "ungrouped" ? (
               <div>
-                <p className="text-sm font-bold text-emerald-300">✨ Great job! All categories are grouped.</p>
+                <p className="text-sm font-bold text-emerald-300">All categories are grouped.</p>
                 <p className="text-xs text-white/60 mt-1">Every category has been categorized into Needs, Wants, Savings, or Bills.</p>
                 <button
                   type="button"
@@ -6989,14 +6987,14 @@ function CategoriesSection({
                               const newG = e.target.value as CategoryGroup
                               await updateCategory(c.id, { group: newG })
                             }}
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-sans font-semibold border cursor-pointer transition-all outline-none appearance-none pr-5 text-center ${badge.bg} ${badge.border} ${badge.text}`}
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-sans font-semibold border cursor-pointer transition-all outline-none appearance-none pr-5 text-center ${badge.bg} ${badge.border} ${badge.text}`}
                             title="Change budget framework group"
                           >
-                            <option value="ungrouped" className="bg-[#1E0C38] text-white">⚪ Ungrouped</option>
-                            <option value="needs" className="bg-[#1E0C38] text-teal-300">🎯 Needs</option>
-                            <option value="wants" className="bg-[#1E0C38] text-purple-300">🎨 Wants</option>
-                            <option value="savings" className="bg-[#1E0C38] text-amber-300">💰 Savings</option>
-                            <option value="bills" className="bg-[#1E0C38] text-blue-300">📄 Bills</option>
+                            <option value="ungrouped" className="bg-[#1E0C38] text-white">Ungrouped</option>
+                            <option value="needs" className="bg-[#1E0C38] text-teal-300">Needs</option>
+                            <option value="wants" className="bg-[#1E0C38] text-purple-300">Wants</option>
+                            <option value="savings" className="bg-[#1E0C38] text-amber-300">Savings</option>
+                            <option value="bills" className="bg-[#1E0C38] text-blue-300">Bills</option>
                           </select>
                           <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-white/50">▾</span>
                         </div>
@@ -7053,28 +7051,28 @@ function CategoriesSection({
                       onClick={() => updateCategory(c.id, { group: "needs" })}
                       className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-teal-500/15 hover:bg-teal-500/30 text-teal-300 border border-teal-500/30 transition-all cursor-pointer"
                     >
-                      🎯 Needs
+                      Needs
                     </button>
                     <button
                       type="button"
                       onClick={() => updateCategory(c.id, { group: "wants" })}
                       className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-purple-500/15 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 transition-all cursor-pointer"
                     >
-                      🎨 Wants
+                      Wants
                     </button>
                     <button
                       type="button"
                       onClick={() => updateCategory(c.id, { group: "savings" })}
                       className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 transition-all cursor-pointer"
                     >
-                      💰 Savings
+                      Savings
                     </button>
                     <button
                       type="button"
                       onClick={() => updateCategory(c.id, { group: "bills" })}
                       className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-blue-500/15 hover:bg-blue-500/30 text-blue-300 border border-blue-500/30 transition-all cursor-pointer"
                     >
-                      📄 Bills
+                      Bills
                     </button>
                   </div>
                 )}
