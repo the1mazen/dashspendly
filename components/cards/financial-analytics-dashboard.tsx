@@ -5516,7 +5516,7 @@ function CategoryBudgetGauges({
     return sorted.slice(0, 5).map((c) => {
       const spent = c.total_spent || 0
       const budget = c.budget && c.budget > 0 ? c.budget : undefined
-      const ratio = budget ? Math.min(1, spent / budget) : (spent > 0 ? 1 : 0)
+      const ratio = budget ? spent / budget : (spent > 0 ? 1 : 0)
       return {
         id: c.id,
         name: c.name,
@@ -5563,7 +5563,11 @@ function CategoryBudgetGauges({
       ) : (
         <div className="flex flex-col gap-4 mt-4">
           {displayList.map((item) => {
-            const pct = Math.round(item.ratio * 100)
+            const hasBudget = item.budget != null && item.budget > 0
+            const pct = hasBudget ? Math.round((item.spent / item.budget!) * 100) : 0
+            const fillPct = hasBudget
+              ? Math.min(100, Math.max(0, (item.spent / item.budget!) * 100))
+              : (item.spent > 0 ? 100 : 0)
             // Feature 7 color thresholds: <50% green (#4ADE80), 50-80% amber (#FACC15), >80% red (#F87171)
             const gaugeFillColor = pct < 50 ? "#4ADE80" : pct <= 80 ? "#FACC15" : "#F87171"
 
@@ -5590,13 +5594,14 @@ function CategoryBudgetGauges({
                 </div>
 
                 {/* Dynamic color fill Progress Bar */}
-                <div className="h-2 w-full rounded-full overflow-hidden bg-white/10 p-[1px]">
+                <div className="h-2 w-full rounded-full overflow-hidden bg-white/10">
                   <div
                     className="h-full rounded-full transition-all duration-500"
                     style={{
-                      width: `${item.budget != null ? Math.max(4, pct) : (item.spent > 0 ? 100 : 4)}%`,
+                      width: `${fillPct}%`,
+                      opacity: fillPct > 0 ? 1 : 0,
                       backgroundColor: gaugeFillColor,
-                      boxShadow: `0 0 10px ${gaugeFillColor}60`,
+                      boxShadow: fillPct > 0 ? `0 0 10px ${gaugeFillColor}60` : "none",
                     }}
                   />
                 </div>
@@ -7129,6 +7134,7 @@ function CategoriesSection({
                           className="h-full rounded-full bg-white/40"
                           style={{
                             width: `${Math.min(100, Math.max(0, (spent / c.budget) * 100))}%`,
+                            opacity: spent > 0 ? 1 : 0,
                           }}
                         />
                       </div>
