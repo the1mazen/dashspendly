@@ -489,6 +489,7 @@ function AddTransactionModal({
   const { accounts, categories, createTransaction, createSplitExpenseTransaction } = useFinanceData()
   const { profile } = useUserProfile()
   const { tokens } = useDashboardTheme()
+  const { startPageTour, isTourActive, currentTour, skipCurrentTour } = useTrialMode()
   const currencySymbol = getCurrencySymbol(profile.currency)
 
   const [newType, setNewType] = useState<"income" | "expense" | "expense_divider" | "transfer">("expense")
@@ -515,6 +516,19 @@ function AddTransactionModal({
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (isOpen) {
+      startPageTour('record_transaction')
+    }
+  }, [isOpen, startPageTour])
+
+  const handleClose = () => {
+    if (isTourActive && currentTour?.pageId === 'record_transaction') {
+      skipCurrentTour()
+    }
+    onClose()
+  }
 
   useEffect(() => {
     if (accounts.length > 0 && !newAccountId) {
@@ -712,7 +726,7 @@ function AddTransactionModal({
             <p className="text-xs font-sans text-white/70 mt-0.5">Post an expense, income, split divider, or transfer</p>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="size-8 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
           >
             ✕
@@ -728,7 +742,7 @@ function AddTransactionModal({
 
         <form onSubmit={handleSubmit} className="mt-5 space-y-4">
           {/* Type Selector */}
-          <div>
+          <div data-tour="tour-modal-tx-type">
             <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1.5 font-sans text-white/75">
               Type
             </label>
@@ -1020,7 +1034,7 @@ function AddTransactionModal({
           ) : (
             /* ─── STANDARD TRANSACTION MODES (Income, Expense, Transfer) ─── */
             <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div data-tour="tour-modal-tx-amount-date" className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* Amount */}
                 <div>
                   <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
@@ -1110,7 +1124,10 @@ function AddTransactionModal({
                     </motion.div>
                   )}
                 </div>
+              </div>
 
+              {/* Account & Category */}
+              <div data-tour="tour-modal-tx-account-category" className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* Source Account */}
                 <div>
                   <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
@@ -1192,7 +1209,7 @@ function AddTransactionModal({
               )}
 
               {/* Note / Description */}
-              <div>
+              <div data-tour="tour-modal-tx-note">
                 <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
                   Description / Note
                 </label>
@@ -1210,7 +1227,7 @@ function AddTransactionModal({
 
           {/* FEATURE 1: OPTIONAL FEE SYSTEM & INSTAPAY TOGGLE */}
           {(newType === "expense" || newType === "transfer") && (
-            <div className="p-3.5 rounded-2xl border" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+            <div data-tour="tour-modal-tx-fee" className="p-3.5 rounded-2xl border" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-bold text-white flex items-center gap-1.5">
                   <Receipt className="size-3.5 text-[#FEF08A]" />
@@ -1318,12 +1335,13 @@ function AddTransactionModal({
           <div className="flex items-center justify-end gap-3 pt-3 border-t" style={{ borderColor: tokens.border }}>
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="px-4 py-2.5 rounded-xl text-xs font-semibold text-white/70 hover:text-white transition-colors cursor-pointer"
             >
               Cancel
             </button>
             <button
+              data-tour="tour-modal-tx-submit"
               type="submit"
               disabled={isSubmitting || (newType === "expense_divider" && (Math.abs(remainingToAllocate) > 0.001 || formulaResult <= 0 || !isRemainingValid))}
               className="px-6 py-2.5 rounded-xl text-xs font-bold transition-all font-sans shadow-lg cursor-pointer hover:scale-[1.02] text-[#120824] disabled:opacity-50"
@@ -5966,7 +5984,16 @@ function AccountsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
                   </div>
 
                   <button
-                    onClick={() => deleteAccount(acc.id)}
+                    onClick={async (e) => {
+                      e.stopPropagation()
+                      if (window.confirm(`Are you sure you want to permanently delete "${acc.name}"? This will remove the account and all associated transactions, bills, and held funds from cloud database and local storage.`)) {
+                        try {
+                          await deleteAccount(acc.id)
+                        } catch (err: any) {
+                          alert(err?.message || "Failed to delete account.")
+                        }
+                      }
+                    }}
                     className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg transition-all cursor-pointer hover:bg-red-500/20 text-red-400"
                     title="Delete account"
                   >

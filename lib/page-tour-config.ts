@@ -1,4 +1,4 @@
-﻿export interface TourStep {
+export interface TourStep {
   targetId: string // data-tour attribute value
   title: string
   description: string
@@ -182,6 +182,48 @@ export const PAGE_TOURS: Record<string, PageTour> = {
         targetId: 'tour-danger-zone',
         title: 'Account Security & Data',
         description: 'View your profile details, manage sessions, or reset all your financial data safely when needed.',
+        placement: 'top',
+      },
+    ],
+  },
+  record_transaction: {
+    pageId: 'record_transaction',
+    title: 'Record Transaction Guide',
+    steps: [
+      {
+        targetId: 'tour-modal-tx-type',
+        title: 'Transaction Types',
+        description: 'Choose between Income, Expense, Expense Divider (auto-splits residual spending), or Transfer between your accounts.',
+        placement: 'bottom',
+      },
+      {
+        targetId: 'tour-modal-tx-amount-date',
+        title: 'Amount & Date Selection',
+        description: 'Enter the transaction amount and pick a date using quick shortcuts (Yesterday, Today) or a custom calendar date.',
+        placement: 'bottom',
+      },
+      {
+        targetId: 'tour-modal-tx-account-category',
+        title: 'Account & Category',
+        description: 'Select the funding account and categorize this transaction to keep your budget allocations and analytics precise.',
+        placement: 'bottom',
+      },
+      {
+        targetId: 'tour-modal-tx-note',
+        title: 'Description & Notes',
+        description: 'Add an optional description or note (e.g., Monthly cloud server, Dinner with friends) for easy search and tracking.',
+        placement: 'top',
+      },
+      {
+        targetId: 'tour-modal-tx-fee',
+        title: 'Optional Transaction Fees',
+        description: 'Attach manual flat or percentage fees, or toggle InstaPay for automatic Egyptian banking fee calculation.',
+        placement: 'top',
+      },
+      {
+        targetId: 'tour-modal-tx-submit',
+        title: 'Save & Instant Sync',
+        description: 'Click Save Transaction to log your activity and instantly update your account balances and cash flow in real-time.',
         placement: 'top',
       },
     ],

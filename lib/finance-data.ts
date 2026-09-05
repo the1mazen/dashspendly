@@ -700,18 +700,82 @@ function useFinanceDataInternal() {
       try {
         const userId = await resolveCurrentUserId()
         if (userId && isValidUUID(accountId)) {
-          await supabase.from("accounts").delete().eq("id", accountId).eq("user_id", userId)
+          // 1. Delete held fund history for any held funds in this account
+          const { data: userHeldFunds } = await supabase
+            .from("held_funds")
+            .select("id")
+            .eq("account_id", accountId)
+            .eq("user_id", userId)
+
+          if (userHeldFunds && userHeldFunds.length > 0) {
+            const hfIds = userHeldFunds.map((h) => h.id)
+            await supabase
+              .from("held_fund_history")
+              .delete()
+              .in("held_fund_id", hfIds)
+              .eq("user_id", userId)
+
+            await supabase
+              .from("held_funds")
+              .delete()
+              .eq("account_id", accountId)
+              .eq("user_id", userId)
+          }
+
+          // 2. Delete bills referencing this account
+          await supabase
+            .from("bills")
+            .delete()
+            .or(`account_id.eq.${accountId},destination_account_id.eq.${accountId}`)
+            .eq("user_id", userId)
+
+          // 3. Delete transactions referencing this account
+          await supabase
+            .from("transactions")
+            .delete()
+            .or(`account_id.eq.${accountId},destination_account_id.eq.${accountId}`)
+            .eq("user_id", userId)
+
+          // 4. Delete the account record
+          const { error: accError } = await supabase
+            .from("accounts")
+            .delete()
+            .eq("id", accountId)
+            .eq("user_id", userId)
+
+          if (accError) {
+            console.error("Supabase account delete error:", accError)
+            throw new Error(`Failed to delete account: ${accError.message}`)
+          }
         }
+        await fetchData()
       } catch (err) {
-        console.warn("Supabase account delete error:", err)
+        console.error("deleteAccount error:", err)
+        throw err
       }
+    } else {
+      setAccounts((prev) => {
+        const updated = prev.filter((a) => a.id !== accountId)
+        saveLocal(STORAGE_ACCOUNTS_KEY, updated)
+        return updated
+      })
+      setTransactions((prev) => {
+        const updated = prev.filter((t) => t.account_id !== accountId && t.destination_account_id !== accountId)
+        saveLocal(STORAGE_TRANSACTIONS_KEY, updated)
+        return updated
+      })
+      setBills((prev) => {
+        const updated = prev.filter((b) => b.account_id !== accountId && b.destination_account_id !== accountId)
+        saveLocal(STORAGE_BILLS_KEY, updated)
+        return updated
+      })
+      setHeldFunds((prev) => {
+        const updated = prev.filter((h) => h.account_id !== accountId)
+        saveLocal(STORAGE_HELD_FUNDS_KEY, updated)
+        return updated
+      })
     }
-    setAccounts((prev) => {
-      const updated = prev.filter((a) => a.id !== accountId)
-      saveLocal(STORAGE_ACCOUNTS_KEY, updated)
-      return updated
-    })
-  }, [])
+  }, [fetchData])
 
   // ─────────────────────────────────────────────────────────────────
   // CATEGORIES CRUD
@@ -858,18 +922,43 @@ function useFinanceDataInternal() {
       try {
         const userId = await resolveCurrentUserId()
         if (userId && isValidUUID(categoryId)) {
-          await supabase.from("categories").delete().eq("id", categoryId).eq("user_id", userId)
+          // 1. Clear category_id on transactions and bills
+          await supabase
+            .from("transactions")
+            .update({ category_id: null })
+            .eq("category_id", categoryId)
+            .eq("user_id", userId)
+
+          await supabase
+            .from("bills")
+            .update({ category_id: null })
+            .eq("category_id", categoryId)
+            .eq("user_id", userId)
+
+          // 2. Delete the category
+          const { error: catError } = await supabase
+            .from("categories")
+            .delete()
+            .eq("id", categoryId)
+            .eq("user_id", userId)
+
+          if (catError) {
+            console.error("Supabase category delete error:", catError)
+            throw new Error(`Failed to delete category: ${catError.message}`)
+          }
         }
         await fetchData()
       } catch (err) {
-        console.warn("Supabase category delete error:", err)
+        console.error("deleteCategory error:", err)
+        throw err
       }
+    } else {
+      setCategories((prev) => {
+        const updated = prev.filter((c) => c.id !== categoryId)
+        saveLocal(STORAGE_CATEGORIES_KEY, updated)
+        return updated
+      })
     }
-    setCategories((prev) => {
-      const updated = prev.filter((c) => c.id !== categoryId)
-      saveLocal(STORAGE_CATEGORIES_KEY, updated)
-      return updated
-    })
   }, [fetchData])
 
   // ─────────────────────────────────────────────────────────────────
