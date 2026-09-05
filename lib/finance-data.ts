@@ -779,12 +779,12 @@ function useFinanceDataInternal() {
         return updated
       })
       setTransactions((prev) => {
-        const updated = prev.filter((t) => t.account_id !== accountId && t.destination_account_id !== accountId)
+        const updated = prev.filter((t) => t.account_id !== accountId && (t as any).destination_account_id !== accountId)
         saveLocal(STORAGE_TRANSACTIONS_KEY, updated)
         return updated
       })
       setBills((prev) => {
-        const updated = prev.filter((b) => b.account_id !== accountId && b.destination_account_id !== accountId)
+        const updated = prev.filter((b) => b.account_id !== accountId && (b as any).destination_account_id !== accountId)
         saveLocal(STORAGE_BILLS_KEY, updated)
         return updated
       })

@@ -199,7 +199,7 @@ export function Active503020Tracker() {
   let actualSavings = 0
 
   cycleExpenses.forEach((t) => {
-    const b = catBucketMap.get(t.category_id) || autoAssignBucket(t.category_name || "")
+    const b = (t.category_id ? catBucketMap.get(t.category_id) : undefined) || autoAssignBucket(t.category_name || "")
     const amt = Math.abs(t.amount)
     if (b === "needs") actualNeeds += amt
     else if (b === "wants") actualWants += amt
