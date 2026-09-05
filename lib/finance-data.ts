@@ -1640,6 +1640,65 @@ function useFinanceDataInternal() {
     }
   }, [fetchData])
 
+  const batchDeleteTransactions = useCallback(async (transactionIds: string[]) => {
+    if (!transactionIds || transactionIds.length === 0) return
+
+    if (isSupabaseConfigured && supabase) {
+      const userId = await resolveCurrentUserId()
+      if (!userId) throw new Error("User authentication required.")
+
+      // 1. Fetch transactions to identify any linked fee_pair_id or transfer_pair_id
+      const { data: rows } = await supabase
+        .from("transactions")
+        .select("id, fee_pair_id, transfer_pair_id")
+        .in("id", transactionIds)
+        .eq("user_id", userId)
+
+      const feePairIds = Array.from(
+        new Set((rows || []).map((r: any) => r.fee_pair_id).filter(Boolean))
+      )
+      const transferPairIds = Array.from(
+        new Set((rows || []).map((r: any) => r.transfer_pair_id).filter(Boolean))
+      )
+
+      // 2. Delete linked fee pairs completely
+      if (feePairIds.length > 0) {
+        await supabase
+          .from("transactions")
+          .delete()
+          .in("fee_pair_id", feePairIds)
+          .eq("user_id", userId)
+      }
+
+      // 3. Delete linked transfer pairs completely
+      if (transferPairIds.length > 0) {
+        await supabase
+          .from("transactions")
+          .delete()
+          .in("transfer_pair_id", transferPairIds)
+          .eq("user_id", userId)
+      }
+
+      // 4. Delete all selected transactions completely from Supabase
+      const { error } = await supabase
+        .from("transactions")
+        .delete()
+        .in("id", transactionIds)
+        .eq("user_id", userId)
+
+      if (error) throw new Error(error.message || "Failed to delete selected transactions from Supabase.")
+
+      await fetchData()
+    } else {
+      setTransactions((prev) => {
+        const idSet = new Set(transactionIds)
+        const updated = prev.filter((t) => !idSet.has(t.id))
+        saveLocal(STORAGE_TRANSACTIONS_KEY, updated)
+        return updated
+      })
+    }
+  }, [fetchData])
+
   const deleteTransaction = useCallback(async (transactionId: string) => {
     if (isSupabaseConfigured && supabase) {
       const userId = await resolveCurrentUserId()
@@ -3348,6 +3407,7 @@ function useFinanceDataInternal() {
     createSplitExpenseTransaction,
     updateTransaction,
     batchUpdateTransactionDates,
+    batchDeleteTransactions,
     deleteTransaction,
     createHeldFund,
     renameHeldFund,

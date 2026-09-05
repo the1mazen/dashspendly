@@ -4315,7 +4315,7 @@ function AllTransactionsModal({
   onDeleteTransaction: (tx: Transaction) => void
 }) {
   const { tokens } = useDashboardTheme()
-  const { batchUpdateTransactionDates } = useFinanceData()
+  const { batchUpdateTransactionDates, batchDeleteTransactions } = useFinanceData()
   const [filter, setFilter] = useState<"all" | "expense" | "income">("all")
   const [search, setSearch] = useState("")
 
@@ -4324,6 +4324,7 @@ function AllTransactionsModal({
   const [isBulkDateModalOpen, setIsBulkDateModalOpen] = useState(false)
   const [bulkDate, setBulkDate] = useState(new Date().toISOString().split("T")[0])
   const [isBulkSubmitting, setIsBulkSubmitting] = useState(false)
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false)
   const [bulkError, setBulkError] = useState<string | null>(null)
   const [bulkSuccessMsg, setBulkSuccessMsg] = useState<string | null>(null)
 
@@ -4392,6 +4393,28 @@ function AllTransactionsModal({
       setBulkError(err.message || "Failed to update transaction dates.")
     } finally {
       setIsBulkSubmitting(false)
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedTxIds.size === 0) return
+    const count = selectedTxIds.size
+    const confirmed = window.confirm(
+      `Permanently delete ${count} selected transaction${count > 1 ? "s" : ""} from Supabase? This action cannot be undone.`
+    )
+    if (!confirmed) return
+    setIsBulkDeleting(true)
+    setBulkError(null)
+    try {
+      await batchDeleteTransactions(Array.from(selectedTxIds))
+      setSelectedTxIds(new Set())
+      setBulkSuccessMsg(`Successfully deleted ${count} transaction${count > 1 ? "s" : ""} from Supabase.`)
+      setTimeout(() => setBulkSuccessMsg(null), 3500)
+    } catch (err: any) {
+      setBulkError(err.message || "Failed to delete transactions.")
+      setTimeout(() => setBulkError(null), 4000)
+    } finally {
+      setIsBulkDeleting(false)
     }
   }
 
@@ -4519,6 +4542,17 @@ function AllTransactionsModal({
 
                   <button
                     type="button"
+                    onClick={handleBulkDelete}
+                    disabled={isBulkDeleting}
+                    className="px-3 py-1 text-xs font-bold rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 flex items-center gap-1.5 transition-all shadow-sm cursor-pointer hover:scale-[1.02] disabled:opacity-50"
+                    title={`Delete ${selectedTxIds.size} selected transaction${selectedTxIds.size > 1 ? "s" : ""}`}
+                  >
+                    <Trash2 className="size-3.5" />
+                    {isBulkDeleting ? "Deleting..." : "Delete"}
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={() => setSelectedTxIds(new Set())}
                     className="p-1 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
                     title="Clear selection"
@@ -4529,6 +4563,19 @@ function AllTransactionsModal({
               </motion.div>
             )}
           </AnimatePresence>
+
+          {bulkError && !isBulkDateModalOpen && (
+            <div className="p-2.5 px-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-200 text-xs flex items-center gap-2">
+              <AlertCircle className="size-4 shrink-0 text-red-400" />
+              <span>{bulkError}</span>
+            </div>
+          )}
+          {bulkSuccessMsg && !isBulkDateModalOpen && (
+            <div className="p-2.5 px-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-xs flex items-center gap-2">
+              <CheckCircle2 className="size-4 shrink-0 text-emerald-400" />
+              <span>{bulkSuccessMsg}</span>
+            </div>
+          )}
         </div>
 
         {/* Scrollable Transaction List */}
@@ -4792,7 +4839,7 @@ function RecentTransactionsFeed({
   onDeleteTransaction: (tx: Transaction) => void
 }) {
   const { tokens } = useDashboardTheme()
-  const { batchUpdateTransactionDates } = useFinanceData()
+  const { batchUpdateTransactionDates, batchDeleteTransactions } = useFinanceData()
   const [filter, setFilter] = useState<"all" | "expense" | "income">("all")
   const [search, setSearch] = useState("")
   const [visibleLimit, setVisibleLimit] = useState(12)
@@ -4805,6 +4852,7 @@ function RecentTransactionsFeed({
   const [isBulkDateModalOpen, setIsBulkDateModalOpen] = useState(false)
   const [bulkDate, setBulkDate] = useState(new Date().toISOString().split("T")[0])
   const [isBulkSubmitting, setIsBulkSubmitting] = useState(false)
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false)
   const [bulkError, setBulkError] = useState<string | null>(null)
   const [bulkSuccessMsg, setBulkSuccessMsg] = useState<string | null>(null)
 
@@ -4884,6 +4932,28 @@ function RecentTransactionsFeed({
       setBulkError(err.message || "Failed to update transaction dates.")
     } finally {
       setIsBulkSubmitting(false)
+    }
+  }
+
+  const handleBulkDelete = async () => {
+    if (selectedTxIds.size === 0) return
+    const count = selectedTxIds.size
+    const confirmed = window.confirm(
+      `Permanently delete ${count} selected transaction${count > 1 ? "s" : ""} from Supabase? This action cannot be undone.`
+    )
+    if (!confirmed) return
+    setIsBulkDeleting(true)
+    setBulkError(null)
+    try {
+      await batchDeleteTransactions(Array.from(selectedTxIds))
+      setSelectedTxIds(new Set())
+      setBulkSuccessMsg(`Successfully deleted ${count} transaction${count > 1 ? "s" : ""} from Supabase.`)
+      setTimeout(() => setBulkSuccessMsg(null), 3500)
+    } catch (err: any) {
+      setBulkError(err.message || "Failed to delete transactions.")
+      setTimeout(() => setBulkError(null), 4000)
+    } finally {
+      setIsBulkDeleting(false)
     }
   }
 
@@ -5012,6 +5082,17 @@ function RecentTransactionsFeed({
 
                   <button
                     type="button"
+                    onClick={handleBulkDelete}
+                    disabled={isBulkDeleting}
+                    className="px-3 py-1 text-xs font-bold rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/40 flex items-center gap-1.5 transition-all shadow-sm cursor-pointer hover:scale-[1.02] disabled:opacity-50"
+                    title={`Delete ${selectedTxIds.size} selected transaction${selectedTxIds.size > 1 ? "s" : ""}`}
+                  >
+                    <Trash2 className="size-3.5" />
+                    {isBulkDeleting ? "Deleting..." : "Delete"}
+                  </button>
+
+                  <button
+                    type="button"
                     onClick={() => setSelectedTxIds(new Set())}
                     className="p-1 rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
                     title="Clear selection"
@@ -5022,6 +5103,19 @@ function RecentTransactionsFeed({
               </motion.div>
             )}
           </AnimatePresence>
+
+          {bulkError && !isBulkDateModalOpen && (
+            <div className="p-2.5 px-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-200 text-xs flex items-center gap-2">
+              <AlertCircle className="size-4 shrink-0 text-red-400" />
+              <span>{bulkError}</span>
+            </div>
+          )}
+          {bulkSuccessMsg && !isBulkDateModalOpen && (
+            <div className="p-2.5 px-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-200 text-xs flex items-center gap-2">
+              <CheckCircle2 className="size-4 shrink-0 text-emerald-400" />
+              <span>{bulkSuccessMsg}</span>
+            </div>
+          )}
         </div>
 
         {/* Itemized Rows with Multi-Select Checkbox, Edit & Delete actions */}
