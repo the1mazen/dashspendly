@@ -39,6 +39,12 @@ export function TrialSetupWizard({
   const [isCreatingAccount, setIsCreatingAccount] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
 
+  useEffect(() => {
+    if (profile.currency) {
+      setAccountCurrency(profile.currency)
+    }
+  }, [profile.currency])
+
   if (!isWizardOpen) return null
 
   const hasAccount = accounts.length > 0

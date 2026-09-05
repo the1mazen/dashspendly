@@ -226,6 +226,16 @@ export function getCurrencySymbol(curr?: string): string {
       return "AED "
     case "SAR":
       return "SAR "
+    case "CAD":
+      return "C$ "
+    case "AUD":
+      return "A$ "
+    case "JPY":
+      return "¥ "
+    case "KWD":
+      return "KWD "
+    case "QAR":
+      return "QAR "
     default:
       return curr ? `${curr} ` : "EGP "
   }
@@ -633,6 +643,28 @@ function useFinanceDataInternal() {
 
   useEffect(() => {
     fetchData()
+
+    const handleProfileUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent<any>
+      if (customEvent.detail?.currency) {
+        const newCurr = customEvent.detail.currency
+        setAccounts((prev) => prev.map((a) => ({ ...a, currency: newCurr })))
+        setCategories((prev) => prev.map((c) => ({ ...c, currency: newCurr })))
+      }
+      fetchData()
+    }
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("spendly_profile_updated", handleProfileUpdate)
+      window.addEventListener("storage", handleProfileUpdate)
+    }
+
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("spendly_profile_updated", handleProfileUpdate)
+        window.removeEventListener("storage", handleProfileUpdate)
+      }
+    }
   }, [fetchData])
 
   const refreshFinanceData = useCallback(async () => {

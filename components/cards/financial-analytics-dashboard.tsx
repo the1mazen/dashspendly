@@ -384,6 +384,11 @@ function getCurrencySymbol(curr?: string) {
   if (c === "GBP") return "£"
   if (c === "SAR") return "SAR "
   if (c === "AED") return "AED "
+  if (c === "CAD") return "C$"
+  if (c === "AUD") return "A$"
+  if (c === "JPY") return "¥"
+  if (c === "KWD") return "KWD "
+  if (c === "QAR") return "QAR "
   return `${c} `
 }
 
@@ -2277,14 +2282,18 @@ function MonthSummaryModal({
                   />
                   <YAxis stroke="rgba(255,255,255,0.6)" fontSize={10} tickLine={false} />
                   <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#160b29",
-                      borderColor: "rgba(255,255,255,0.15)",
-                      borderRadius: "12px",
-                      fontSize: "11px",
-                      color: "#FFFFFF",
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null
+                      const val = Number(payload[0]?.value || 0)
+                      return (
+                        <div className="rounded-xl border p-2.5 text-xs shadow-2xl backdrop-blur-md bg-[#160b29]/95 border-white/20 text-white min-w-[140px]">
+                          <p className="text-xs font-bold text-white mb-1">{label}</p>
+                          <p className="text-[11px] font-medium text-emerald-300">
+                            Spent: <span className="font-bold text-white">{currencySymbol}{val.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          </p>
+                        </div>
+                      )
                     }}
-                    formatter={(val: any) => [`${currencySymbol}${Number(val || 0).toFixed(2)}`, "Spent"]}
                   />
                   <Bar dataKey="amount" radius={[6, 6, 0, 0]}>
                     {categoryChartData.map((_, index) => (
@@ -6015,22 +6024,27 @@ function AccountsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
                     </div>
                   </div>
 
-                  <button
-                    onClick={async (e) => {
-                      e.stopPropagation()
-                      if (window.confirm(`Are you sure you want to permanently delete "${acc.name}"? This will remove the account and all associated transactions, bills, and held funds from cloud database and local storage.`)) {
-                        try {
-                          await deleteAccount(acc.id)
-                        } catch (err: any) {
-                          alert(err?.message || "Failed to delete account.")
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-white/15 bg-white/10 text-white/80">
+                      {acc.currency || profile.currency || "USD"}
+                    </span>
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation()
+                        if (window.confirm(`Are you sure you want to permanently delete "${acc.name}"? This will remove the account and all associated transactions, bills, and held funds from cloud database and local storage.`)) {
+                          try {
+                            await deleteAccount(acc.id)
+                          } catch (err: any) {
+                            alert(err?.message || "Failed to delete account.")
+                          }
                         }
-                      }
-                    }}
-                    className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg transition-all cursor-pointer hover:bg-red-500/20 text-red-400"
-                    title="Delete account"
-                  >
-                    <Trash2 className="size-4" />
-                  </button>
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg transition-all cursor-pointer hover:bg-red-500/20 text-red-400"
+                      title="Delete account"
+                    >
+                      <Trash2 className="size-4" />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="relative z-10 pt-4 border-t flex items-end justify-between" style={{ borderColor: tokens.borderNested }}>
@@ -6840,6 +6854,7 @@ function CategoriesSection({
 
 function SettingsSection({ onNavigate }: { onNavigate: (s: SectionId) => void }) {
   const { profile, updateProfile } = useUserProfile()
+  const { refreshFinanceData } = useFinanceData()
   const { isDarkMode, isVideoEnabled, toggleTheme, toggleVideo, tokens } = useDashboardTheme()
 
   const [fullName, setFullName] = useState(profile.fullName)
@@ -6863,6 +6878,9 @@ function SettingsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
     setSavedSuccess(false)
     try {
       await updateProfile({ fullName, currency })
+      if (refreshFinanceData) {
+        await refreshFinanceData()
+      }
       setSavedSuccess(true)
       setTimeout(() => setSavedSuccess(false), 3000)
     } catch (err: any) {
@@ -6966,6 +6984,11 @@ function SettingsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
                 <option value="GBP" className="bg-[#1E0C38] text-white">GBP (British Pound)</option>
                 <option value="SAR" className="bg-[#1E0C38] text-white">SAR (Saudi Riyal)</option>
                 <option value="AED" className="bg-[#1E0C38] text-white">AED (UAE Dirham)</option>
+                <option value="CAD" className="bg-[#1E0C38] text-white">CAD (Canadian Dollar)</option>
+                <option value="AUD" className="bg-[#1E0C38] text-white">AUD (Australian Dollar)</option>
+                <option value="JPY" className="bg-[#1E0C38] text-white">JPY (Japanese Yen)</option>
+                <option value="KWD" className="bg-[#1E0C38] text-white">KWD (Kuwaiti Dinar)</option>
+                <option value="QAR" className="bg-[#1E0C38] text-white">QAR (Qatari Riyal)</option>
               </select>
             </div>
           </div>

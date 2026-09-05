@@ -183,23 +183,64 @@ export function useUserProfile() {
 
         const userId = await resolveCurrentUserId()
         if (userId) {
+          // 1. Update Supabase profiles table
           try {
-            await supabase.from("profiles").upsert({
+            const { error: upsertError } = await supabase.from("profiles").upsert({
               id: userId,
               full_name: updated.fullName,
               username: cleanUser,
+              currency: updated.currency,
               default_currency: updated.currency,
               language: updated.language,
               phone: updated.phone,
             })
+            if (upsertError) {
+              await supabase.from("profiles").upsert({
+                id: userId,
+                full_name: updated.fullName,
+                username: cleanUser,
+                currency: updated.currency,
+                language: updated.language,
+                phone: updated.phone,
+              })
+            }
           } catch {
             // Ignore profiles table schema variations
+          }
+
+          // 2. Update user's accounts currency in Supabase
+          if (updates.currency) {
+            try {
+              await supabase
+                .from("accounts")
+                .update({ currency: updates.currency })
+                .eq("user_id", userId)
+            } catch (err) {
+              console.warn("Failed to update accounts currency in Supabase:", err)
+            }
           }
         }
       } catch (err) {
         console.warn("Error updating Supabase user metadata:", err)
       }
     }
+
+    // 3. Update local accounts currency
+    if (updates.currency && typeof window !== "undefined") {
+      try {
+        const localAccountsRaw = localStorage.getItem("spendly_accounts")
+        if (localAccountsRaw) {
+          const localAccounts = JSON.parse(localAccountsRaw)
+          if (Array.isArray(localAccounts)) {
+            const updatedAccounts = localAccounts.map((a: any) => ({ ...a, currency: updates.currency }))
+            localStorage.setItem("spendly_accounts", JSON.stringify(updatedAccounts))
+          }
+        }
+      } catch {
+        // Ignore
+      }
+    }
+
     return updated
   }, [])
 
