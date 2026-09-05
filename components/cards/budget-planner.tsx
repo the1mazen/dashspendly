@@ -234,7 +234,11 @@ export function Active503020Tracker() {
   }
 
   return (
-    <div className="p-4 sm:p-5 rounded-2xl border space-y-4 backdrop-blur-md" style={{ backgroundColor: tokens.nestedSurface, borderColor: "rgba(94, 234, 212, 0.35)" }}>
+    <div
+      data-tour="tour-active-tracker"
+      className="p-4 sm:p-5 rounded-2xl border space-y-4 backdrop-blur-md"
+      style={{ backgroundColor: tokens.nestedSurface, borderColor: "rgba(94, 234, 212, 0.35)" }}
+    >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 border-b pb-3" style={{ borderColor: tokens.borderNested }}>
         <div>
           <div className="flex items-center gap-2">
@@ -1862,6 +1866,7 @@ export function BudgetPlannerSection({
 
       {/* ─── SECTION 1: PLAN BASICS ─── */}
       <motion.div
+        data-tour="tour-create-plan-btn"
         {...cardEntrance(0.04)}
         className="rounded-3xl p-6 sm:p-7 border backdrop-blur-xl transition-all"
         style={{
@@ -2285,7 +2290,7 @@ export function BudgetPlannerSection({
 
           {/* Change 5: 50/30/20 & Bills Progress Indicators with Live Fill Bars & Colors */}
           {framework === "50/30/20" && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-4 rounded-2xl border" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+            <div data-tour="tour-plan-buckets" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-4 rounded-2xl border" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
               {bucketIndicators.map((bucket) => (
                 <div key={bucket.key} className="p-3.5 rounded-xl border bg-white/5 space-y-2" style={{ borderColor: tokens.borderNested }}>
                   <div className="flex items-center justify-between">

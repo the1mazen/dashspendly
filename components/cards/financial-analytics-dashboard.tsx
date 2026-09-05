@@ -35,6 +35,9 @@ import { supabase, isSupabaseConfigured } from "@/lib/supabase"
 import { ManagePlansModal, BudgetPlannerSection, Active503020Tracker } from "./budget-planner"
 import { AuthGuard } from "@/components/auth-guard"
 import { clearClientAuthSession } from "@/lib/auth-session"
+import { TrialModeProvider, useTrialMode } from "@/lib/trial-mode-context"
+import { SpotlightTour } from "@/components/trial/spotlight-tour"
+import { TrialSetupWizard } from "@/components/trial/trial-setup-wizard"
 
 // ─── Design Tokens: Exact Reproduction of 2.jpeg ──────────────────
 
@@ -3982,6 +3985,7 @@ function NetWorthHeroCard({
 
   return (
     <motion.div
+      data-tour="tour-net-worth"
       {...cardEntrance(0.05)}
       className="relative rounded-3xl p-6 sm:p-7 border backdrop-blur-xl hover:scale-[1.01] transition-transform duration-300 group"
       style={{
@@ -4151,6 +4155,7 @@ function NetWorthHeroCard({
         </div>
 
         <button
+          data-tour="tour-quick-actions"
           onClick={onAddTransaction}
           className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all font-sans cursor-pointer shadow-lg bg-black/40 hover:bg-black/55 border border-white/20 hover:border-white/30 text-white hover:scale-[1.02]"
         >
@@ -4806,6 +4811,7 @@ function RecentTransactionsFeed({
   return (
     <>
       <motion.div
+        data-tour="tour-recent-activity"
         {...cardEntrance(0.12)}
         className="rounded-3xl border p-5 lg:p-6 flex flex-col hover:scale-[1.01] transition-transform duration-300 backdrop-blur-xl"
         style={{
@@ -5223,6 +5229,7 @@ function ActiveAccountsDeck({
 
   return (
     <motion.div
+      data-tour="tour-accounts-summary"
       {...cardEntrance(0.18)}
       className="rounded-3xl border p-5 lg:p-6 flex flex-col justify-between hover:scale-[1.01] transition-transform duration-300 backdrop-blur-xl"
       style={{
@@ -5609,6 +5616,7 @@ function BillsSection({ onNavigate }: { onNavigate: (s: SectionId) => void }) {
     <div className="flex flex-col gap-6">
       <SectionHeader title="Planned Bills & Incomes" subtitle="Scheduled obligations, recurring income, and planned transfers">
         <button
+          data-tour="tour-add-bill-btn"
           onClick={() => setAddBillOpen(true)}
           className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all font-sans cursor-pointer shadow-lg hover:scale-[1.02] text-[#120824]"
           style={{ background: tokens.dashboardActivePill }}
@@ -5646,7 +5654,7 @@ function BillsSection({ onNavigate }: { onNavigate: (s: SectionId) => void }) {
       </div>
 
       {/* 3 Summary Cards (Current Calendar Month Only) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div data-tour="tour-bills-summary" className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {/* Planned Income */}
         <motion.div
           {...cardEntrance(0.05)}
@@ -5692,6 +5700,9 @@ function BillsSection({ onNavigate }: { onNavigate: (s: SectionId) => void }) {
           </p>
         </motion.div>
       </div>
+
+      {/* 3-Tier Bills Timeline */}
+      <div data-tour="tour-bills-timeline" className="flex flex-col gap-6">
 
       {/* 1. Overdue Section (Red Highlight, Top) */}
       {overdueBills.length > 0 && (
@@ -5819,6 +5830,7 @@ function BillsSection({ onNavigate }: { onNavigate: (s: SectionId) => void }) {
           </div>
         </details>
       )}
+      </div>
 
       {/* Modals */}
       <AddBillModal isOpen={addBillOpen} onClose={() => setAddBillOpen(false)} />
@@ -5911,6 +5923,7 @@ function AccountsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
       <div className="flex flex-col gap-5">
         <SectionHeader title="Accounts & Liquidity" subtitle="All connected bank vaults, credit lines, and cash stores">
           <button
+            data-tour="tour-add-account-btn"
             onClick={() => setAddAccOpen(true)}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all font-sans cursor-pointer shadow-lg hover:scale-[1.02] text-[#120824]"
             style={{ background: tokens.dashboardActivePill }}
@@ -5920,7 +5933,7 @@ function AccountsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
           </button>
         </SectionHeader>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div data-tour="tour-accounts-grid" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {accounts.map((acc, i) => {
             const visual = getAccountVisual(acc.type, acc.name)
             const linkedHeldFunds = heldFunds.filter((hf) => hf.account_id === acc.id)
@@ -5988,7 +6001,7 @@ function AccountsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
       </div>
 
       {/* ─── FEATURE 2: HELD FUNDS SYSTEM (with Rename & Delete) ─── */}
-      <div className="flex flex-col gap-5 pt-4 border-t" style={{ borderColor: tokens.borderNested }}>
+      <div data-tour="tour-held-funds-section" className="flex flex-col gap-5 pt-4 border-t" style={{ borderColor: tokens.borderNested }}>
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-lg font-bold font-display text-white flex items-center gap-2">
@@ -6563,6 +6576,7 @@ function CategoriesSection({
 
           {/* Manage Plans Button */}
           <button
+            data-tour="tour-category-plans-btn"
             type="button"
             onClick={() => setManagePlansOpen(true)}
             className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all font-sans cursor-pointer shadow-md bg-white/10 hover:bg-white/20 text-white hover:scale-[1.02]"
@@ -6600,6 +6614,7 @@ function CategoriesSection({
 
       {/* Category Creation Card */}
       <motion.div
+        data-tour="tour-add-category-btn"
         {...cardEntrance(0.05)}
         className="rounded-3xl p-6 border backdrop-blur-xl hover:scale-[1.01] transition-transform duration-300"
         style={{ background: tokens.cardGradient, borderColor: tokens.border, boxShadow: tokens.cardShadow }}
@@ -6655,13 +6670,13 @@ function CategoriesSection({
             className="w-full px-5 py-2.5 rounded-xl text-xs font-bold text-[#120824] shadow-lg cursor-pointer transition-all"
             style={{ background: tokens.dashboardActivePill }}
           >
-            {isSubmitting ? "Saving..." : "Create Category"}
+            {isSubmitting ? "Creating..." : "Create Category"}
           </button>
         </form>
       </motion.div>
 
-      {/* Categories Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* Categories Cards Grid */}
+      <div data-tour="tour-categories-grid" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
         {categories.length === 0 ? (
           <div className="col-span-full p-8 rounded-3xl border text-center backdrop-blur-xl" style={{ background: tokens.cardGradient, borderColor: tokens.border }}>
             <p className="text-sm text-white/60">No categories created yet. Create your first category above.</p>
@@ -6899,7 +6914,7 @@ function SettingsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
           <div className="pt-4 border-t space-y-4" style={{ borderColor: tokens.borderNested }}>
             <h3 className="text-sm font-bold text-white uppercase tracking-wider font-display">Display & Aesthetics</h3>
 
-            <div className="flex items-center justify-between p-4 rounded-2xl border" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+            <div data-tour="tour-theme-mode" className="flex items-center justify-between p-4 rounded-2xl border" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
               <div>
                 <p className="text-xs font-bold text-white font-sans">Dark / Light Mode</p>
                 <p className="text-[10.5px] text-white/60">{isDarkMode ? "Dark Riviera Blue" : "Light Cyber Glass"}</p>
@@ -6914,7 +6929,7 @@ function SettingsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
               </button>
             </div>
 
-            <div className="flex items-center justify-between p-4 rounded-2xl border" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+            <div data-tour="tour-video-toggle" className="flex items-center justify-between p-4 rounded-2xl border" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
               <div>
                 <p className="text-xs font-bold text-white font-sans">Background Video Animation</p>
                 <p className="text-[10.5px] text-white/60">{isVideoEnabled ? "Seamless video active" : "Static PNG active"}</p>
@@ -6956,7 +6971,7 @@ function SettingsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
           </div>
 
           {/* Danger Zone: Full Data Reset */}
-          <div className="pt-4 border-t space-y-3" style={{ borderColor: tokens.borderNested }}>
+          <div data-tour="tour-danger-zone" className="pt-4 border-t space-y-3" style={{ borderColor: tokens.borderNested }}>
             <div className="flex items-center gap-2 text-red-400">
               <AlertTriangle className="size-4" />
               <h3 className="text-sm font-bold uppercase tracking-wider font-display text-red-400">Danger Zone</h3>
@@ -7147,8 +7162,18 @@ function FinancialAnalyticsDashboardInner({
 
   const [addTxOpen, setAddTxOpen] = useState(false)
   const [addAccOpen, setAddAccOpen] = useState(false)
+  const [addBillOpen, setAddBillOpen] = useState(false)
   const [monthSummaryOpen, setMonthSummaryOpen] = useState(false)
   const [editPlanTargetId, setEditPlanTargetId] = useState<string | null>(null)
+  
+  // Trial Mode Engine
+  const { isTrialActive, isWizardOpen, onNavigateSection } = useTrialMode()
+
+  useEffect(() => {
+    if (isTrialActive && !isWizardOpen) {
+      onNavigateSection(activeSection)
+    }
+  }, [activeSection, isTrialActive, isWizardOpen, onNavigateSection])
   
   // Feature 4: Edit & Delete Modal States
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
@@ -7363,6 +7388,7 @@ function FinancialAnalyticsDashboardInner({
         {/* Modals & Dialogs */}
         <AddTransactionModal isOpen={addTxOpen} onClose={() => setAddTxOpen(false)} />
         <AddAccountModal isOpen={addAccOpen} onClose={() => setAddAccOpen(false)} />
+        <AddBillModal isOpen={addBillOpen} onClose={() => setAddBillOpen(false)} />
         <MonthSummaryModal isOpen={monthSummaryOpen} onClose={() => setMonthSummaryOpen(false)} />
         <EditTransactionModal
           transaction={editingTransaction}
@@ -7385,6 +7411,14 @@ function FinancialAnalyticsDashboardInner({
             }
           }}
         />
+
+        {/* Trial Mode Wizard & Interactive Spotlight Tour */}
+        <TrialSetupWizard
+          onOpenAddAccount={() => setAddAccOpen(true)}
+          onOpenAddTransaction={() => setAddTxOpen(true)}
+          onOpenAddBill={() => setAddBillOpen(true)}
+        />
+        <SpotlightTour />
       </div>
     </div>
   )
@@ -7470,7 +7504,9 @@ export function FinancialAnalyticsDashboard({
     <AuthGuard>
       <FinanceDataProvider>
         <DashboardThemeContext.Provider value={themeContextValue}>
-          <FinancialAnalyticsDashboardInner initialSection={initialSection} />
+          <TrialModeProvider>
+            <FinancialAnalyticsDashboardInner initialSection={initialSection} />
+          </TrialModeProvider>
         </DashboardThemeContext.Provider>
       </FinanceDataProvider>
     </AuthGuard>

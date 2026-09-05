@@ -62,7 +62,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     let authSub: any = null
     if (isSupabaseConfigured && supabase) {
       const { data } = supabase.auth.onAuthStateChange((event, session) => {
-        if (event === "SIGNED_OUT" || !session) {
+        if (event === "SIGNED_OUT") {
           clearClientAuthSession()
           if (isMounted) {
             setIsAuthenticated(false)

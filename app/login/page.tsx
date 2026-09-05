@@ -36,6 +36,14 @@ export default function AuthPage() {
   useEffect(() => {
     setMounted(true)
 
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href)
+      const err = url.searchParams.get("error_description") || url.searchParams.get("error")
+      if (err) {
+        setAuthError(decodeURIComponent(err))
+      }
+    }
+
     const checkExistingSession = async () => {
       const isAccountStep = typeof window !== "undefined" && window.location.search.includes("step=account")
 
