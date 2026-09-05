@@ -122,7 +122,7 @@ export function autoAssignBucket(categoryName: string, categoryGroup?: string | 
 // ─── Component: Active 50/30/20 Plan Progress Tracker ────────────────
 
 export function Active503020Tracker() {
-  const { budgetPlans, transactions, bills, loading } = useFinanceData()
+  const { budgetPlans, transactions, bills, categories, loading } = useFinanceData()
   const { profile } = useUserProfile()
   const { tokens } = useDashboardTheme()
   const currencySymbol = getCurrencySymbol(profile.currency)
@@ -169,11 +169,19 @@ export function Active503020Tracker() {
         ? Math.round((totalPlannedBudget - categoriesTotalAlloc) * 100) / 100
         : planFixedBillsTotal
 
-  // Category to bucket mapping from plan categories
-  const catBucketMap = new Map<string, "bills" | "needs" | "wants" | "savings">()
+  // Map of category ID -> current CategoryGroup from live categories state (live authority for transaction attribution)
+  const liveCategoryGroupMap = new Map<string, "bills" | "needs" | "wants" | "savings">()
+  categories.forEach((cat) => {
+    if (cat.group && cat.group !== "ungrouped") {
+      liveCategoryGroupMap.set(cat.id, cat.group)
+    }
+  })
+
+  // Category to bucket mapping from plan categories (fallback)
+  const planCategoryGroupMap = new Map<string, "bills" | "needs" | "wants" | "savings">()
   if (activePlan.categories && activePlan.categories.length > 0) {
     activePlan.categories.forEach((c) => {
-      catBucketMap.set(c.category_id, c.bucket)
+      planCategoryGroupMap.set(c.category_id, c.bucket)
     })
   }
 
@@ -181,6 +189,7 @@ export function Active503020Tracker() {
   const plannedAvailable = Math.max(0, Math.round((totalPlannedBudget - plannedBills) * 100) / 100)
 
   // 5. Targets: Needs (50%), Wants (30%), Savings (20%)
+  // Initial plan group targets remain constant as established in the plan
   const needsAlloc = (activePlan.categories || [])
     .filter((c) => c.bucket === "needs")
     .reduce((sum, c) => sum + (c.allocated_amount_cents ? c.allocated_amount_cents / 100 : c.allocated_amount || 0), 0)
@@ -197,26 +206,40 @@ export function Active503020Tracker() {
   const plannedWants = wantsAlloc > 0 ? Math.round(wantsAlloc * 100) / 100 : Math.round(plannedAvailable * 0.3 * 100) / 100
   const plannedSavings = savingsAlloc > 0 ? Math.round(savingsAlloc * 100) / 100 : Math.round(plannedAvailable * 0.2 * 100) / 100
 
-  // Actual spent per bucket from real transactions
+  // Actual spent per bucket from real transactions in this cycle
   let actualNeeds = 0
   let actualWants = 0
   let actualSavings = 0
+  let actualBillsExpenses = 0
 
   cycleExpenses.forEach((t) => {
-    const b = (t.category_id ? catBucketMap.get(t.category_id) : undefined) || autoAssignBucket(t.category_name || "")
+    const isBillTx = Boolean(t.note && (t.note.startsWith("Bill Paid:") || t.note.startsWith("Bill Paid —") || t.note.startsWith("Bill Paid -")))
+    // Live category group is the primary authority for where transactions are expensed
+    const b = (t.category_id ? liveCategoryGroupMap.get(t.category_id) : undefined)
+      || (t.category_id ? planCategoryGroupMap.get(t.category_id) : undefined)
+      || autoAssignBucket(t.category_name || "")
     const amt = Math.abs(t.amount)
-    if (b === "needs") actualNeeds += amt
-    else if (b === "wants") actualWants += amt
-    else if (b === "savings") actualSavings += amt
+
+    if (b === "needs") {
+      actualNeeds += amt
+    } else if (b === "wants") {
+      actualWants += amt
+    } else if (b === "savings") {
+      actualSavings += amt
+    } else if (b === "bills" && !isBillTx) {
+      actualBillsExpenses += amt
+    }
   })
 
-  // Actual bills: sum of completed bills in this cycle from start_date to today
-  const actualBills = bills
+  // Actual bills: completed bills in this cycle + expenses from categories currently assigned to "bills" group
+  const completedBillsTotal = bills
     .filter((b) => b.type === "expense" && b.is_completed && b.due_date >= activePlan.start_date && b.due_date <= todayStr)
     .reduce((sum, b) => sum + (b.amount + (b.fee_amount || 0)), 0)
 
-  // Overall Total Spending: all logged expenses in this cycle
-  const totalSpent = cycleExpenses.reduce((sum, t) => sum + Math.abs(t.amount), 0)
+  const actualBills = completedBillsTotal + actualBillsExpenses
+
+  // Overall Total Spending: all logged expenses across the 4 buckets in this cycle
+  const totalSpent = actualNeeds + actualWants + actualSavings + actualBills
   const totalLeft = Math.max(0, totalPlannedBudget - totalSpent)
   const totalProgressPct = totalPlannedBudget > 0 ? Math.round((totalSpent / totalPlannedBudget) * 100) : 0
 
@@ -1579,7 +1602,7 @@ export function BudgetPlannerSection({
       }
 
       const allocationsPayload: BudgetPlanCategory[] = activeAllocationsList
-        .filter((a) => ["needs", "wants", "savings"].includes(a.bucket))
+        .filter((a) => ["needs", "wants", "savings", "bills"].includes(a.bucket))
         .map((a) => ({
           category_id: a.category_id,
           bucket: a.bucket,

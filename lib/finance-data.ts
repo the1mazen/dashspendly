@@ -581,9 +581,13 @@ function useFinanceDataInternal() {
 
             const budget = c.budget_cents != null ? c.budget_cents / 100 : (c.budget != null ? c.budget : undefined)
             const catIdStr = String(c.id)
+            const dbGroup = (c.group && ["needs", "wants", "savings", "bills"].includes(c.group))
+              ? c.group
+              : (c.bucket && ["needs", "wants", "savings", "bills"].includes(c.bucket))
+                ? c.bucket
+                : undefined
             const planAssignedGroup = planCategoryGroups[catIdStr]
-            const dbGroup = c.group || c.bucket || c.category_group || (c.group_name ? String(c.group_name).toLowerCase() : undefined)
-            const rawGroup = planAssignedGroup || dbGroup || localGroups[catIdStr]
+            const rawGroup = dbGroup || localGroups[catIdStr] || planAssignedGroup
             const normalizedGroup: CategoryGroup = (rawGroup === "needs" || rawGroup === "wants" || rawGroup === "savings" || rawGroup === "bills") ? rawGroup : "ungrouped"
 
             if (normalizedGroup !== "ungrouped") {
@@ -1062,6 +1066,22 @@ function useFinanceDataInternal() {
                 .update(fallbackPayload)
                 .eq("id", categoryId)
                 .eq("user_id", userId)
+            }
+          }
+
+          // If category group changed, also sync budget_plan_categories bucket in Supabase
+          if (updates.group !== undefined) {
+            const newBucket = (updates.group === "ungrouped" || !updates.group) ? null : updates.group
+            if (newBucket) {
+              try {
+                await supabase
+                  .from("budget_plan_categories")
+                  .update({ bucket: newBucket })
+                  .eq("category_id", categoryId)
+                  .eq("user_id", userId)
+              } catch (bpcErr) {
+                console.warn("Sync budget_plan_categories bucket error:", bpcErr)
+              }
             }
           }
         }
