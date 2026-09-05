@@ -528,6 +528,52 @@ function useFinanceDataInternal() {
 
           const localGroups = getLocalCategoryGroups()
 
+          // Build mapping of categories assigned in 50/30/20 budget plans
+          // Active plan has highest priority, followed by latest created plans, then local plans
+          const planCategoryGroups: Record<string, CategoryGroup> = {}
+
+          const sortedDbPlans = [...(dbBudgetPlans || [])].sort((a: any, b: any) => {
+            if (Boolean(a.is_active) && !Boolean(b.is_active)) return -1
+            if (!Boolean(a.is_active) && Boolean(b.is_active)) return 1
+            return 0
+          })
+
+          for (const plan of sortedDbPlans) {
+            const planCats = (dbBudgetPlanCategories || []).filter((bpc: any) => String(bpc.plan_id) === String(plan.id))
+            for (const pc of planCats) {
+              const catId = String(pc.category_id)
+              const bucket = String(pc.bucket).toLowerCase()
+              if (["needs", "wants", "savings", "bills"].includes(bucket) && !planCategoryGroups[catId]) {
+                planCategoryGroups[catId] = bucket as CategoryGroup
+              }
+            }
+          }
+
+          // Fallback check: any remaining budget plan categories
+          for (const pc of (dbBudgetPlanCategories || [])) {
+            const catId = String(pc.category_id)
+            const bucket = String(pc.bucket).toLowerCase()
+            if (["needs", "wants", "savings", "bills"].includes(bucket) && !planCategoryGroups[catId]) {
+              planCategoryGroups[catId] = bucket as CategoryGroup
+            }
+          }
+
+          // Fallback check: local stored budget plans
+          const cachedBudgetPlans = getLocal<BudgetPlan>(STORAGE_BUDGET_PLANS_KEY) || []
+          for (const bp of cachedBudgetPlans) {
+            if (Array.isArray(bp.categories)) {
+              for (const pc of bp.categories) {
+                const catId = String(pc.category_id)
+                const bucket = String(pc.bucket).toLowerCase()
+                if (["needs", "wants", "savings", "bills"].includes(bucket) && !planCategoryGroups[catId]) {
+                  planCategoryGroups[catId] = bucket as CategoryGroup
+                }
+              }
+            }
+          }
+
+          const categoriesToBackfill: { id: string; group: CategoryGroup }[] = []
+
           const parsedCategories: Category[] = dbCategories.map((c: any) => {
             const catSpent = parsedTransactions
               .filter((t) => t.category_id === String(c.id) && t.type === "expense" && !isTransferTransaction(t) && t.date >= currentMonthStart && t.date <= todayStr)
@@ -535,11 +581,17 @@ function useFinanceDataInternal() {
 
             const budget = c.budget_cents != null ? c.budget_cents / 100 : (c.budget != null ? c.budget : undefined)
             const catIdStr = String(c.id)
-            const rawGroup = c.group || c.bucket || c.category_group || (c.group_name ? String(c.group_name).toLowerCase() : undefined) || localGroups[catIdStr]
+            const planAssignedGroup = planCategoryGroups[catIdStr]
+            const dbGroup = c.group || c.bucket || c.category_group || (c.group_name ? String(c.group_name).toLowerCase() : undefined)
+            const rawGroup = planAssignedGroup || dbGroup || localGroups[catIdStr]
             const normalizedGroup: CategoryGroup = (rawGroup === "needs" || rawGroup === "wants" || rawGroup === "savings" || rawGroup === "bills") ? rawGroup : "ungrouped"
 
-            if (normalizedGroup !== "ungrouped" && !localGroups[catIdStr]) {
+            if (normalizedGroup !== "ungrouped") {
               localGroups[catIdStr] = normalizedGroup
+              // If not already persisted to Supabase categories.group, queue for backfill
+              if (c.group !== normalizedGroup) {
+                categoriesToBackfill.push({ id: catIdStr, group: normalizedGroup })
+              }
             }
 
             return {
@@ -556,6 +608,18 @@ function useFinanceDataInternal() {
             }
           })
           saveLocalCategoryGroups(localGroups)
+
+          // Background backfill for existing users' categories to Supabase
+          if (categoriesToBackfill.length > 0 && isSupabaseConfigured && supabase) {
+            const sbClient = supabase
+            Promise.all(
+              categoriesToBackfill.map((item) =>
+                sbClient.from("categories").update({ group: item.group }).eq("id", item.id).eq("user_id", userId)
+              )
+            ).catch((backfillErr) => {
+              console.warn("Category group backfill background sync warning:", backfillErr)
+            })
+          }
 
           const parsedHeldFunds: HeldFund[] = dbHeldFunds.map((h: any) => {
             const accObj = dbAccounts.find((a: any) => String(a.id) === String(h.account_id))
@@ -2645,7 +2709,7 @@ function useFinanceDataInternal() {
           }
 
           const validCatRows = categoryAllocations
-            .filter((c) => isValidUUID(c.category_id) && ["needs", "wants", "savings"].includes(c.bucket))
+            .filter((c) => isValidUUID(c.category_id) && ["needs", "wants", "savings", "bills"].includes(c.bucket))
             .map((c) => ({
               id: generateUUID(),
               plan_id: newPlanId,
@@ -2663,17 +2727,34 @@ function useFinanceDataInternal() {
             }
           }
 
-          if (activateNow) {
-            for (const c of categoryAllocations) {
-              if (isValidUUID(c.category_id)) {
-                await supabase
-                  .from("categories")
-                  .update({ budget_cents: Math.round(c.allocated_amount * 100) })
-                  .eq("id", c.category_id)
-                  .eq("user_id", userId)
+          // Persist category group assignments (and budget if activating) to categories table
+          const localGroups = getLocalCategoryGroups()
+          for (const c of categoryAllocations) {
+            if (isValidUUID(c.category_id)) {
+              const bucket = c.bucket as CategoryGroup
+              const updatePayload: any = {}
+              if (activateNow) {
+                updatePayload.budget_cents = Math.round(c.allocated_amount * 100)
+              }
+              if (["needs", "wants", "savings", "bills"].includes(bucket)) {
+                updatePayload.group = bucket
+                localGroups[c.category_id] = bucket
+              }
+              if (Object.keys(updatePayload).length > 0) {
+                try {
+                  await supabase
+                    .from("categories")
+                    .update(updatePayload)
+                    .eq("id", c.category_id)
+                    .eq("user_id", userId)
+                } catch (catUpErr) {
+                  console.warn("Category update error in createBudgetPlan:", catUpErr)
+                }
               }
             }
           }
+          saveLocalCategoryGroups(localGroups)
+
           await fetchData()
           return newPlan
         }
@@ -2684,6 +2765,14 @@ function useFinanceDataInternal() {
     }
 
     // Always update local state & local storage
+    const localGroups = getLocalCategoryGroups()
+    categoryAllocations.forEach((c) => {
+      if (["needs", "wants", "savings", "bills"].includes(c.bucket)) {
+        localGroups[c.category_id] = c.bucket as CategoryGroup
+      }
+    })
+    saveLocalCategoryGroups(localGroups)
+
     setBudgetPlans((prev) => {
       const list = activateNow ? prev.map((p) => ({ ...p, is_active: false })) : prev
       const updated = [newPlan, ...list.filter((p) => p.id !== newPlanId)]
@@ -2691,19 +2780,26 @@ function useFinanceDataInternal() {
       return updated
     })
 
-    if (activateNow) {
-      setCategories((prev) => {
-        const allocMap = new Map(categoryAllocations.map((c) => [c.category_id, c.allocated_amount]))
-        const updated = prev.map((cat) => {
-          if (allocMap.has(cat.id)) {
-            return { ...cat, budget: allocMap.get(cat.id) }
-          }
-          return cat
-        })
-        saveLocal(STORAGE_CATEGORIES_KEY, updated)
-        return updated
+    setCategories((prev) => {
+      const groupMap = new Map(
+        categoryAllocations
+          .filter((c) => ["needs", "wants", "savings", "bills"].includes(c.bucket))
+          .map((c) => [c.category_id, c.bucket as CategoryGroup])
+      )
+      const allocMap = activateNow ? new Map(categoryAllocations.map((c) => [c.category_id, c.allocated_amount])) : null
+      const updated = prev.map((cat) => {
+        let nextCat = cat
+        if (groupMap.has(cat.id)) {
+          nextCat = { ...nextCat, group: groupMap.get(cat.id)! }
+        }
+        if (allocMap && allocMap.has(cat.id)) {
+          nextCat = { ...nextCat, budget: allocMap.get(cat.id) }
+        }
+        return nextCat
       })
-    }
+      saveLocal(STORAGE_CATEGORIES_KEY, updated)
+      return updated
+    })
 
     return newPlan
   }, [fetchData])
@@ -2762,7 +2858,7 @@ function useFinanceDataInternal() {
           }
 
           const validCatRows = categoryAllocations
-            .filter((c) => isValidUUID(c.category_id) && ["needs", "wants", "savings"].includes(c.bucket))
+            .filter((c) => isValidUUID(c.category_id) && ["needs", "wants", "savings", "bills"].includes(c.bucket))
             .map((c) => ({
               id: generateUUID(),
               plan_id: planId,
@@ -2780,17 +2876,32 @@ function useFinanceDataInternal() {
             }
           }
 
-          if (activateNow) {
-            for (const c of categoryAllocations) {
-              if (isValidUUID(c.category_id)) {
-                await supabase
-                  .from("categories")
-                  .update({ budget_cents: Math.round(c.allocated_amount * 100) })
-                  .eq("id", c.category_id)
-                  .eq("user_id", userId)
+          const localGroups = getLocalCategoryGroups()
+          for (const c of categoryAllocations) {
+            if (isValidUUID(c.category_id)) {
+              const bucket = c.bucket as CategoryGroup
+              const updatePayload: any = {}
+              if (activateNow) {
+                updatePayload.budget_cents = Math.round(c.allocated_amount * 100)
+              }
+              if (["needs", "wants", "savings", "bills"].includes(bucket)) {
+                updatePayload.group = bucket
+                localGroups[c.category_id] = bucket
+              }
+              if (Object.keys(updatePayload).length > 0) {
+                try {
+                  await supabase
+                    .from("categories")
+                    .update(updatePayload)
+                    .eq("id", c.category_id)
+                    .eq("user_id", userId)
+                } catch (catUpErr) {
+                  console.warn("Category update error in updateBudgetPlan:", catUpErr)
+                }
               }
             }
           }
+          saveLocalCategoryGroups(localGroups)
 
           await fetchData()
         }
@@ -2801,6 +2912,14 @@ function useFinanceDataInternal() {
     }
 
     // Always update local fallback
+    const localGroups = getLocalCategoryGroups()
+    categoryAllocations.forEach((c) => {
+      if (["needs", "wants", "savings", "bills"].includes(c.bucket)) {
+        localGroups[c.category_id] = c.bucket as CategoryGroup
+      }
+    })
+    saveLocalCategoryGroups(localGroups)
+
     setBudgetPlans((prev) => {
       const updated = prev.map((p) => {
         if (p.id === planId) {
@@ -2825,19 +2944,26 @@ function useFinanceDataInternal() {
       return updated
     })
 
-    if (activateNow) {
-      setCategories((prev) => {
-        const allocMap = new Map(categoryAllocations.map((c) => [c.category_id, c.allocated_amount]))
-        const updated = prev.map((cat) => {
-          if (allocMap.has(cat.id)) {
-            return { ...cat, budget: allocMap.get(cat.id) }
-          }
-          return cat
-        })
-        saveLocal(STORAGE_CATEGORIES_KEY, updated)
-        return updated
+    setCategories((prev) => {
+      const groupMap = new Map(
+        categoryAllocations
+          .filter((c) => ["needs", "wants", "savings", "bills"].includes(c.bucket))
+          .map((c) => [c.category_id, c.bucket as CategoryGroup])
+      )
+      const allocMap = activateNow ? new Map(categoryAllocations.map((c) => [c.category_id, c.allocated_amount])) : null
+      const updated = prev.map((cat) => {
+        let nextCat = cat
+        if (groupMap.has(cat.id)) {
+          nextCat = { ...nextCat, group: groupMap.get(cat.id)! }
+        }
+        if (allocMap && allocMap.has(cat.id)) {
+          nextCat = { ...nextCat, budget: allocMap.get(cat.id) }
+        }
+        return nextCat
       })
-    }
+      saveLocal(STORAGE_CATEGORIES_KEY, updated)
+      return updated
+    })
   }, [fetchData])
 
   const activateBudgetPlan = useCallback(async (planId: string) => {
@@ -2855,15 +2981,23 @@ function useFinanceDataInternal() {
             .eq("user_id", userId)
 
           if (allocations && allocations.length > 0) {
+            const localGroups = getLocalCategoryGroups()
             for (const a of allocations) {
               if (isValidUUID(a.category_id)) {
+                const bucket = String(a.bucket).toLowerCase()
+                const updatePayload: any = { budget_cents: a.allocated_amount_cents }
+                if (["needs", "wants", "savings", "bills"].includes(bucket)) {
+                  updatePayload.group = bucket
+                  localGroups[String(a.category_id)] = bucket as CategoryGroup
+                }
                 await supabase
                   .from("categories")
-                  .update({ budget_cents: a.allocated_amount_cents })
+                  .update(updatePayload)
                   .eq("id", a.category_id)
                   .eq("user_id", userId)
               }
             }
+            saveLocalCategoryGroups(localGroups)
           }
           await fetchData()
         }
@@ -2879,12 +3013,27 @@ function useFinanceDataInternal() {
 
       if (targetPlan?.categories) {
         const allocMap = new Map(targetPlan.categories.map((c) => [c.category_id, c.allocated_amount]))
+        const groupMap = new Map(
+          targetPlan.categories
+            .filter((c) => ["needs", "wants", "savings", "bills"].includes(c.bucket))
+            .map((c) => [c.category_id, c.bucket as CategoryGroup])
+        )
+        const localGroups = getLocalCategoryGroups()
+        groupMap.forEach((grp, catId) => {
+          localGroups[catId] = grp
+        })
+        saveLocalCategoryGroups(localGroups)
+
         setCategories((catPrev) => {
           const updatedCats = catPrev.map((cat) => {
-            if (allocMap.has(cat.id)) {
-              return { ...cat, budget: allocMap.get(cat.id) }
+            let nextCat = cat
+            if (groupMap.has(cat.id)) {
+              nextCat = { ...nextCat, group: groupMap.get(cat.id)! }
             }
-            return cat
+            if (allocMap.has(cat.id)) {
+              nextCat = { ...nextCat, budget: allocMap.get(cat.id) }
+            }
+            return nextCat
           })
           saveLocal(STORAGE_CATEGORIES_KEY, updatedCats)
           return updatedCats
