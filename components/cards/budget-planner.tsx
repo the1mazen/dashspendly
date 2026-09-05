@@ -59,7 +59,11 @@ const cardEntrance = (delay = 0) => ({
 })
 
 // Auto-assignment dictionary for 50/30/20 buckets
-export function autoAssignBucket(categoryName: string): "bills" | "needs" | "wants" | "savings" {
+export function autoAssignBucket(categoryName: string, categoryGroup?: string | null): "bills" | "needs" | "wants" | "savings" {
+  if (categoryGroup === "needs" || categoryGroup === "wants" || categoryGroup === "savings" || categoryGroup === "bills") {
+    return categoryGroup
+  }
+
   const name = categoryName.trim().toLowerCase()
 
   // Savings keywords
@@ -1148,7 +1152,7 @@ export function BudgetPlannerSection({
     return (categories.filter((c) => c.type === "expense"))
       .filter((c) => categorySelectionMode === "app" || selectedCatIds.includes(c.id))
       .map((c) => {
-        const alloc = categoryAllocations[c.id] || { bucket: autoAssignBucket(c.name), amount: "0" }
+        const alloc = categoryAllocations[c.id] || { bucket: autoAssignBucket(c.name, c.group), amount: "0" }
         const amt = parseFloat(alloc.amount) || 0
         return {
           category_id: c.id,
@@ -1247,7 +1251,7 @@ export function BudgetPlannerSection({
       }
 
       displayedCategories.forEach((c) => {
-        const bucket = autoAssignBucket(c.name)
+        const bucket = autoAssignBucket(c.name, c.group)
         bucketGroups[bucket].push(c)
       })
 
@@ -1272,7 +1276,7 @@ export function BudgetPlannerSection({
       displayedCategories.forEach((c) => {
         const suggested = lookbackStats[c.id]?.suggested || 0
         newAllocs[c.id] = {
-          bucket: autoAssignBucket(c.name),
+          bucket: autoAssignBucket(c.name, c.group),
           amount: String(suggested),
         }
       })
@@ -1289,7 +1293,7 @@ export function BudgetPlannerSection({
       const reset: Record<string, { bucket: "bills" | "needs" | "wants" | "savings"; amount: string }> = {}
       categories.forEach((cat) => {
         reset[cat.id] = {
-          bucket: prev[cat.id]?.bucket || autoAssignBucket(cat.name),
+          bucket: prev[cat.id]?.bucket || autoAssignBucket(cat.name, cat.group),
           amount: "0",
         }
       })
@@ -1308,7 +1312,7 @@ export function BudgetPlannerSection({
         savings: [],
       }
       displayedCategories.forEach((c) => {
-        const bucket = autoAssignBucket(c.name)
+        const bucket = autoAssignBucket(c.name, c.group)
         bucketGroups[bucket].push(c)
       })
 
@@ -1331,7 +1335,7 @@ export function BudgetPlannerSection({
       displayedCategories.forEach((c) => {
         const suggested = lookbackStats[c.id]?.suggested || 0
         newAllocs[c.id] = {
-          bucket: autoAssignBucket(c.name),
+          bucket: autoAssignBucket(c.name, c.group),
           amount: String(suggested),
         }
       })
@@ -1340,10 +1344,11 @@ export function BudgetPlannerSection({
   }
 
   const handleUpdateAllocation = (catId: string, field: "bucket" | "amount", value: string) => {
+    const targetCat = categories.find((c) => c.id === catId)
     setCategoryAllocations((prev) => ({
       ...prev,
       [catId]: {
-        bucket: field === "bucket" ? (value as any) : prev[catId]?.bucket || autoAssignBucket(categories.find((c) => c.id === catId)?.name || ""),
+        bucket: field === "bucket" ? (value as any) : prev[catId]?.bucket || autoAssignBucket(targetCat?.name || "", targetCat?.group),
         amount: field === "amount" ? value : prev[catId]?.amount || "0",
       },
     }))
@@ -1504,7 +1509,7 @@ export function BudgetPlannerSection({
     setCategoryAllocations((prev) => ({
       ...prev,
       [newCat.id]: {
-        bucket: autoAssignBucket(newCat.name),
+        bucket: autoAssignBucket(newCat.name, newCat.group),
         amount: "0",
       },
     }))
@@ -2398,7 +2403,7 @@ export function BudgetPlannerSection({
           <div className="space-y-2 max-h-[340px] overflow-y-auto pr-1">
             {displayedCategories.map((cat) => {
               const isIncluded = categorySelectionMode === "app" || selectedCatIds.includes(cat.id)
-              const alloc = categoryAllocations[cat.id] || { bucket: autoAssignBucket(cat.name), amount: "0" }
+              const alloc = categoryAllocations[cat.id] || { bucket: autoAssignBucket(cat.name, cat.group), amount: "0" }
 
               return (
                 <div

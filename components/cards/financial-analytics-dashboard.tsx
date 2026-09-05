@@ -23,6 +23,7 @@ import {
   Transaction,
   Account,
   Category,
+  CategoryGroup,
   HeldFund,
   HeldFundHistory,
   Bill,
@@ -6450,6 +6451,7 @@ function EditCategoryModal({
   const [name, setName] = useState(category?.name || "")
   const [type, setType] = useState<"expense" | "income">(category?.type || "expense")
   const [budget, setBudget] = useState(category?.budget !== undefined && category?.budget !== null && category?.budget > 0 ? String(category.budget) : "")
+  const [group, setGroup] = useState<CategoryGroup>(category?.group || "ungrouped")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
@@ -6458,6 +6460,7 @@ function EditCategoryModal({
       setName(category.name)
       setType(category.type)
       setBudget(category.budget !== undefined && category.budget !== null && category.budget > 0 ? String(category.budget) : "")
+      setGroup(category.group || "ungrouped")
       setErrorMsg(null)
     }
   }, [category])
@@ -6475,6 +6478,7 @@ function EditCategoryModal({
         name: name.trim(),
         type,
         budget: isNaN(budgetNum) ? 0 : budgetNum,
+        group,
       })
       onClose()
     } catch (err: any) {
@@ -6499,7 +6503,7 @@ function EditCategoryModal({
         <div className="flex items-center justify-between pb-4 border-b" style={{ borderColor: tokens.border }}>
           <div>
             <h3 className="text-base font-bold font-display text-white">Edit Category</h3>
-            <p className="text-xs text-white/70">Modify category details, type, and monthly budget</p>
+            <p className="text-xs text-white/70">Modify category details, type, group, and monthly budget</p>
           </div>
           <button onClick={onClose} className="text-white/60 hover:text-white cursor-pointer">✕</button>
         </div>
@@ -6557,6 +6561,24 @@ function EditCategoryModal({
             </div>
           </div>
 
+          <div>
+            <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 text-white/75">
+              Budget Framework Group
+            </label>
+            <select
+              value={group}
+              onChange={(e) => setGroup(e.target.value as CategoryGroup)}
+              className="w-full px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
+              style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+            >
+              <option value="ungrouped" className="bg-[#1E0C38] text-white">⚪ Ungrouped (None)</option>
+              <option value="needs" className="bg-[#1E0C38] text-teal-300">🎯 Needs (Essential)</option>
+              <option value="wants" className="bg-[#1E0C38] text-purple-300">🎨 Wants (Discretionary)</option>
+              <option value="savings" className="bg-[#1E0C38] text-amber-300">💰 Savings & Investments</option>
+              <option value="bills" className="bg-[#1E0C38] text-blue-300">📄 Bills & Commitments</option>
+            </select>
+          </div>
+
           <div className="flex items-center justify-end gap-3 pt-4 border-t" style={{ borderColor: tokens.border }}>
             <button
               type="button"
@@ -6580,6 +6602,8 @@ function EditCategoryModal({
   )
 }
 
+type CategoryFilterGroup = "all" | "needs" | "wants" | "savings" | "bills" | "ungrouped"
+
 function CategoriesSection({
   onNavigate,
   onEditPlan,
@@ -6587,7 +6611,7 @@ function CategoriesSection({
   onNavigate: (s: SectionId) => void
   onEditPlan?: (plan: BudgetPlan) => void
 }) {
-  const { categories, transactions, createCategory, deleteCategory, activeBudgetPlan, budgetPlans } = useFinanceData()
+  const { categories, transactions, createCategory, updateCategory, deleteCategory, activeBudgetPlan, budgetPlans } = useFinanceData()
   const { profile } = useUserProfile()
   const { tokens } = useDashboardTheme()
   const currencySymbol = getCurrencySymbol(profile.currency)
@@ -6608,8 +6632,10 @@ function CategoriesSection({
     return map
   }, [transactions, currentMonthStart, todayStr])
 
+  const [selectedFilterGroup, setSelectedFilterGroup] = useState<CategoryFilterGroup>("all")
   const [newCatName, setNewCatName] = useState("")
   const [newCatType, setNewCatType] = useState<"expense" | "income">("expense")
+  const [newCatGroup, setNewCatGroup] = useState<CategoryGroup>("ungrouped")
   const [newCatBudget, setNewCatBudget] = useState("")
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
@@ -6617,6 +6643,36 @@ function CategoriesSection({
   const [editingCategory, setEditingCategory] = useState<Category | null>(null)
   const [browseSuggestionsOpen, setBrowseSuggestionsOpen] = useState(false)
   const [managePlansOpen, setManagePlansOpen] = useState(false)
+
+  // Group counts for filter tabs
+  const groupCounts = useMemo(() => {
+    const counts = { all: categories.length, needs: 0, wants: 0, savings: 0, bills: 0, ungrouped: 0 }
+    categories.forEach((c) => {
+      const g = c.group || "ungrouped"
+      if (g === "needs") counts.needs++
+      else if (g === "wants") counts.wants++
+      else if (g === "savings") counts.savings++
+      else if (g === "bills") counts.bills++
+      else counts.ungrouped++
+    })
+    return counts
+  }, [categories])
+
+  // Filtered categories based on selected filter tab
+  const filteredCategories = useMemo(() => {
+    if (selectedFilterGroup === "all") return categories
+    if (selectedFilterGroup === "ungrouped") {
+      return categories.filter((c) => !c.group || c.group === "ungrouped")
+    }
+    return categories.filter((c) => c.group === selectedFilterGroup)
+  }, [categories, selectedFilterGroup])
+
+  const handleSelectFilter = (group: CategoryFilterGroup) => {
+    setSelectedFilterGroup(group)
+    if (group !== "all") {
+      setNewCatGroup(group)
+    }
+  }
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -6631,6 +6687,7 @@ function CategoriesSection({
         type: newCatType,
         budget: parseFloat(newCatBudget) || undefined,
         currency: profile.currency || "EGP",
+        group: newCatGroup,
       })
       setNewCatName("")
       setNewCatBudget("")
@@ -6641,6 +6698,21 @@ function CategoriesSection({
       setErrorMessage(err?.message || "Failed to create category. Please try again.")
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  const getGroupBadgeInfo = (g?: CategoryGroup | null) => {
+    switch (g) {
+      case "needs":
+        return { label: "Needs", icon: "🎯", border: "border-teal-500/40", bg: "bg-teal-500/15", text: "text-teal-300" }
+      case "wants":
+        return { label: "Wants", icon: "🎨", border: "border-purple-500/40", bg: "bg-purple-500/15", text: "text-purple-300" }
+      case "savings":
+        return { label: "Savings", icon: "💰", border: "border-amber-500/40", bg: "bg-amber-500/15", text: "text-amber-300" }
+      case "bills":
+        return { label: "Bills", icon: "📄", border: "border-blue-500/40", bg: "bg-blue-500/15", text: "text-blue-300" }
+      default:
+        return { label: "Ungrouped", icon: "⚪", border: "border-white/20 border-dashed", bg: "bg-white/5", text: "text-white/60" }
     }
   }
 
@@ -6721,7 +6793,14 @@ function CategoriesSection({
         className="rounded-3xl p-6 border backdrop-blur-xl hover:scale-[1.01] transition-transform duration-300"
         style={{ background: tokens.cardGradient, borderColor: tokens.border, boxShadow: tokens.cardShadow }}
       >
-        <h3 className="text-base font-bold font-display text-white mb-3">Add Category</h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-base font-bold font-display text-white">Add Category</h3>
+          {selectedFilterGroup !== "all" && (
+            <span className="text-[11px] font-mono px-2.5 py-1 rounded-full bg-white/10 text-white/80 border border-white/15">
+              Target Group: <strong className="text-white capitalize">{selectedFilterGroup}</strong>
+            </span>
+          )}
+        </div>
 
         {errorMessage && (
           <div className="mb-3 p-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-200 text-xs">
@@ -6735,7 +6814,7 @@ function CategoriesSection({
           </div>
         )}
 
-        <form onSubmit={handleCreate} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+        <form onSubmit={handleCreate} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           <input
             type="text"
             required
@@ -6756,6 +6835,19 @@ function CategoriesSection({
             <option value="income" className="bg-[#1E0C38] text-white">Income Category</option>
           </select>
 
+          <select
+            value={newCatGroup}
+            onChange={(e) => setNewCatGroup(e.target.value as CategoryGroup)}
+            className="w-full px-3.5 py-2.5 border rounded-xl text-sm text-white focus:outline-none"
+            style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
+          >
+            <option value="ungrouped" className="bg-[#1E0C38] text-white">⚪ Ungrouped (None)</option>
+            <option value="needs" className="bg-[#1E0C38] text-teal-300">🎯 Needs (Essential)</option>
+            <option value="wants" className="bg-[#1E0C38] text-purple-300">🎨 Wants (Discretionary)</option>
+            <option value="savings" className="bg-[#1E0C38] text-amber-300">💰 Savings & Investments</option>
+            <option value="bills" className="bg-[#1E0C38] text-blue-300">📄 Bills & Commitments</option>
+          </select>
+
           <input
             type="number"
             step="0.01"
@@ -6769,7 +6861,7 @@ function CategoriesSection({
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full px-5 py-2.5 rounded-xl text-xs font-bold text-[#120824] shadow-lg cursor-pointer transition-all"
+            className="w-full px-5 py-2.5 rounded-xl text-xs font-bold text-[#120824] shadow-lg cursor-pointer transition-all hover:scale-[1.02] disabled:opacity-50"
             style={{ background: tokens.dashboardActivePill }}
           >
             {isSubmitting ? "Creating..." : "Create Category"}
@@ -6777,15 +6869,100 @@ function CategoriesSection({
         </form>
       </motion.div>
 
+      {/* Filter Buttons Bar */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 max-w-full">
+          {[
+            { id: "all" as const, label: "All", icon: "🌐", count: groupCounts.all },
+            { id: "needs" as const, label: "Needs", icon: "🎯", count: groupCounts.needs },
+            { id: "wants" as const, label: "Wants", icon: "🎨", count: groupCounts.wants },
+            { id: "savings" as const, label: "Savings", icon: "💰", count: groupCounts.savings },
+            { id: "bills" as const, label: "Bills", icon: "📄", count: groupCounts.bills },
+            { id: "ungrouped" as const, label: "Ungrouped", icon: "⚪", count: groupCounts.ungrouped },
+          ].map((tab) => {
+            const isActive = selectedFilterGroup === tab.id
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => handleSelectFilter(tab.id)}
+                className={`flex items-center gap-2 px-3.5 py-2 rounded-2xl text-xs font-bold transition-all font-sans cursor-pointer shrink-0 border ${
+                  isActive
+                    ? "shadow-lg scale-[1.02]"
+                    : "hover:scale-[1.01] opacity-75 hover:opacity-100"
+                }`}
+                style={{
+                  background: isActive ? tokens.dashboardActivePill : tokens.nestedSurface,
+                  color: isActive ? "#120824" : "white",
+                  borderColor: isActive ? "rgba(255,255,255,0.4)" : tokens.borderNested,
+                }}
+              >
+                <span>{tab.icon}</span>
+                <span>{tab.label}</span>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                    isActive
+                      ? "bg-black/20 text-[#120824]"
+                      : tab.id === "ungrouped" && tab.count > 0
+                      ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                      : "bg-white/10 text-white/80"
+                  }`}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+
+        {selectedFilterGroup === "ungrouped" && groupCounts.ungrouped > 0 && (
+          <div className="text-xs text-amber-300 font-sans flex items-center gap-1.5 bg-amber-500/10 px-3 py-1.5 rounded-xl border border-amber-500/20">
+            <span>💡</span>
+            <span>Assign your ungrouped categories to Needs, Wants, Savings, or Bills below.</span>
+          </div>
+        )}
+      </div>
+
       {/* Categories Cards Grid */}
       <div data-tour="tour-categories-grid" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-        {categories.length === 0 ? (
+        {filteredCategories.length === 0 ? (
           <div className="col-span-full p-8 rounded-3xl border text-center backdrop-blur-xl" style={{ background: tokens.cardGradient, borderColor: tokens.border }}>
-            <p className="text-sm text-white/60">No categories created yet. Create your first category above.</p>
+            {selectedFilterGroup === "ungrouped" ? (
+              <div>
+                <p className="text-sm font-bold text-emerald-300">✨ Great job! All categories are grouped.</p>
+                <p className="text-xs text-white/60 mt-1">Every category has been categorized into Needs, Wants, Savings, or Bills.</p>
+                <button
+                  type="button"
+                  onClick={() => setSelectedFilterGroup("all")}
+                  className="mt-3 px-4 py-1.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white cursor-pointer transition-all"
+                >
+                  View All Categories
+                </button>
+              </div>
+            ) : selectedFilterGroup === "all" ? (
+              <div>
+                <p className="text-sm text-white/60">No categories created yet. Create your first category above.</p>
+              </div>
+            ) : (
+              <div>
+                <p className="text-sm text-white/80">No categories in <span className="capitalize font-bold text-white">{selectedFilterGroup}</span> yet.</p>
+                <p className="text-xs text-white/60 mt-1">Use the Add Category form above or move existing categories to this group.</p>
+                <button
+                  type="button"
+                  onClick={() => setSelectedFilterGroup("ungrouped")}
+                  className="mt-3 px-4 py-1.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-white cursor-pointer transition-all"
+                >
+                  View Ungrouped Categories ({groupCounts.ungrouped})
+                </button>
+              </div>
+            )}
           </div>
         ) : (
-          categories.map((c, i) => {
+          filteredCategories.map((c, i) => {
             const spent = categorySpentMap.has(c.id) ? categorySpentMap.get(c.id)! : (c.total_spent || 0)
+            const badge = getGroupBadgeInfo(c.group)
+            const isUngrouped = !c.group || c.group === "ungrouped"
+
             return (
               <motion.div
                 key={c.id}
@@ -6793,54 +6970,112 @@ function CategoriesSection({
                 className="p-5 rounded-2xl border flex flex-col justify-between backdrop-blur-md hover:scale-[1.01] transition-transform duration-300 relative group"
                 style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h4 className="text-sm font-bold text-white font-sans">{c.name}</h4>
-                      <span className={`px-2 py-0.5 rounded text-[9.5px] font-mono uppercase ${
-                        c.type === "income" ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "bg-white/10 text-white/70"
-                      }`}>
-                        {c.type}
-                      </span>
+                <div>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="text-sm font-bold text-white font-sans truncate">{c.name}</h4>
+                        <span className={`px-2 py-0.5 rounded text-[9.5px] font-mono uppercase ${
+                          c.type === "income" ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "bg-white/10 text-white/70"
+                        }`}>
+                          {c.type}
+                        </span>
+
+                        {/* Interactive Group Selector */}
+                        <div className="relative inline-block">
+                          <select
+                            value={c.group || "ungrouped"}
+                            onChange={async (e) => {
+                              const newG = e.target.value as CategoryGroup
+                              await updateCategory(c.id, { group: newG })
+                            }}
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-sans font-semibold border cursor-pointer transition-all outline-none appearance-none pr-5 text-center ${badge.bg} ${badge.border} ${badge.text}`}
+                            title="Change budget framework group"
+                          >
+                            <option value="ungrouped" className="bg-[#1E0C38] text-white">⚪ Ungrouped</option>
+                            <option value="needs" className="bg-[#1E0C38] text-teal-300">🎯 Needs</option>
+                            <option value="wants" className="bg-[#1E0C38] text-purple-300">🎨 Wants</option>
+                            <option value="savings" className="bg-[#1E0C38] text-amber-300">💰 Savings</option>
+                            <option value="bills" className="bg-[#1E0C38] text-blue-300">📄 Bills</option>
+                          </select>
+                          <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[8px] text-white/50">▾</span>
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-white/60 font-mono mt-1.5">
+                        Spent: <span className="text-white font-semibold">{currencySymbol}{spent.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+                        {c.budget != null && c.budget > 0 ? ` / Budget: ${currencySymbol}${c.budget.toLocaleString("en-US", { minimumFractionDigits: 2 })}` : ""}
+                      </p>
                     </div>
-                    <p className="text-xs text-white/60 font-mono mt-1">
-                      Spent: <span className="text-white font-semibold">{currencySymbol}{spent.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
-                      {c.budget != null && c.budget > 0 ? ` / Budget: ${currencySymbol}${c.budget.toLocaleString("en-US", { minimumFractionDigits: 2 })}` : ""}
-                    </p>
+
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all shrink-0">
+                      <button
+                        onClick={() => setEditingCategory(c)}
+                        className="p-1.5 rounded-lg hover:bg-white/10 text-white/60 hover:text-white cursor-pointer transition-all"
+                        title="Edit category"
+                      >
+                        <Edit3 className="size-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (confirm(`Delete category "${c.name}"?`)) {
+                            deleteCategory(c.id)
+                          }
+                        }}
+                        className="p-1.5 rounded-lg hover:bg-red-500/20 text-white/40 hover:text-red-400 cursor-pointer transition-all"
+                        title="Delete category"
+                      >
+                        <Trash2 className="size-4" />
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all shrink-0">
-                    <button
-                      onClick={() => setEditingCategory(c)}
-                      className="p-1.5 rounded-lg hover:bg-white/10 text-white/60 hover:text-white cursor-pointer transition-all"
-                      title="Edit category"
-                    >
-                      <Edit3 className="size-4" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (confirm(`Delete category "${c.name}"?`)) {
-                          deleteCategory(c.id)
-                        }
-                      }}
-                      className="p-1.5 rounded-lg hover:bg-red-500/20 text-white/40 hover:text-red-400 cursor-pointer transition-all"
-                      title="Delete category"
-                    >
-                      <Trash2 className="size-4" />
-                    </button>
-                  </div>
+                  {c.budget != null && c.budget > 0 && (
+                    <div className="w-full mt-3">
+                      <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-white/40"
+                          style={{
+                            width: `${Math.min(100, Math.max(0, (spent / c.budget) * 100))}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                {c.budget != null && c.budget > 0 && (
-                  <div className="w-full mt-3">
-                    <div className="w-full h-1.5 rounded-full bg-white/10 overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-white/40"
-                        style={{
-                          width: `${Math.min(100, Math.max(0, (spent / c.budget) * 100))}%`,
-                        }}
-                      />
-                    </div>
+                {/* 1-Click Quick Grouping Action Bar for Ungrouped Items */}
+                {isUngrouped && (
+                  <div className="mt-3 pt-2.5 border-t border-white/10 flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] text-white/50 font-sans">Group as:</span>
+                    <button
+                      type="button"
+                      onClick={() => updateCategory(c.id, { group: "needs" })}
+                      className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-teal-500/15 hover:bg-teal-500/30 text-teal-300 border border-teal-500/30 transition-all cursor-pointer"
+                    >
+                      🎯 Needs
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateCategory(c.id, { group: "wants" })}
+                      className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-purple-500/15 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 transition-all cursor-pointer"
+                    >
+                      🎨 Wants
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateCategory(c.id, { group: "savings" })}
+                      className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-amber-500/15 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 transition-all cursor-pointer"
+                    >
+                      💰 Savings
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateCategory(c.id, { group: "bills" })}
+                      className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-blue-500/15 hover:bg-blue-500/30 text-blue-300 border border-blue-500/30 transition-all cursor-pointer"
+                    >
+                      📄 Bills
+                    </button>
                   </div>
                 )}
               </motion.div>

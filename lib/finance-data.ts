@@ -43,12 +43,15 @@ export function isTransferTransaction(tx: { transfer_pair_id?: string; note?: st
   return false
 }
 
+export type CategoryGroup = "needs" | "wants" | "savings" | "bills" | "ungrouped"
+
 export interface Category {
   id: string
   user_id?: string
   name: string
   type: "income" | "expense"
   parent_category_id?: string
+  group?: CategoryGroup | null
   currency: string
   total_spent?: number
   budget?: number
@@ -507,6 +510,8 @@ function useFinanceDataInternal() {
               .reduce((sum, t) => sum + Math.abs(t.amount), 0)
 
             const budget = c.budget_cents != null ? c.budget_cents / 100 : (c.budget != null ? c.budget : undefined)
+            const rawGroup = c.group || c.bucket || c.category_group || (c.group_name ? String(c.group_name).toLowerCase() : undefined)
+            const normalizedGroup: CategoryGroup = (rawGroup === "needs" || rawGroup === "wants" || rawGroup === "savings" || rawGroup === "bills") ? rawGroup : "ungrouped"
 
             return {
               id: String(c.id),
@@ -514,6 +519,7 @@ function useFinanceDataInternal() {
               name: c.name,
               type: c.type || "expense",
               parent_category_id: c.parent_category_id ? String(c.parent_category_id) : undefined,
+              group: normalizedGroup,
               currency: c.currency || "EGP",
               total_spent: catSpent,
               budget,
@@ -800,10 +806,17 @@ function useFinanceDataInternal() {
   // CATEGORIES CRUD
   // ─────────────────────────────────────────────────────────────────
 
-  const createCategory = useCallback(async (catData: { name: string; type: "income" | "expense"; budget?: number; currency?: string }) => {
+  const createCategory = useCallback(async (catData: {
+    name: string
+    type: "income" | "expense"
+    budget?: number
+    currency?: string
+    group?: CategoryGroup | null
+  }) => {
     const currency = catData.currency || "EGP"
     const budgetCents = catData.budget && catData.budget > 0 ? Math.round(catData.budget * 100) : null
     const newCatId = generateUUID()
+    const groupVal = (catData.group && catData.group !== "ungrouped") ? catData.group : null
 
     if (isSupabaseConfigured && supabase) {
       const userId = await resolveCurrentUserId()
@@ -817,6 +830,9 @@ function useFinanceDataInternal() {
         name: catData.name.trim(),
         type: catData.type,
       }
+      if (groupVal) {
+        insertPayload.group = groupVal
+      }
       if (budgetCents != null) {
         insertPayload.budget_cents = budgetCents
       }
@@ -827,15 +843,19 @@ function useFinanceDataInternal() {
         .select()
         .single()
 
-      if (error && (error.message?.includes("budget_cents") || error.code === "PGRST204" || error.code === "42703")) {
+      if (error && (error.message?.includes("group") || error.message?.includes("budget_cents") || error.code === "PGRST204" || error.code === "42703")) {
+        const fallbackPayload: any = {
+          id: newCatId,
+          user_id: userId,
+          name: catData.name.trim(),
+          type: catData.type,
+        }
+        if (budgetCents != null && !error.message?.includes("budget_cents")) {
+          fallbackPayload.budget_cents = budgetCents
+        }
         const retry = await supabase
           .from("categories")
-          .insert({
-            id: newCatId,
-            user_id: userId,
-            name: catData.name.trim(),
-            type: catData.type,
-          })
+          .insert(fallbackPayload)
           .select()
           .single()
         data = retry.data
@@ -857,6 +877,7 @@ function useFinanceDataInternal() {
       id: newCatId,
       name: catData.name.trim(),
       type: catData.type,
+      group: (catData.group === "needs" || catData.group === "wants" || catData.group === "savings" || catData.group === "bills") ? catData.group : "ungrouped",
       currency,
       budget: catData.budget,
       total_spent: 0,
@@ -876,6 +897,7 @@ function useFinanceDataInternal() {
       name?: string
       type?: "income" | "expense"
       budget?: number
+      group?: CategoryGroup | null
     }
   ) => {
     if (isSupabaseConfigured && supabase) {
@@ -890,6 +912,9 @@ function useFinanceDataInternal() {
       if (updates.budget !== undefined) {
         updatePayload.budget_cents = updates.budget && updates.budget > 0 ? Math.round(updates.budget * 100) : 0
       }
+      if (updates.group !== undefined) {
+        updatePayload.group = (updates.group === "ungrouped" || !updates.group) ? null : updates.group
+      }
 
       if (isValidUUID(categoryId)) {
         let { error } = await supabase
@@ -898,10 +923,11 @@ function useFinanceDataInternal() {
           .eq("id", categoryId)
           .eq("user_id", userId)
 
-        // Fallback if budget_cents column is missing
-        if (error && (error.message?.includes("budget_cents") || error.code === "PGRST204" || error.code === "42703")) {
+        // Fallback if group or budget_cents column is missing
+        if (error && (error.message?.includes("group") || error.message?.includes("budget_cents") || error.code === "PGRST204" || error.code === "42703")) {
           const fallbackPayload = { ...updatePayload }
-          delete fallbackPayload.budget_cents
+          if (error.message?.includes("group")) delete fallbackPayload.group
+          if (error.message?.includes("budget_cents")) delete fallbackPayload.budget_cents
           const retry = await supabase
             .from("categories")
             .update(fallbackPayload)
@@ -926,6 +952,7 @@ function useFinanceDataInternal() {
               ...(updates.name !== undefined ? { name: updates.name.trim() } : {}),
               ...(updates.type !== undefined ? { type: updates.type } : {}),
               ...(updates.budget !== undefined ? { budget: updates.budget } : {}),
+              ...(updates.group !== undefined ? { group: updates.group || "ungrouped" } : {}),
             }
           }
           return c
