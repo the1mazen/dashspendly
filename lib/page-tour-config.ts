@@ -228,4 +228,40 @@ export const PAGE_TOURS: Record<string, PageTour> = {
       },
     ],
   },
+  expense_divider: {
+    pageId: 'expense_divider',
+    title: 'Expense Divider Smart Guide',
+    steps: [
+      {
+        targetId: 'tour-divider-account-remaining',
+        title: 'Account & Remaining Balance',
+        description: 'Select your account and enter how much money is currently left in it. Spendly will compare it against your starting balance.',
+        placement: 'bottom',
+      },
+      {
+        targetId: 'tour-divider-formula',
+        title: 'Automated Difference Formula',
+        description: 'Spendly calculates: Account Balance − Remaining = Total Spent. No manual arithmetic required!',
+        placement: 'bottom',
+      },
+      {
+        targetId: 'tour-divider-splits',
+        title: 'Multi-Category Distribution',
+        description: 'Divide the total spent amount across multiple categories (e.g., Groceries, Fuel, Dining) in one simple screen.',
+        placement: 'top',
+      },
+      {
+        targetId: 'tour-divider-allocator',
+        title: 'Live Allocation Validator',
+        description: 'Verifies that 100% of the calculated spent amount is allocated across your categories before saving.',
+        placement: 'top',
+      },
+      {
+        targetId: 'tour-modal-tx-submit',
+        title: '1-Click Grouped Recording',
+        description: 'Click Log Split Expenses to atomically record all categorized entries and adjust your account to the exact remaining balance.',
+        placement: 'top',
+      },
+    ],
+  },
 }

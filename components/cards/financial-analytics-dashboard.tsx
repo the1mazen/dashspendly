@@ -519,12 +519,16 @@ function AddTransactionModal({
 
   useEffect(() => {
     if (isOpen) {
-      startPageTour('record_transaction')
+      if (newType === 'expense_divider') {
+        startPageTour('expense_divider')
+      } else {
+        startPageTour('record_transaction')
+      }
     }
-  }, [isOpen, startPageTour])
+  }, [isOpen, newType, startPageTour])
 
   const handleClose = () => {
-    if (isTourActive && currentTour?.pageId === 'record_transaction') {
+    if (isTourActive && (currentTour?.pageId === 'record_transaction' || currentTour?.pageId === 'expense_divider')) {
       skipCurrentTour()
     }
     onClose()
@@ -777,7 +781,7 @@ function AddTransactionModal({
           {newType === "expense_divider" ? (
             <div className="space-y-4">
               {/* Account & Remaining Inputs */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div data-tour="tour-divider-account-remaining" className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* Source Account */}
                 <div>
                   <label className="text-[11px] font-semibold uppercase tracking-wider block mb-1 font-sans text-white/75">
@@ -818,6 +822,7 @@ function AddTransactionModal({
 
               {/* Dynamic Formula Display Card: (Account Balance - Remaining = Result) */}
               <div
+                data-tour="tour-divider-formula"
                 className="p-3.5 rounded-2xl border space-y-2.5"
                 style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}
               >
@@ -826,9 +831,13 @@ function AddTransactionModal({
                     <Layers className="size-3.5 text-[#A7F3D0]" />
                     Expense Calculation Formula
                   </span>
-                  <span className="font-mono text-[10.5px] text-white/50">
-                    Account Balance − Remaining = Result
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => startPageTour('expense_divider', true)}
+                    className="flex items-center gap-1 text-[10.5px] font-sans font-semibold text-[#5EEAD4] hover:text-white px-2 py-0.5 rounded-md hover:bg-white/10 transition cursor-pointer"
+                  >
+                    <span>(?) Guide</span>
+                  </button>
                 </div>
 
                 <div className="grid grid-cols-3 gap-2 text-center">
@@ -951,7 +960,7 @@ function AddTransactionModal({
               </div>
 
               {/* Category Allocations for the Result Amount */}
-              <div className="p-4 rounded-2xl border space-y-3" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
+              <div data-tour="tour-divider-splits" className="p-4 rounded-2xl border space-y-3" style={{ backgroundColor: tokens.nestedSurface, borderColor: tokens.borderNested }}>
                 <div className="flex items-center justify-between">
                   <div>
                     <span className="text-xs font-bold font-display text-white flex items-center gap-1.5">
@@ -1019,7 +1028,7 @@ function AddTransactionModal({
                 </div>
 
                 {/* Running Remainder Banner */}
-                <div className="pt-2.5 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+                <div data-tour="tour-divider-allocator" className="pt-2.5 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
                   <span className="text-white/60">Allocated: {currencySymbol}{totalAllocated.toFixed(2)} / {currencySymbol}{formulaResult.toFixed(2)}</span>
                   <span className={`font-bold ${Math.abs(remainingToAllocate) <= 0.001 && formulaResult > 0 ? "text-emerald-300" : "text-amber-300"}`}>
                     {Math.abs(remainingToAllocate) <= 0.001 && formulaResult > 0 ? (
