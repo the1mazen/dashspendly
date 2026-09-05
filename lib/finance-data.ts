@@ -404,7 +404,7 @@ function useFinanceDataInternal() {
         if (userId) {
           const [accRes, txRes, catRes, hfRes, billRes] = await Promise.all([
             supabase.from("accounts").select("*").eq("user_id", userId).order("created_at", { ascending: true }),
-            supabase.from("transactions").select("*").eq("user_id", userId).order("date", { ascending: false }),
+            supabase.from("transactions").select("*").eq("user_id", userId).order("date", { ascending: false }).order("created_at", { ascending: false }),
             supabase.from("categories").select("*").eq("user_id", userId).order("name", { ascending: true }),
             supabase.from("held_funds").select("*").eq("user_id", userId).order("created_at", { ascending: true }),
             supabase.from("bills").select("*").eq("user_id", userId).order("due_date", { ascending: true }),
@@ -467,6 +467,15 @@ function useFinanceDataInternal() {
               account_name: accountObj?.name || "Account",
               category_name: catObj?.name || (isFee ? "Fees" : "General"),
             }
+          })
+
+          parsedTransactions.sort((a, b) => {
+            const dateComp = (b.date || "").localeCompare(a.date || "")
+            if (dateComp !== 0) return dateComp
+            const timeA = a.created_at ? new Date(a.created_at).getTime() : 0
+            const timeB = b.created_at ? new Date(b.created_at).getTime() : 0
+            if (timeB !== timeA) return timeB - timeA
+            return (b.id || "").localeCompare(a.id || "")
           })
 
           const parsedAccounts: Account[] = dbAccounts.map((a: any) => {

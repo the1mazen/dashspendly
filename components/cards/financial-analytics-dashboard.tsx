@@ -2062,11 +2062,11 @@ function MonthSummaryModal({
     return `${sign}${diff.toFixed(1)}%`
   }
 
-  // Biggest single transaction (excluding transfers)
+  // Biggest single expense transaction (excluding transfers)
   const biggestTx = useMemo(() => {
-    const nonTransfers = filteredCurrentTxs.filter((t) => !isTransferTransaction(t))
-    if (nonTransfers.length === 0) return null
-    return [...nonTransfers].sort((a, b) => b.amount - a.amount)[0]
+    const expenses = filteredCurrentTxs.filter((t) => t.type === "expense" && !isTransferTransaction(t))
+    if (expenses.length === 0) return null
+    return [...expenses].sort((a, b) => b.amount - a.amount)[0]
   }, [filteredCurrentTxs])
 
   // Top spending categories and chart data
@@ -4327,7 +4327,7 @@ function AllTransactionsModal({
   const [bulkSuccessMsg, setBulkSuccessMsg] = useState<string | null>(null)
 
   const filtered = useMemo(() => {
-    return transactions.filter((t) => {
+    const list = transactions.filter((t) => {
       const matchesFilter = filter === "all" || t.type === filter
       const matchesSearch =
         t.description.toLowerCase().includes(search.toLowerCase()) ||
@@ -4336,6 +4336,15 @@ function AllTransactionsModal({
         (t.note || "").toLowerCase().includes(search.toLowerCase()) ||
         (t.date || "").includes(search)
       return matchesFilter && matchesSearch
+    })
+
+    return [...list].sort((a, b) => {
+      const dateComp = (b.date || "").localeCompare(a.date || "")
+      if (dateComp !== 0) return dateComp
+      const timeA = a.created_at ? new Date(a.created_at).getTime() : 0
+      const timeB = b.created_at ? new Date(b.created_at).getTime() : 0
+      if (timeB !== timeA) return timeB - timeA
+      return (b.id || "").localeCompare(a.id || "")
     })
   }, [transactions, filter, search])
 
@@ -4799,13 +4808,23 @@ function RecentTransactionsFeed({
   const [bulkSuccessMsg, setBulkSuccessMsg] = useState<string | null>(null)
 
   const filtered = useMemo(() => {
-    return transactions.filter((t) => {
+    const list = transactions.filter((t) => {
       const matchesFilter = filter === "all" || t.type === filter
       const matchesSearch =
         t.description.toLowerCase().includes(search.toLowerCase()) ||
         (t.category_name || "").toLowerCase().includes(search.toLowerCase()) ||
-        (t.account_name || "").toLowerCase().includes(search.toLowerCase())
+        (t.account_name || "").toLowerCase().includes(search.toLowerCase()) ||
+        (t.note || "").toLowerCase().includes(search.toLowerCase())
       return matchesFilter && matchesSearch
+    })
+
+    return [...list].sort((a, b) => {
+      const dateComp = (b.date || "").localeCompare(a.date || "")
+      if (dateComp !== 0) return dateComp
+      const timeA = a.created_at ? new Date(a.created_at).getTime() : 0
+      const timeB = b.created_at ? new Date(b.created_at).getTime() : 0
+      if (timeB !== timeA) return timeB - timeA
+      return (b.id || "").localeCompare(a.id || "")
     })
   }, [transactions, filter, search])
 
@@ -5389,7 +5408,17 @@ function CategoryBudgetGauges({
   }, [categories])
 
   const displayList = useMemo(() => {
-    return expenseCategories.slice(0, 4).map((c) => {
+    const sorted = [...expenseCategories].sort((a, b) => {
+      const spentA = a.total_spent || 0
+      const spentB = b.total_spent || 0
+      if (spentB !== spentA) return spentB - spentA
+      const budgetA = a.budget || 0
+      const budgetB = b.budget || 0
+      if (budgetB !== budgetA) return budgetB - budgetA
+      return a.name.localeCompare(b.name)
+    })
+
+    return sorted.slice(0, 5).map((c) => {
       const spent = c.total_spent || 0
       const budget = c.budget && c.budget > 0 ? c.budget : undefined
       const ratio = budget ? Math.min(1, spent / budget) : (spent > 0 ? 1 : 0)
