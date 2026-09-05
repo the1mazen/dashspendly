@@ -80,8 +80,8 @@ const TOKENS = {
     budgetProgressGradient: "linear-gradient(90deg, #06B6D4 0%, #22C55E 45%, #EAB308 80%, #FEF08A 100%)",
     
     // Header & Bars
-    headerBg: "rgba(20, 8, 42, 0.75)",
-    headerBorder: "rgba(255, 255, 255, 0.12)",
+    headerBg: "rgba(20, 8, 42, 0.45)",
+    headerBorder: "rgba(255, 255, 255, 0.16)",
     
     // Chart
     chartStroke: "#FFFFFF",
@@ -127,8 +127,8 @@ const TOKENS = {
     budgetProgressGradient: "linear-gradient(90deg, #06B6D4 0%, #22C55E 45%, #EAB308 80%, #FEF08A 100%)",
     
     // Header & Bars
-    headerBg: "rgba(28, 12, 54, 0.75)",
-    headerBorder: "rgba(255, 255, 255, 0.18)",
+    headerBg: "rgba(28, 12, 54, 0.35)",
+    headerBorder: "rgba(255, 255, 255, 0.20)",
     
     // Chart
     chartStroke: "#FFFFFF",
