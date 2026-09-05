@@ -16,6 +16,7 @@ export default function Home() {
   const aboutSectionRef = useRef<HTMLDivElement>(null)
   const contactSectionRef = useRef<HTMLDivElement>(null)
   const touchStartRef = useRef({ x: 0, y: 0 })
+  const lastSectionChangeRef = useRef(0)
 
   const moveToSection = (direction: 1 | -1) => {
     const scrollContainer = scrollContainerRef.current
@@ -35,11 +36,156 @@ export default function Home() {
     const deltaX = touch.clientX - touchStartRef.current.x
     const deltaY = touch.clientY - touchStartRef.current.y
 
-    // Only navigate horizontally if the horizontal swipe is dominant and exceeds threshold
+    // Only navigate horizontally on mobile if the horizontal swipe is dominant and exceeds threshold
     if (Math.abs(deltaX) >= 45 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2) {
       moveToSection(deltaX < 0 ? 1 : -1)
     }
   }
+
+  useEffect(() => {
+    const scrollContainer = scrollContainerRef.current
+    if (!scrollContainer) return
+
+    const handleWheel = (e: WheelEvent) => {
+      const delta = e.deltaY
+      if (Math.abs(delta) < 5) return
+
+      const currentScroll = scrollContainer.scrollLeft
+      const containerWidth = scrollContainer.offsetWidth
+      const currentSection = Math.round(currentScroll / containerWidth)
+
+      const canTransition = () => {
+        const now = Date.now()
+        if (now - lastSectionChangeRef.current < 450) {
+          return false
+        }
+        lastSectionChangeRef.current = now
+        return true
+      }
+
+      if (currentSection === 1 && featuresSectionRef.current) {
+        const featuresSection = featuresSectionRef.current
+        const isAtTop = featuresSection.scrollTop <= 2
+        const isAtBottom = featuresSection.scrollTop + featuresSection.clientHeight >= featuresSection.scrollHeight - 3
+
+        if (delta > 0 && !isAtBottom) {
+          return
+        }
+
+        if (delta < 0 && !isAtTop) {
+          return
+        }
+
+        if (delta < 0 && isAtTop) {
+          e.preventDefault()
+          if (canTransition()) {
+            scrollContainer.scrollTo({
+              left: 0 * containerWidth,
+              behavior: "smooth",
+            })
+          }
+          return
+        }
+
+        if (delta > 0 && isAtBottom) {
+          e.preventDefault()
+          if (canTransition()) {
+            scrollContainer.scrollTo({
+              left: 2 * containerWidth,
+              behavior: "smooth",
+            })
+          }
+          return
+        }
+      }
+
+      if (currentSection === 2 && aboutSectionRef.current) {
+        const aboutSection = aboutSectionRef.current
+        const isAtTop = aboutSection.scrollTop <= 2
+        const isAtBottom = aboutSection.scrollTop + aboutSection.clientHeight >= aboutSection.scrollHeight - 3
+
+        if (delta > 0 && !isAtBottom) {
+          return
+        }
+
+        if (delta < 0 && !isAtTop) {
+          return
+        }
+
+        if (delta < 0 && isAtTop) {
+          e.preventDefault()
+          if (canTransition()) {
+            scrollContainer.scrollTo({
+              left: 1 * containerWidth,
+              behavior: "smooth",
+            })
+          }
+          return
+        }
+
+        if (delta > 0 && isAtBottom) {
+          e.preventDefault()
+          if (canTransition()) {
+            scrollContainer.scrollTo({
+              left: 3 * containerWidth,
+              behavior: "smooth",
+            })
+          }
+          return
+        }
+      }
+
+      if (currentSection === 3 && contactSectionRef.current) {
+        const contactSection = contactSectionRef.current
+        const isAtTop = contactSection.scrollTop <= 2
+        const isAtBottom = contactSection.scrollTop + contactSection.clientHeight >= contactSection.scrollHeight - 3
+
+        if (delta > 0 && !isAtBottom) {
+          return
+        }
+
+        if (delta < 0 && !isAtTop) {
+          return
+        }
+
+        if (delta < 0 && isAtTop) {
+          e.preventDefault()
+          if (canTransition()) {
+            scrollContainer.scrollTo({
+              left: 2 * containerWidth,
+              behavior: "smooth",
+            })
+          }
+          return
+        }
+
+        if (delta > 0 && isAtBottom) {
+          e.preventDefault()
+          return
+        }
+      }
+
+      e.preventDefault()
+
+      if (Math.abs(delta) > 10) {
+        if (!canTransition()) return
+        let targetSection = currentSection
+        if (delta > 0) {
+          targetSection = Math.min(currentSection + 1, 3)
+        } else {
+          targetSection = Math.max(currentSection - 1, 0)
+        }
+
+        scrollContainer.scrollTo({
+          left: targetSection * containerWidth,
+          behavior: "smooth",
+        })
+      }
+    }
+
+    scrollContainer.addEventListener("wheel", handleWheel, { passive: false })
+    return () => scrollContainer.removeEventListener("wheel", handleWheel)
+  }, [])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -217,7 +363,7 @@ export default function Home() {
 
 function SwipeIndicator({ direction = "right" }: { direction?: "left" | "right" }) {
   return (
-    <div className="pointer-events-none absolute bottom-4 sm:bottom-6 inset-x-0 z-20 flex items-center justify-center select-none">
+    <div className="pointer-events-none absolute bottom-4 sm:bottom-6 inset-x-0 z-20 flex md:hidden items-center justify-center select-none">
       <span className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs font-mono font-medium tracking-widest text-purple-200/80 [text-shadow:_0_0_10px_rgba(192,132,252,0.9),_0_0_20px_rgba(168,85,247,0.6),_0_0_2px_rgba(255,255,255,0.8)] animate-pulse uppercase">
         {direction === "right" ? "Swipe ->" : "<- Swipe"}
       </span>
