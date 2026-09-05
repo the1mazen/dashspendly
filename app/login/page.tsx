@@ -8,6 +8,7 @@ import { saveLocalUserProfile } from "@/lib/user-profile"
 import { saveLocalAccounts, Account } from "@/lib/finance-data"
 import { supabase, isSupabaseConfigured, resolveCurrentUserId } from "@/lib/supabase"
 import { TermsDialog } from "@/components/terms-dialog"
+import { setClientAuthSession } from "@/lib/auth-session"
 
 export default function AuthPage() {
   const router = useRouter()
@@ -58,9 +59,7 @@ export default function AuthPage() {
 
           if (user) {
             setAuthUserId(user.id)
-            if (typeof window !== "undefined") {
-              localStorage.setItem("spendly_auth_user_id", user.id)
-            }
+            setClientAuthSession(user.id)
 
             const redirectParam = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("redirect") : null
             if (isAccountStep) {
@@ -87,9 +86,7 @@ export default function AuthPage() {
       const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (session?.user) {
           setAuthUserId(session.user.id)
-          if (typeof window !== "undefined") {
-            localStorage.setItem("spendly_auth_user_id", session.user.id)
-          }
+          setClientAuthSession(session.user.id)
           if (window.location.search.includes("step=account")) {
             setSetupStep("account")
           } else {
@@ -423,9 +420,7 @@ export default function AuthPage() {
 
                     if (uid) {
                       setAuthUserId(uid)
-                      if (typeof window !== "undefined") {
-                        localStorage.setItem("spendly_auth_user_id", uid)
-                      }
+                      setClientAuthSession(uid)
                       try {
                         await supabase.from("profiles").upsert({
                           id: uid,
@@ -452,9 +447,7 @@ export default function AuthPage() {
 
                     if (signInData?.user?.id) {
                       setAuthUserId(signInData.user.id)
-                      if (typeof window !== "undefined") {
-                        localStorage.setItem("spendly_auth_user_id", signInData.user.id)
-                      }
+                      setClientAuthSession(signInData.user.id)
                     }
                   }
                 } catch (err: any) {
@@ -463,6 +456,10 @@ export default function AuthPage() {
                   setLoading(false)
                   return
                 }
+              } else if (!isSupabaseConfigured || !supabase) {
+                const localUid = "user_local_" + Date.now()
+                setAuthUserId(localUid)
+                setClientAuthSession(localUid)
               }
 
               setLoading(false)

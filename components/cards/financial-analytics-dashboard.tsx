@@ -33,6 +33,8 @@ import {
 import { useUserProfile } from "@/lib/user-profile"
 import { supabase, isSupabaseConfigured } from "@/lib/supabase"
 import { ManagePlansModal, BudgetPlannerSection, Active503020Tracker } from "./budget-planner"
+import { AuthGuard } from "@/components/auth-guard"
+import { clearClientAuthSession } from "@/lib/auth-session"
 
 // ─── Design Tokens: Exact Reproduction of 2.jpeg ──────────────────
 
@@ -6806,12 +6808,13 @@ function SettingsSection({ onNavigate }: { onNavigate: (s: SectionId) => void })
       console.warn("Supabase sign out error:", err)
     } finally {
       if (typeof window !== "undefined") {
+        clearClientAuthSession()
         localStorage.clear()
         sessionStorage.clear()
         document.cookie.split(";").forEach((c) => {
           document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/")
         })
-        window.location.href = "/login"
+        window.location.replace("/login")
       }
     }
   }
@@ -7464,11 +7467,13 @@ export function FinancialAnalyticsDashboard({
   }), [isDarkMode, isVideoEnabled, currentTokens, toggleTheme, toggleVideo, setThemeMode])
 
   return (
-    <FinanceDataProvider>
-      <DashboardThemeContext.Provider value={themeContextValue}>
-        <FinancialAnalyticsDashboardInner initialSection={initialSection} />
-      </DashboardThemeContext.Provider>
-    </FinanceDataProvider>
+    <AuthGuard>
+      <FinanceDataProvider>
+        <DashboardThemeContext.Provider value={themeContextValue}>
+          <FinancialAnalyticsDashboardInner initialSection={initialSection} />
+        </DashboardThemeContext.Provider>
+      </FinanceDataProvider>
+    </AuthGuard>
   )
 }
 

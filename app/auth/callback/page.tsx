@@ -26,6 +26,8 @@ export default function AuthCallbackPage() {
           if (session?.user) {
             if (typeof window !== "undefined") {
               localStorage.setItem("spendly_auth_user_id", session.user.id)
+              const maxAge = 60 * 60 * 24 * 30
+              document.cookie = `spendly_session=${encodeURIComponent(session.user.id)}; path=/; max-age=${maxAge}; SameSite=Lax`
             }
 
             const user = session.user
@@ -54,7 +56,7 @@ export default function AuthCallbackPage() {
       }
 
       if (isMounted) {
-        router.replace("/dashboard")
+        router.replace("/login")
       }
     }
 
