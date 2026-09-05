@@ -226,43 +226,22 @@ export function SpotlightTour() {
           transition={{ type: 'spring', damping: 25, stiffness: 350 }}
           style={{
             ...tooltipStyle,
-            background: tokens.cardGradient,
-            borderColor: tokens.border,
-            boxShadow: tokens.cardShadow,
+            background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.04) 100%)',
           }}
-          className="pointer-events-auto backdrop-blur-2xl border rounded-3xl p-5 text-white flex flex-col gap-3.5 z-[9999] relative overflow-hidden"
+          className="pointer-events-auto backdrop-blur-2xl border-2 border-white/20 rounded-3xl p-5 text-white flex flex-col gap-3.5 z-[9999] relative overflow-hidden shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
         >
-          {/* Frosted inner edge ring */}
-          <div className="absolute inset-0 rounded-3xl pointer-events-none border border-white/10" />
-
           {/* Header */}
-          <div
-            className="relative z-10 flex items-center justify-between gap-2 border-b pb-2.5"
-            style={{ borderColor: tokens.borderNested }}
-          >
+          <div className="relative z-10 flex items-center justify-between gap-2 border-b border-white/15 pb-2.5">
             <div className="flex items-center gap-2">
-              <div
-                className="size-7 rounded-xl border flex items-center justify-center shadow-sm"
-                style={{
-                  backgroundColor: tokens.nestedSurface,
-                  borderColor: tokens.borderNested,
-                  color: tokens.savingsRate,
-                }}
-              >
+              <div className="size-7 rounded-xl border border-white/20 bg-white/10 flex items-center justify-center shadow-sm text-[#5EEAD4]">
                 <Compass className="size-3.5 animate-spin-slow" />
               </div>
               <div>
-                <span className="text-[10.5px] font-bold tracking-wider uppercase text-white/70 font-sans block">
+                <span className="text-[10.5px] font-bold tracking-wider uppercase text-white/75 font-sans block">
                   {currentTour.title}
                 </span>
                 <div className="flex items-center gap-1.5 mt-0.5">
-                  <span
-                    className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full shadow-sm"
-                    style={{
-                      background: tokens.dashboardActivePill,
-                      color: tokens.dashboardActiveText,
-                    }}
-                  >
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full shadow-sm bg-gradient-to-r from-[#5EEAD4] to-[#A7F3D0] text-[#120824]">
                     Step {currentTourStepIndex + 1} of {currentTour.steps.length}
                   </span>
                 </div>
@@ -284,7 +263,7 @@ export function SpotlightTour() {
               <Sparkles className="size-3.5 text-[#FEF08A] shrink-0" />
               {currentStep.title}
             </h4>
-            <p className="text-xs text-white/75 font-sans leading-relaxed">
+            <p className="text-xs text-white/80 font-sans leading-relaxed">
               {currentStep.description}
             </p>
           </div>
@@ -298,14 +277,11 @@ export function SpotlightTour() {
                   key={idx}
                   className={`h-1.5 rounded-full transition-all duration-300 ${
                     idx === currentTourStepIndex
-                      ? 'w-5'
+                      ? 'w-5 bg-gradient-to-r from-[#5EEAD4] to-[#A7F3D0]'
                       : idx < currentTourStepIndex
                       ? 'w-2 bg-[#4ADE80]'
                       : 'w-1.5 bg-white/20'
                   }`}
-                  style={{
-                    background: idx === currentTourStepIndex ? tokens.dashboardActivePill : undefined,
-                  }}
                 />
               ))}
             </div>
@@ -315,11 +291,7 @@ export function SpotlightTour() {
               {currentTourStepIndex > 0 && (
                 <button
                   onClick={prevTourStep}
-                  className="px-2.5 py-1 text-xs font-semibold text-white/80 hover:text-white border rounded-xl transition flex items-center gap-1 cursor-pointer hover:bg-white/10"
-                  style={{
-                    backgroundColor: tokens.nestedSurface,
-                    borderColor: tokens.borderNested,
-                  }}
+                  className="px-2.5 py-1 text-xs font-semibold text-white/90 hover:text-white border border-white/20 bg-white/10 hover:bg-white/20 rounded-xl transition flex items-center gap-1 cursor-pointer"
                 >
                   <ChevronLeft className="size-3" />
                   <span>Back</span>
@@ -328,11 +300,7 @@ export function SpotlightTour() {
 
               <button
                 onClick={nextTourStep}
-                className="px-3.5 py-1.5 text-xs font-bold rounded-xl shadow-md transition-all flex items-center gap-1 cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
-                style={{
-                  background: tokens.dashboardActivePill,
-                  color: tokens.dashboardActiveText,
-                }}
+                className="px-3.5 py-1.5 text-xs font-bold rounded-xl bg-gradient-to-r from-[#5EEAD4] via-[#A7F3D0] to-[#FEF08A] text-[#120824] shadow-[0_4px_16px_rgba(94,234,212,0.35)] hover:shadow-[0_6px_20px_rgba(94,234,212,0.5)] transition-all flex items-center gap-1 cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
               >
                 <span>{isLastStep ? 'Got it!' : 'Next'}</span>
                 {!isLastStep && <ChevronRight className="size-3" />}

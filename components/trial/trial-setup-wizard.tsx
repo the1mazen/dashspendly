@@ -84,43 +84,28 @@ export function TrialSetupWizard({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[9950] flex items-center justify-center p-4 bg-black/65 backdrop-blur-md">
+      <div className="fixed inset-0 z-[9950] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
           transition={{ duration: 0.25, ease: 'easeOut' }}
-          className="relative w-full max-w-md rounded-3xl p-6 sm:p-7 border backdrop-blur-2xl text-white selection:bg-[#5EEAD4] selection:text-[#120824] shadow-2xl overflow-hidden"
+          className="relative w-full max-w-md rounded-3xl p-6 sm:p-7 border-2 border-white/20 backdrop-blur-2xl text-white selection:bg-[#5EEAD4] selection:text-[#120824] shadow-[0_8px_32px_rgba(0,0,0,0.45)] overflow-hidden"
           style={{
-            background: tokens.cardGradient,
-            borderColor: tokens.border,
-            boxShadow: tokens.cardShadow,
+            background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.04) 100%)',
           }}
         >
-          {/* Frosted inner edge ring */}
-          <div className="absolute inset-0 rounded-3xl pointer-events-none border border-white/10" />
-
           {/* Header */}
-          <div
-            className="relative z-10 flex items-center justify-between pb-3.5 mb-4 border-b"
-            style={{ borderColor: tokens.borderNested }}
-          >
+          <div className="relative z-10 flex items-center justify-between pb-3.5 mb-4 border-b border-white/15">
             <div className="flex items-center gap-2.5">
-              <span
-                className="size-8 rounded-xl border flex items-center justify-center font-bold shadow-sm"
-                style={{
-                  backgroundColor: tokens.nestedSurface,
-                  borderColor: tokens.borderNested,
-                  color: tokens.savingsRate,
-                }}
-              >
+              <span className="size-8 rounded-xl border border-white/20 bg-white/10 flex items-center justify-center font-bold shadow-sm text-[#5EEAD4]">
                 <Sparkles className="size-4" />
               </span>
               <div>
                 <h3 className="text-xs font-bold uppercase tracking-wider font-display text-white">
                   Quick Setup Guide
                 </h3>
-                <p className="text-[11px] font-sans text-white/70 mt-0.5">
+                <p className="text-[11px] font-sans text-white/75 mt-0.5">
                   {wizardStep === 'account' && 'Step 1 of 3: Primary Account'}
                   {wizardStep === 'transaction' && 'Step 2 of 3: First Activity'}
                   {wizardStep === 'bill' && 'Step 3 of 3: Recurring Bills'}
@@ -144,14 +129,11 @@ export function TrialSetupWizard({
                     key={s}
                     className={`h-1.5 rounded-full transition-all duration-300 ${
                       isCurrent
-                        ? 'w-5'
+                        ? 'w-5 bg-gradient-to-r from-[#5EEAD4] to-[#A7F3D0]'
                         : isPassed
                         ? 'w-2 bg-[#4ADE80]'
                         : 'w-1.5 bg-white/20'
                     }`}
-                    style={{
-                      background: isCurrent ? tokens.dashboardActivePill : undefined,
-                    }}
                   />
                 )
               })}
@@ -165,20 +147,13 @@ export function TrialSetupWizard({
                 <h4 className="text-base font-bold font-display text-white">
                   Create Your First Account
                 </h4>
-                <p className="text-xs text-white/70 font-sans mt-0.5 leading-relaxed">
+                <p className="text-xs text-white/75 font-sans mt-0.5 leading-relaxed">
                   Spendly needs at least one account to calculate your net worth and 50/30/20 budget.
                 </p>
               </div>
 
               {createError && (
-                <div
-                  className="p-2.5 rounded-xl border text-xs font-sans"
-                  style={{
-                    backgroundColor: tokens.expenseWell,
-                    borderColor: tokens.borderExpense,
-                    color: tokens.loss,
-                  }}
-                >
+                <div className="p-2.5 rounded-xl border border-red-500/30 bg-red-500/15 text-xs text-red-200 font-sans">
                   {createError}
                 </div>
               )}
@@ -191,14 +166,10 @@ export function TrialSetupWizard({
                   <input
                     type="text"
                     required
-                    placeholder="e.g. QNB Checking, Cash Wallet, Card"
+                    placeholder="e.g. Checking Account, Cash Wallet, Card"
                     value={accountName}
                     onChange={(e) => setAccountName(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl text-xs font-sans text-white focus:outline-none border transition-colors"
-                    style={{
-                      backgroundColor: tokens.nestedSurface,
-                      borderColor: tokens.borderNested,
-                    }}
+                    className="w-full px-3.5 py-2.5 rounded-xl text-xs font-sans text-white focus:outline-none border border-white/20 bg-white/10 focus:border-[#5EEAD4] focus:ring-1 focus:ring-[#5EEAD4]/40 placeholder-white/40 transition-colors"
                   />
                 </div>
 
@@ -210,16 +181,12 @@ export function TrialSetupWizard({
                     <select
                       value={accountType}
                       onChange={(e) => setAccountType(e.target.value)}
-                      className="w-full px-3 py-2.5 rounded-xl text-xs font-sans text-white focus:outline-none border cursor-pointer transition-colors"
-                      style={{
-                        backgroundColor: tokens.nestedSurface,
-                        borderColor: tokens.borderNested,
-                      }}
+                      className="w-full px-3 py-2.5 rounded-xl text-xs font-sans text-white focus:outline-none border border-white/20 bg-white/10 focus:border-[#5EEAD4] focus:ring-1 focus:ring-[#5EEAD4]/40 cursor-pointer transition-colors"
                     >
-                      <option value="checking" className="bg-[#1a0c32] text-white">Bank / Checking</option>
-                      <option value="cash" className="bg-[#1a0c32] text-white">Cash wallet</option>
-                      <option value="credit" className="bg-[#1a0c32] text-white">Credit card</option>
-                      <option value="savings" className="bg-[#1a0c32] text-white">Savings account</option>
+                      <option value="checking" className="bg-[#171722] text-white">Bank / Checking</option>
+                      <option value="cash" className="bg-[#171722] text-white">Cash wallet</option>
+                      <option value="credit" className="bg-[#171722] text-white">Credit card</option>
+                      <option value="savings" className="bg-[#171722] text-white">Savings account</option>
                     </select>
                   </div>
 
@@ -230,18 +197,14 @@ export function TrialSetupWizard({
                     <select
                       value={accountCurrency}
                       onChange={(e) => setAccountCurrency(e.target.value)}
-                      className="w-full px-3 py-2.5 rounded-xl text-xs font-sans text-white focus:outline-none border cursor-pointer transition-colors"
-                      style={{
-                        backgroundColor: tokens.nestedSurface,
-                        borderColor: tokens.borderNested,
-                      }}
+                      className="w-full px-3 py-2.5 rounded-xl text-xs font-sans text-white focus:outline-none border border-white/20 bg-white/10 focus:border-[#5EEAD4] focus:ring-1 focus:ring-[#5EEAD4]/40 cursor-pointer transition-colors"
                     >
-                      <option value="USD" className="bg-[#1a0c32] text-white">USD ($)</option>
-                      <option value="EGP" className="bg-[#1a0c32] text-white">EGP (EGP)</option>
-                      <option value="EUR" className="bg-[#1a0c32] text-white">EUR (€)</option>
-                      <option value="GBP" className="bg-[#1a0c32] text-white">GBP (£)</option>
-                      <option value="SAR" className="bg-[#1a0c32] text-white">SAR (SAR)</option>
-                      <option value="AED" className="bg-[#1a0c32] text-white">AED (AED)</option>
+                      <option value="USD" className="bg-[#171722] text-white">USD ($)</option>
+                      <option value="EGP" className="bg-[#171722] text-white">EGP (EGP)</option>
+                      <option value="EUR" className="bg-[#171722] text-white">EUR (€)</option>
+                      <option value="GBP" className="bg-[#171722] text-white">GBP (£)</option>
+                      <option value="SAR" className="bg-[#171722] text-white">SAR (SAR)</option>
+                      <option value="AED" className="bg-[#171722] text-white">AED (AED)</option>
                     </select>
                   </div>
                 </div>
@@ -256,11 +219,7 @@ export function TrialSetupWizard({
                     placeholder="0.00"
                     value={startingBalance}
                     onChange={(e) => setStartingBalance(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl text-xs font-mono text-white focus:outline-none border transition-colors"
-                    style={{
-                      backgroundColor: tokens.nestedSurface,
-                      borderColor: tokens.borderNested,
-                    }}
+                    className="w-full px-3.5 py-2.5 rounded-xl text-xs font-mono text-white focus:outline-none border border-white/20 bg-white/10 focus:border-[#5EEAD4] focus:ring-1 focus:ring-[#5EEAD4]/40 placeholder-white/40 transition-colors"
                   />
                 </div>
 
@@ -268,11 +227,7 @@ export function TrialSetupWizard({
                   <button
                     type="submit"
                     disabled={isCreatingAccount || !accountName.trim()}
-                    className="w-full py-3 px-4 rounded-xl text-xs font-bold shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 hover:scale-[1.02] active:scale-[0.98]"
-                    style={{
-                      background: tokens.dashboardActivePill,
-                      color: tokens.dashboardActiveText,
-                    }}
+                    className="w-full py-3 px-4 rounded-xl text-xs font-bold bg-gradient-to-r from-[#5EEAD4] via-[#A7F3D0] to-[#FEF08A] text-[#120824] shadow-[0_4px_20px_rgba(94,234,212,0.35)] hover:shadow-[0_6px_25px_rgba(94,234,212,0.5)] transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 hover:scale-[1.02] active:scale-[0.98]"
                   >
                     <Wallet className="size-3.5" />
                     <span>{isCreatingAccount ? 'Creating account...' : 'Create Account & Continue'}</span>
@@ -293,24 +248,18 @@ export function TrialSetupWizard({
                 <h4 className="text-base font-bold font-display text-white">
                   Add Your First Transaction
                 </h4>
-                <p className="text-xs text-white/70 font-sans mt-0.5 leading-relaxed">
+                <p className="text-xs text-white/75 font-sans mt-0.5 leading-relaxed">
                   Log an expense, income, or transfer to see real-time cash flow and charts in action.
                 </p>
               </div>
 
-              <div
-                className="p-3.5 rounded-2xl border space-y-2 text-xs text-white/80 font-sans backdrop-blur-md"
-                style={{
-                  backgroundColor: tokens.incomeWell,
-                  borderColor: tokens.borderIncome,
-                }}
-              >
+              <div className="p-3.5 rounded-2xl border border-white/20 bg-white/[0.08] backdrop-blur-md space-y-2 text-xs text-white/90 font-sans">
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="size-3.5" style={{ color: tokens.gain }} />
+                  <CheckCircle2 className="size-3.5 text-[#4ADE80]" />
                   <span>Account successfully created</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="size-3.5" style={{ color: tokens.gain }} />
+                  <CheckCircle2 className="size-3.5 text-[#4ADE80]" />
                   <span>You can log a transaction now or skip to later</span>
                 </div>
               </div>
@@ -319,11 +268,7 @@ export function TrialSetupWizard({
                 <button
                   type="button"
                   onClick={() => setWizardStep('bill')}
-                  className="py-2.5 px-3.5 rounded-xl text-xs font-semibold text-white/80 hover:text-white border transition-all text-center cursor-pointer hover:bg-white/10"
-                  style={{
-                    backgroundColor: tokens.nestedSurface,
-                    borderColor: tokens.borderNested,
-                  }}
+                  className="py-2.5 px-3.5 rounded-xl text-xs font-semibold text-white/90 hover:text-white border border-white/20 bg-white/10 hover:bg-white/20 transition-all text-center cursor-pointer"
                 >
                   Skip for now
                 </button>
@@ -331,11 +276,7 @@ export function TrialSetupWizard({
                 <button
                   type="button"
                   onClick={handleAddTxClick}
-                  className="py-2.5 px-3.5 rounded-xl text-xs font-bold shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer hover:scale-[1.02]"
-                  style={{
-                    background: tokens.dashboardActivePill,
-                    color: tokens.dashboardActiveText,
-                  }}
+                  className="py-2.5 px-3.5 rounded-xl text-xs font-bold bg-gradient-to-r from-[#5EEAD4] via-[#A7F3D0] to-[#FEF08A] text-[#120824] shadow-[0_4px_16px_rgba(94,234,212,0.35)] hover:shadow-[0_6px_20px_rgba(94,234,212,0.5)] transition-all flex items-center justify-center gap-1.5 cursor-pointer hover:scale-[1.02]"
                 >
                   <ArrowRightLeft className="size-3.5" />
                   <span>Add Transaction</span>
@@ -351,24 +292,18 @@ export function TrialSetupWizard({
                 <h4 className="text-base font-bold font-display text-white">
                   Set Up Recurring Bills
                 </h4>
-                <p className="text-xs text-white/70 font-sans mt-0.5 leading-relaxed">
+                <p className="text-xs text-white/75 font-sans mt-0.5 leading-relaxed">
                   Track rent, electricity, gym, or subscriptions to calculate fixed commitments and safe-to-spend allowances.
                 </p>
               </div>
 
-              <div
-                className="p-3.5 rounded-2xl border space-y-2 text-xs text-white/80 font-sans backdrop-blur-md"
-                style={{
-                  backgroundColor: tokens.savingsWell,
-                  borderColor: tokens.borderSavings,
-                }}
-              >
+              <div className="p-3.5 rounded-2xl border border-white/20 bg-white/[0.08] backdrop-blur-md space-y-2 text-xs text-white/90 font-sans">
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="size-3.5" style={{ color: tokens.savingsRate }} />
+                  <CheckCircle2 className="size-3.5 text-[#5EEAD4]" />
                   <span>Safeguards your 50/30/20 budget framework</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="size-3.5" style={{ color: tokens.savingsRate }} />
+                  <CheckCircle2 className="size-3.5 text-[#5EEAD4]" />
                   <span>1-click mark as paid auto-records transactions</span>
                 </div>
               </div>
@@ -377,11 +312,7 @@ export function TrialSetupWizard({
                 <button
                   type="button"
                   onClick={() => setWizardStep('celebration')}
-                  className="py-2.5 px-3.5 rounded-xl text-xs font-semibold text-white/80 hover:text-white border transition-all text-center cursor-pointer hover:bg-white/10"
-                  style={{
-                    backgroundColor: tokens.nestedSurface,
-                    borderColor: tokens.borderNested,
-                  }}
+                  className="py-2.5 px-3.5 rounded-xl text-xs font-semibold text-white/90 hover:text-white border border-white/20 bg-white/10 hover:bg-white/20 transition-all text-center cursor-pointer"
                 >
                   Skip for now
                 </button>
@@ -389,11 +320,7 @@ export function TrialSetupWizard({
                 <button
                   type="button"
                   onClick={handleAddBillClick}
-                  className="py-2.5 px-3.5 rounded-xl text-xs font-bold shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer hover:scale-[1.02]"
-                  style={{
-                    background: tokens.dashboardActivePill,
-                    color: tokens.dashboardActiveText,
-                  }}
+                  className="py-2.5 px-3.5 rounded-xl text-xs font-bold bg-gradient-to-r from-[#5EEAD4] via-[#A7F3D0] to-[#FEF08A] text-[#120824] shadow-[0_4px_16px_rgba(94,234,212,0.35)] hover:shadow-[0_6px_20px_rgba(94,234,212,0.5)] transition-all flex items-center justify-center gap-1.5 cursor-pointer hover:scale-[1.02]"
                 >
                   <Receipt className="size-3.5" />
                   <span>Add Bill</span>
@@ -405,14 +332,7 @@ export function TrialSetupWizard({
           {/* Celebration / Guided Tour Launch */}
           {wizardStep === 'celebration' && (
             <div className="relative z-10 space-y-4 text-center py-2">
-              <div
-                className="mx-auto size-14 rounded-2xl border flex items-center justify-center shadow-lg"
-                style={{
-                  backgroundColor: tokens.incomeWell,
-                  borderColor: tokens.borderIncome,
-                  color: tokens.gain,
-                }}
-              >
+              <div className="mx-auto size-14 rounded-2xl border border-white/20 bg-white/10 flex items-center justify-center shadow-lg text-[#5EEAD4]">
                 <Sparkles className="size-7 animate-pulse" />
               </div>
 
@@ -420,7 +340,7 @@ export function TrialSetupWizard({
                 <h4 className="text-lg font-bold font-display text-white">
                   You're all set! 🚀
                 </h4>
-                <p className="text-xs text-white/70 font-sans mt-1 leading-relaxed max-w-xs mx-auto">
+                <p className="text-xs text-white/75 font-sans mt-1 leading-relaxed max-w-xs mx-auto">
                   Your Spendly workspace is active. Let's take a quick interactive tour through the dashboard to show you around.
                 </p>
               </div>
@@ -429,11 +349,7 @@ export function TrialSetupWizard({
                 <button
                   type="button"
                   onClick={handleStartTour}
-                  className="w-full py-3 px-4 rounded-xl text-xs font-bold shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.02]"
-                  style={{
-                    background: tokens.dashboardActivePill,
-                    color: tokens.dashboardActiveText,
-                  }}
+                  className="w-full py-3 px-4 rounded-xl text-xs font-bold bg-gradient-to-r from-[#5EEAD4] via-[#A7F3D0] to-[#FEF08A] text-[#120824] shadow-[0_4px_20px_rgba(94,234,212,0.35)] hover:shadow-[0_6px_25px_rgba(94,234,212,0.5)] transition-all flex items-center justify-center gap-2 cursor-pointer hover:scale-[1.02]"
                 >
                   <span>Start Dashboard Tour</span>
                   <ArrowRight className="size-3.5" />
