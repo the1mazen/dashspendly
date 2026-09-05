@@ -34,139 +34,27 @@ export default function Home() {
     const touch = event.changedTouches[0]
     const deltaX = touch.clientX - touchStartRef.current.x
     const deltaY = touch.clientY - touchStartRef.current.y
-    const primaryDistance = Math.max(Math.abs(deltaX), Math.abs(deltaY))
 
-    if (primaryDistance < 48) return
-
-    if (Math.abs(deltaY) >= Math.abs(deltaX)) {
-      moveToSection(deltaY < 0 ? 1 : -1)
-      return
+    // Only navigate horizontally if the horizontal swipe is dominant and exceeds threshold
+    if (Math.abs(deltaX) >= 45 && Math.abs(deltaX) > Math.abs(deltaY) * 1.2) {
+      moveToSection(deltaX < 0 ? 1 : -1)
     }
-
-    moveToSection(deltaX < 0 ? 1 : -1)
   }
 
   useEffect(() => {
-    const scrollContainer = scrollContainerRef.current
-    if (!scrollContainer) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return
 
-    const handleWheel = (e: WheelEvent) => {
-      const delta = e.deltaY
-      const currentScroll = scrollContainer.scrollLeft
-      const containerWidth = scrollContainer.offsetWidth
-      const currentSection = Math.round(currentScroll / containerWidth)
-
-      if (currentSection === 1 && featuresSectionRef.current) {
-        const featuresSection = featuresSectionRef.current
-        const isAtTop = featuresSection.scrollTop === 0
-        const isAtBottom = featuresSection.scrollTop + featuresSection.clientHeight >= featuresSection.scrollHeight - 1
-
-        if (delta > 0 && !isAtBottom) {
-          return
-        }
-
-        if (delta < 0 && !isAtTop) {
-          return
-        }
-
-        if (delta < 0 && isAtTop) {
-          e.preventDefault()
-          scrollContainer.scrollTo({
-            left: 0 * containerWidth,
-            behavior: "smooth",
-          })
-          return
-        }
-
-        if (delta > 0 && isAtBottom) {
-          e.preventDefault()
-          scrollContainer.scrollTo({
-            left: 2 * containerWidth,
-            behavior: "smooth",
-          })
-          return
-        }
-      }
-
-      if (currentSection === 2 && aboutSectionRef.current) {
-        const aboutSection = aboutSectionRef.current
-        const isAtTop = aboutSection.scrollTop === 0
-        const isAtBottom = aboutSection.scrollTop + aboutSection.clientHeight >= aboutSection.scrollHeight - 1
-
-        if (delta > 0 && !isAtBottom) {
-          return
-        }
-
-        if (delta < 0 && !isAtTop) {
-          return
-        }
-
-        if (delta < 0 && isAtTop) {
-          e.preventDefault()
-          scrollContainer.scrollTo({
-            left: 1 * containerWidth,
-            behavior: "smooth",
-          })
-          return
-        }
-
-        if (delta > 0 && isAtBottom) {
-          e.preventDefault()
-          scrollContainer.scrollTo({
-            left: 3 * containerWidth,
-            behavior: "smooth",
-          })
-          return
-        }
-      }
-
-      if (currentSection === 3 && contactSectionRef.current) {
-        const contactSection = contactSectionRef.current
-        const isAtTop = contactSection.scrollTop === 0
-        const isAtBottom = contactSection.scrollTop + contactSection.clientHeight >= contactSection.scrollHeight - 1
-
-        if (delta > 0 && !isAtBottom) {
-          return
-        }
-
-        if (delta < 0 && !isAtTop) {
-          return
-        }
-
-        if (delta < 0 && isAtTop) {
-          e.preventDefault()
-          scrollContainer.scrollTo({
-            left: 2 * containerWidth,
-            behavior: "smooth",
-          })
-          return
-        }
-
-        if (delta > 0 && isAtBottom) {
-          e.preventDefault()
-          return
-        }
-      }
-
-      e.preventDefault()
-
-      if (Math.abs(delta) > 10) {
-        let targetSection = currentSection
-        if (delta > 0) {
-          targetSection = Math.min(currentSection + 1, 3)
-        } else {
-          targetSection = Math.max(currentSection - 1, 0)
-        }
-
-        scrollContainer.scrollTo({
-          left: targetSection * containerWidth,
-          behavior: "smooth",
-        })
+      if (e.key === "ArrowRight") {
+        moveToSection(1)
+      } else if (e.key === "ArrowLeft") {
+        moveToSection(-1)
       }
     }
 
-    scrollContainer.addEventListener("wheel", handleWheel, { passive: false })
-    return () => scrollContainer.removeEventListener("wheel", handleWheel)
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
   }, [])
 
   return (
@@ -182,11 +70,11 @@ export default function Home() {
           ref={scrollContainerRef}
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
-          className="relative z-10 flex h-[100dvh] w-full max-w-full overflow-x-auto overflow-y-hidden scroll-smooth snap-x snap-mandatory overscroll-x-contain touch-pan-y"
+          className="relative z-10 flex h-[100dvh] w-full max-w-full overflow-x-auto overflow-y-hidden scroll-smooth snap-x snap-mandatory overscroll-x-contain"
           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
         >
           {/* PAGE 1 — Welcome (Hero) */}
-          <section id="home" className="flex w-full min-w-full max-w-full shrink-0 snap-start items-center justify-center px-4 py-24 sm:px-6">
+          <section id="home" className="relative flex h-[100dvh] w-full min-w-full max-w-full shrink-0 snap-start items-center justify-center px-4 py-24 sm:px-6">
             <div className="mx-auto max-w-4xl">
               <div className="text-center px-0 leading-5">
                 <h1 className="mb-6 text-balance text-[clamp(2rem,9vw,3.5rem)] leading-[1] tracking-tight text-white [text-shadow:_0_4px_20px_rgb(0_0_0_/_60%)] md:text-6xl lg:text-8xl">
@@ -200,14 +88,14 @@ export default function Home() {
                 </p>
               </div>
             </div>
+
+            <SwipeIndicator direction="right" />
           </section>
 
           {/* PAGE 2 — Features & Why Spendly Stats & Pillars (Merged) */}
           <section
             id="features"
-            ref={featuresSectionRef}
-            className="horizontal-panel relative w-full min-w-full max-w-full shrink-0 snap-start overflow-y-auto px-4 pt-24 pb-28 sm:px-6 [&::-webkit-scrollbar]:hidden"
-            style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+            className="horizontal-panel relative h-[100dvh] w-full min-w-full max-w-full shrink-0 snap-start overflow-hidden"
           >
             <div
               aria-hidden="true"
@@ -219,18 +107,24 @@ export default function Home() {
               )}
             />
 
-            <div className="relative z-10 mx-auto max-w-7xl w-full space-y-16 sm:space-y-24">
-              <Feature />
-              <WhySpendly />
+            <div
+              ref={featuresSectionRef}
+              className="h-full w-full overflow-y-auto px-4 pt-24 pb-28 sm:px-6 [&::-webkit-scrollbar]:hidden"
+              style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+            >
+              <div className="relative z-10 mx-auto max-w-7xl w-full space-y-16 sm:space-y-24">
+                <Feature />
+                <WhySpendly />
+              </div>
             </div>
+
+            <SwipeIndicator direction="right" />
           </section>
 
-          {/* PAGE 5 — About Spendly */}
+          {/* PAGE 3 — About Spendly */}
           <section
             id="about"
-            ref={aboutSectionRef}
-            className="horizontal-panel relative w-full min-w-full max-w-full shrink-0 snap-start overflow-y-auto px-4 pt-24 pb-28 sm:px-6 [&::-webkit-scrollbar]:hidden"
-            style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+            className="horizontal-panel relative h-[100dvh] w-full min-w-full max-w-full shrink-0 snap-start overflow-hidden"
           >
             <div
               aria-hidden="true"
@@ -242,16 +136,23 @@ export default function Home() {
               )}
             />
 
-            <div className="relative z-10 mx-auto w-full max-w-7xl">
-              <AboutQuote />
+            <div
+              ref={aboutSectionRef}
+              className="h-full w-full overflow-y-auto px-4 pt-24 pb-28 sm:px-6 [&::-webkit-scrollbar]:hidden"
+              style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+            >
+              <div className="relative z-10 mx-auto w-full max-w-7xl">
+                <AboutQuote />
+              </div>
             </div>
+
+            <SwipeIndicator direction="right" />
           </section>
 
-          {/* PAGE 6 — Contact */}
+          {/* PAGE 4 — Contact */}
           <section
             id="contact"
-            ref={contactSectionRef}
-            className="horizontal-panel relative w-full min-w-full max-w-full shrink-0 snap-start overflow-y-auto px-4 pt-24 pb-28 sm:px-6"
+            className="horizontal-panel relative h-[100dvh] w-full min-w-full max-w-full shrink-0 snap-start overflow-hidden"
           >
             <div
               aria-hidden="true"
@@ -263,46 +164,64 @@ export default function Home() {
               )}
             />
 
-            <div className="relative z-10 mx-auto w-full max-w-5xl mt-[5vh]">
-              <ContactCard
-                title="Get in touch"
-                description="Feel free to reach out directly through email or GitHub."
-                contactInfo={[]}
-              >
-                <div className="w-full flex flex-col justify-center space-y-4 py-2">
-                  <p className="text-xs sm:text-sm text-gray-300 font-open-sans-custom [text-shadow:_0_2px_6px_rgb(0_0_0_/_40%)]">
-                    Have a question or want to collaborate? I respond within a day.
-                  </p>
-                  <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-3.5 w-full">
-                    {/* BUTTON 1 — Gmail */}
-                    <a
-                      href="mailto:reachmazen@gmail.com"
-                      className="inline-flex w-full sm:w-auto items-center justify-center gap-2.5 rounded-[50px] bg-white px-[28px] py-[14px] text-[0.9rem] font-semibold text-black font-open-sans-custom transition-transform duration-200 hover:-translate-y-[2px] active:translate-y-0 text-center select-none shrink-0"
-                      style={{ borderRadius: "50px" }}
-                    >
-                      <GmailIcon className="h-5 w-5 shrink-0" />
-                      <span>reachmazen@gmail.com</span>
-                    </a>
+            <div
+              ref={contactSectionRef}
+              className="h-full w-full overflow-y-auto px-4 pt-24 pb-28 sm:px-6 [&::-webkit-scrollbar]:hidden"
+              style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+            >
+              <div className="relative z-10 mx-auto w-full max-w-5xl mt-[5vh]">
+                <ContactCard
+                  title="Get in touch"
+                  description="Feel free to reach out directly through email or GitHub."
+                  contactInfo={[]}
+                >
+                  <div className="w-full flex flex-col justify-center space-y-4 py-2">
+                    <p className="text-xs sm:text-sm text-gray-300 font-open-sans-custom [text-shadow:_0_2px_6px_rgb(0_0_0_/_40%)]">
+                      Have a question or want to collaborate? I respond within a day.
+                    </p>
+                    <div className="flex flex-col sm:flex-row items-center gap-3 sm:gap-3.5 w-full">
+                      {/* BUTTON 1 — Gmail */}
+                      <a
+                        href="mailto:reachmazen@gmail.com"
+                        className="inline-flex w-full sm:w-auto items-center justify-center gap-2.5 rounded-[50px] bg-white px-[28px] py-[14px] text-[0.9rem] font-semibold text-black font-open-sans-custom transition-transform duration-200 hover:-translate-y-[2px] active:translate-y-0 text-center select-none shrink-0"
+                        style={{ borderRadius: "50px" }}
+                      >
+                        <GmailIcon className="h-5 w-5 shrink-0" />
+                        <span>reachmazen@gmail.com</span>
+                      </a>
 
-                    {/* BUTTON 2 — GitHub */}
-                    <a
-                      href="https://github.com/the1mazen"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex w-full sm:w-auto items-center justify-center gap-2.5 rounded-[50px] border border-purple-500/70 hover:border-purple-400 bg-transparent px-[28px] py-[14px] text-[0.9rem] font-semibold text-white font-open-sans-custom transition-transform duration-200 hover:-translate-y-[2px] active:translate-y-0 text-center select-none shrink-0"
-                      style={{ borderRadius: "50px" }}
-                    >
-                      <GithubIcon className="h-5 w-5 shrink-0 text-white fill-current" />
-                      <span>github.com/the1mazen</span>
-                    </a>
+                      {/* BUTTON 2 — GitHub */}
+                      <a
+                        href="https://github.com/the1mazen"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex w-full sm:w-auto items-center justify-center gap-2.5 rounded-[50px] border border-purple-500/70 hover:border-purple-400 bg-transparent px-[28px] py-[14px] text-[0.9rem] font-semibold text-white font-open-sans-custom transition-transform duration-200 hover:-translate-y-[2px] active:translate-y-0 text-center select-none shrink-0"
+                        style={{ borderRadius: "50px" }}
+                      >
+                        <GithubIcon className="h-5 w-5 shrink-0 text-white fill-current" />
+                        <span>github.com/the1mazen</span>
+                      </a>
+                    </div>
                   </div>
-                </div>
-              </ContactCard>
+                </ContactCard>
+              </div>
             </div>
+
+            <SwipeIndicator direction="left" />
           </section>
         </div>
       </main>
     </LandingVideoProvider>
+  )
+}
+
+function SwipeIndicator({ direction = "right" }: { direction?: "left" | "right" }) {
+  return (
+    <div className="pointer-events-none absolute bottom-4 sm:bottom-6 inset-x-0 z-20 flex items-center justify-center select-none">
+      <span className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs font-mono font-medium tracking-widest text-purple-200/80 [text-shadow:_0_0_10px_rgba(192,132,252,0.9),_0_0_20px_rgba(168,85,247,0.6),_0_0_2px_rgba(255,255,255,0.8)] animate-pulse uppercase">
+        {direction === "right" ? "Swipe ->" : "<- Swipe"}
+      </span>
+    </div>
   )
 }
 
